@@ -10,7 +10,7 @@ from mangum import Mangum
 from starlette.requests import Request
 from starlette.responses import FileResponse
 
-from season_pass import settings
+from season_pass import settings, api
 
 stage = os.environ.get("STAGE", "local")
 
@@ -38,6 +38,9 @@ def ping():
 def robots():
     return "season_pass/robots.txt"
 
+
+app.include_router(api.router)
+# app.mount("/_app", StaticFiles(directory="iap/frontend/build/_app"), name="static")
 
 handler = Mangum(app)
 
