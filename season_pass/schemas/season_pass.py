@@ -29,7 +29,7 @@ class SeasonPassSchema(BaseSchema):
     id: int
     start_date: date
     end_date: date
-    reward_list: List
+    reward_list: List[RewardSchema]
 
 
 class LevelInfoSchema(BaseSchema):
