@@ -47,7 +47,7 @@ def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
     return target_user
 
 
-@router.post("/level")
+@router.post("/level", response_model=UserSeasonPassSchema)
 def set_level(request: LevelRequestSchema, sess=Depends(session)):
     current_season = get_current_season(sess)
     target_user = sess.scalar(
@@ -67,5 +67,9 @@ def set_level(request: LevelRequestSchema, sess=Depends(session)):
     if not target_level:
         raise Exception("Cannot find target level from provided data. Try again with new value.")
 
-    target_user.exp = target_level.exp
+    target_user.exp = request.exp or target_level.exp
     target_user.level = target_level.level
+    sess.add(target_user)
+    sess.commit()
+    sess.refresh(target_user)
+    return target_user

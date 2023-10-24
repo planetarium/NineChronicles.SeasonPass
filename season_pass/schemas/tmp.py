@@ -15,5 +15,5 @@ class PremiumRequestSchema(BaseSchema):
 
 class LevelRequestSchema(BaseSchema):
     avatar_addr: str
-    level: Optional[int]
-    exp: Optional[int]
+    level: Optional[int] = None
+    exp: Optional[int] = None

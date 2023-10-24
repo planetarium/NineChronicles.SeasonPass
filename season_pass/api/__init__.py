@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from season_pass.api import season_pass, user
+from season_pass.api import season_pass, user, tmp
 
 router = APIRouter(
     prefix="/api",
@@ -9,6 +9,7 @@ router = APIRouter(
 __all__ = [
     season_pass,
     user,
+    tmp,
 ]
 
 for view in __all__:
