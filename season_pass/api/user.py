@@ -70,5 +70,13 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     # Send message to SQS
     # TODO: Send Message to SQS
 
+    user_season.last_normal_claim = user_season.level
+    if user_season.is_premium:
+        user_season.last_premium_claim = user_season.level
+
+    sess.add(user_season)
+    sess.commit()
+    sess.refresh(user_season)
+
     # Return result
-    return ClaimResultSchema(items=reward_items, currencies=reward_currencies)
+    return ClaimResultSchema(items=reward_items, currencies=reward_currencies, user=user_season)

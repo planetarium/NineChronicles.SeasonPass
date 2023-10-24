@@ -26,3 +26,4 @@ class ClaimRequestSchema(BaseSchema):
 class ClaimResultSchema(BaseSchema):
     items: Dict[int, int]
     currencies: Dict[str, float]
+    user: UserSeasonPassSchema
