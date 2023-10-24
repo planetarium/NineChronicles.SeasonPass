@@ -79,4 +79,8 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     sess.refresh(user_season)
 
     # Return result
-    return ClaimResultSchema(items=reward_items, currencies=reward_currencies, user=user_season)
+    return ClaimResultSchema(
+        items=[{"item_id": k, "amount": v} for k, v in reward_items.items()],
+        currencies=[{"ticker": k, "amount": v} for k, v in reward_currencies.items()],
+        user=user_season
+    )

@@ -1,6 +1,8 @@
-from typing import Dict
+from typing import List
 
 from pydantic import BaseModel as BaseSchema
+
+from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema
 
 
 class UserSeasonPassSchema(BaseSchema):
@@ -24,6 +26,6 @@ class ClaimRequestSchema(BaseSchema):
 
 
 class ClaimResultSchema(BaseSchema):
-    items: Dict[int, int]
-    currencies: Dict[str, float]
+    items: List[ItemInfoSchema]
+    currencies: List[CurrencyInfoSchema]
     user: UserSeasonPassSchema
