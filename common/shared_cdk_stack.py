@@ -67,7 +67,7 @@ class SharedStack(Stack):
         self.credentials = _rds.Credentials.from_username("season_pass")
         self.rds = _rds.DatabaseInstance(
             self, f"{config.stage}-9c-season_pass-rds",
-            instance_identifier=f"{config.stage}-9c-season_pass-rds",
+            instance_identifier=f"{config.stage}-9c-season-pass-rds",
             engine=_rds.DatabaseInstanceEngine.postgres(version=_rds.PostgresEngineVersion.VER_15_2),
             vpc=self.vpc,
             vpc_subnets=_ec2.SubnetSelection(),
