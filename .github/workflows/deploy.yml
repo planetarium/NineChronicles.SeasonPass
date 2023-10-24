@@ -1,4 +1,4 @@
-name: Deploy NineChronicles.IAP
+name: Deploy NineChronicles.SeasonPass
 
 #  https://github.com/actions/runner/issues/1490
 on:
@@ -62,7 +62,7 @@ jobs:
           poetry install
           yarn add aws-cdk
 
-      - name: Build IAP Layer
+      - name: Build API Layer
         run: |
           pushd season_pass
           poetry export --with=api --without-hashes -o requirements.txt

@@ -39,7 +39,7 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "[NineChronicles.IAP] Deployment Success :smile:",
+                    "text": "[NineChronicles.SeasonPass] Deployment Success :smile:",
                     "emoji": true
                   }
                 },
@@ -110,7 +110,7 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "[NineChronicles.IAP] Deployment Fail :sob:",
+                    "text": "[NineChronicles.SeasonPass] Deployment Fail :sob:",
                     "emoji": true
                   }
                 },
@@ -148,7 +148,7 @@ jobs:
                       "emoji": true
                     },
                     "style": "danger",
-                    "url": "https://github.com/planetarium/NineChronicles.IAP/actions/runs/${{ github.run_id }}",
+                    "url": "https://github.com/planetarium/NineChronicles.SeasonPass/actions/runs/${{ github.run_id }}",
                     "action_id": "see-github-actions"
                   }
                 }
