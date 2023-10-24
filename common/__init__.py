@@ -4,12 +4,9 @@ COMMON_LAMBDA_EXCLUDE = [
     "!common",
     "!common/**",
     "common/__pycache__",
-    "common/layer",
     "common/alembic",
     "common/alembic.ini",
     "common/alembic.ini.example",
-    "common/poetry.lock",
-    "common/pyproject.toml",
 ]
 
 

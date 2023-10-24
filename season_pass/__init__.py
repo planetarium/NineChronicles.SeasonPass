@@ -1,8 +1,8 @@
 API_LAMBDA_EXCLUDE = [
-    "!api",
-    "!api/**",
-    "api/layer",
-    "api/requirements.txt",
-    "api/settings/*",
-    "!api/settings/__init__.py",
+    "!season_pass",
+    "!season_pass/**",
+    "season_pass/layer",
+    "season_pass/requirements.txt",
+    "season_pass/settings/*",
+    "!season_pass/settings/__init__.py",
 ]
