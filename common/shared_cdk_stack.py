@@ -43,8 +43,12 @@ class SharedStack(Stack):
         self.vpc = _ec2.Vpc.from_lookup(self, f"{config.stage}-9c-season_pass-vpc", vpc_id=resource_data.vpc_id)
 
         # SQS
-        # Uses IAP message queue
-        self.q = _sqs.Queue.from_queue_arn(self, f"{config.stage}-9c-iap-queue", config.iap_queue_arn)
+        self.dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-dlq")
+        self.q = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-queue",
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.dlq),
+            visibility_timeout=cdk_core.Duration.seconds(120),
+        )
 
         # RDS
         self.rds_security_group = _ec2.SecurityGroup(

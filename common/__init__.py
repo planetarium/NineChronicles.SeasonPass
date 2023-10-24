@@ -18,4 +18,3 @@ class Config:
     stage: str
     account_id: str
     region_name: str
-    iap_queue_arn: str
