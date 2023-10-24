@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, desc
 
-from dependencies import session
-from exceptions import UserNotFoundError
-from models.season_pass import Level
-from models.user import UserSeasonPass
-from schemas.tmp import PremiumRequestSchema, LevelRequestSchema, RegisterRequestSchema
-from schemas.user import UserSeasonPassSchema
-from utils.season_pass import get_current_season
+from common.models.season_pass import Level
+from common.models.user import UserSeasonPass
+from season_pass.schemas.tmp import PremiumRequestSchema, LevelRequestSchema, RegisterRequestSchema
+from season_pass.schemas.user import UserSeasonPassSchema
+from season_pass.dependencies import session
+from season_pass.exceptions import UserNotFoundError
+from common.utils.season_pass import get_current_season
 
 router = APIRouter(
     prefix="/tmp",
