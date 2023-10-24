@@ -23,7 +23,7 @@ def fetch_secrets(region: str, secret_arn: str) -> Dict:
 def fetch_kms_key_id(stage: str, region: str) -> Optional[str]:
     client = boto3.client("ssm", region_name=region)
     try:
-        return client.get_parameter(Name=f"{stage}_9c_IAP_KMS_KEY_ID", WithDecryption=True)["Parameter"]["Value"]
+        return client.get_parameter(Name=f"{stage}_9c_SEASON_PASS_KMS_KEY_ID", WithDecryption=True)["Parameter"]["Value"]
     except Exception as e:
         logging.error(e)
         return None
