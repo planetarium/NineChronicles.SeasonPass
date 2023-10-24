@@ -4,7 +4,6 @@ version = "0.0.1"
 description = "Season pass service of Nine Chronicles"
 authors = ["hyeon <hyeon@planetariumhq.com>"]
 readme = "README.md"
-packages = [{include = "ninechronicles"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
