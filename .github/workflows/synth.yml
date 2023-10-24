@@ -39,7 +39,7 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: 1.4.2
+          version: 1.6.1
           virtualenvs-in-project: true
 
       - name: Cache Poetry
@@ -49,32 +49,15 @@ jobs:
           path: .venv
           key: poetry-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
 
-      - name: Cache node_modules
-        id: cache-node
-        uses: actions/cache@v3
-        with:
-          path: iap/frontend/node_modules
-          key: poetry-${{ runner.os }}-${{ hashFiles('iap/frontend/yarn.lock') }}
-
       - name: Install dependencies
         run: |
           poetry install
-          pushd iap/frontend
-          yarn install
-          popd
           yarn add aws-cdk
 
       - name: Build IAP Layer
         run: |
-          pushd iap
-          poetry export --with=iap --without-hashes -o requirements.txt
-          pip install -r requirements.txt -t layer/python/lib/python3.11/site-packages/
-          popd
-
-      - name: Build Worker Layer
-        run: |
-          pushd worker
-          poetry export --with=worker --without-hashes -o requirements.txt
+          pushd season_pass
+          poetry export --with=api --without-hashes -o requirements.txt
           pip install -r requirements.txt -t layer/python/lib/python3.11/site-packages/
           popd
 
