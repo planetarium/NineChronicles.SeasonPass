@@ -57,12 +57,12 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
             for item in reward["normal"]["item"]:
                 reward_items[item["id"]] += item["amount"]
             for curr in reward["normal"]["currency"]:
-                reward_currencies["ticker"] += curr["amount"]
+                reward_currencies[curr["ticker"]] += curr["amount"]
         if reward["level"] in available_rewards["premium"]:
             for item in reward["premium"]["item"]:
                 reward_items[item["id"]] += item["amount"]
             for curr in reward["premium"]["currency"]:
-                reward_currencies["ticker"] += curr["amount"]
+                reward_currencies[curr["ticker"]] += curr["amount"]
 
     logging.debug(reward_items)
     logging.debug(reward_currencies)
