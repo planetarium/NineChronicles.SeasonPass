@@ -9,6 +9,7 @@ class UserSeasonPassSchema(BaseSchema):
     season_pass_id: int = 0
     level: int = 0
     exp: int = 0
+    is_premium: bool
     last_normal_claim: int = 0
     last_premium_claim: int = 0
 
