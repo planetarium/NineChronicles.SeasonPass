@@ -1,0 +1,156 @@
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      url:
+        required: false
+        type: string
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: true
+
+jobs:
+  slack_after_success:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    if: ${{ success() }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get Timestamp
+        id: get_timestamp
+        run: |
+          echo "TIME=$(date +"%Y-%m-%d %H:%M:%S %Z")" >> $GITHUB_OUTPUT
+
+      - name: Slack message after success
+        if: ${{ success() }}
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          STAGE: ${{ vars.STAGE }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "[NineChronicles.IAP] Deployment Success :smile:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Stage:*\n${{ vars.STAGE }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Timestamp:*\n${{ steps.get_timestamp.outputs.TIME }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": " "
+                  },
+                  "accessory": {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "Go and check",
+                      "emoji": true
+                    },
+                    "style": "primary",
+                    "url": "${{ inputs.url }}",
+                    "action_id": "see-api-doc"
+                  }
+                }
+              ]
+            }
+
+  slack_after_failure:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    if: ${{ failure() }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get Timestamp
+        id: get_timestamp
+        run: |
+          echo "TIME=$(date +"%Y-%m-%d %H:%M:%S %Z")" >> $GITHUB_OUTPUT
+
+      - name: Slack message after failure
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          STAGE: ${{ vars.STAGE }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "[NineChronicles.IAP] Deployment Fail :sob:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Stage:*\n${{ vars.STAGE }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Timestamp:*\n${{ steps.get_timestamp.outputs.TIME }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": " "
+                  },
+                  "accessory": {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "Checkout github actions",
+                      "emoji": true
+                    },
+                    "style": "danger",
+                    "url": "https://github.com/planetarium/NineChronicles.IAP/actions/runs/${{ github.run_id }}",
+                    "action_id": "see-github-actions"
+                  }
+                }
+              ]
+            }

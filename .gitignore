@@ -158,6 +158,10 @@ common/alembic.ini
 # Settings
 season_pass/settings/local.py
 
+# AWS CDK
+cdk.out/
+season_pass/requirements.txt
+
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
