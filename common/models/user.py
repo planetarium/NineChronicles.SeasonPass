@@ -17,6 +17,16 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
     last_premium_claim = Column(Integer, nullable=False, default=0,
                                 doc="Last claim order of premium reward. This only activated when is_premium == True")
 
+    @property
+    def available_rewards(self):
+        # TODO: Check level 30. In this case, calculate based on exp
+        return {
+            "normal": [] if self.level == self.last_normal_claim else list(
+                range(self.last_normal_claim + 1, self.level + 1)),
+            "premium": [] if (not self.is_premium or self.level == self.last_premium_claim) else list(
+                range(self.last_premium_claim + 1, self.level + 1))
+        }
+
     __table_args__ = (
         Index("avatar_season", "avatar_addr", "season_pass_id"),
     )

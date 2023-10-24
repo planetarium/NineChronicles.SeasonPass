@@ -54,15 +54,15 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     reward_currencies = defaultdict(int)
     for reward in target_season.reward_list:
         if reward["level"] in available_rewards["normal"]:
-            for item in reward["normal"]["items"]:
+            for item in reward["normal"]["item"]:
                 reward_items[item["id"]] += item["amount"]
-            for curr in reward["normal"]["currencies"]:
-                reward_currencies["ticker"] += curr["amount"]
+            for curr in reward["normal"]["currency"]:
+                reward_currencies[curr["ticker"]] += curr["amount"]
         if reward["level"] in available_rewards["premium"]:
-            for item in reward["premium"]["items"]:
+            for item in reward["premium"]["item"]:
                 reward_items[item["id"]] += item["amount"]
-            for curr in reward["premium"]["currencies"]:
-                reward_currencies["ticker"] += curr["amount"]
+            for curr in reward["premium"]["currency"]:
+                reward_currencies[curr["ticker"]] += curr["amount"]
 
     logging.debug(reward_items)
     logging.debug(reward_currencies)
@@ -70,5 +70,13 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     # Send message to SQS
     # TODO: Send Message to SQS
 
+    user_season.last_normal_claim = user_season.level
+    if user_season.is_premium:
+        user_season.last_premium_claim = user_season.level
+
+    sess.add(user_season)
+    sess.commit()
+    sess.refresh(user_season)
+
     # Return result
-    return ClaimResultSchema(items=reward_items, currencies=reward_currencies)
+    return ClaimResultSchema(items=reward_items, currencies=reward_currencies, user=user_season)
