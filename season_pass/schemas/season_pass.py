@@ -5,7 +5,7 @@ from pydantic import BaseModel as BaseSchema
 
 
 class ItemInfoSchema(BaseSchema):
-    item_id: int
+    id: int
     amount: int
 
 
