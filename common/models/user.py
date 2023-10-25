@@ -1,7 +1,9 @@
 from sqlalchemy import Text, Column, Integer, ForeignKey, Boolean, Index
+from sqlalchemy.dialects.postgresql import JSONB, ENUM
 from sqlalchemy.orm import relationship, backref
 
 from common.models.base import Base, TimeStampMixin, AutoIdMixin
+from common.enums import TxStatus
 
 
 class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
@@ -30,3 +32,15 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
     __table_args__ = (
         Index("avatar_season", "avatar_addr", "season_pass_id"),
     )
+
+
+class Claim(AutoIdMixin, TimeStampMixin, Base):
+    __tablename__ = "claim"
+    uuid = Column(Text, nullable=False, index=True)
+    agent_addr = Column(Text, nullable=False)
+    avatar_addr = Column(Text, nullable=False)
+    reward_list = Column(JSONB, nullable=False)
+    nonce = Column(Integer, nullable=True, unique=True)
+    tx = Column(Text, nullable=True)
+    tx_id = Column(Text, nullable=True)
+    tx_status = Column(ENUM(TxStatus), nullable=True)
