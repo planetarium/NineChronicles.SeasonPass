@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic.dataclasses import dataclass
 
 COMMON_LAMBDA_EXCLUDE = [
@@ -15,3 +17,5 @@ class Config:
     stage: str
     account_id: str
     region_name: str
+
+    kms_key_id: Optional[str] = None

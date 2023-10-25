@@ -20,6 +20,8 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
+      KMS_KEY_ID:
+        required: true
       SLACK_WEBHOOK_URL:
         required: true
 
@@ -69,6 +71,13 @@ jobs:
           pip install -r requirements.txt -t layer/python/lib/python3.11/site-packages/
           popd
 
+      - name: Build Worker Layer
+        run: |
+          pushd worker
+          poetry export --with=worker --without-hashes -o requirements.txt
+          pip install -r requirements.txt -t layer/python/lib/python3.11/site-packages/
+          popd
+
       - name: Synth stack
         env:
           STAGE: ${{ vars.STAGE }}
@@ -76,6 +85,7 @@ jobs:
           ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
         run: |
           source $VENV
           yarn cdk synth
@@ -88,6 +98,7 @@ jobs:
           ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
         run: |
           source $VENV
           yarn cdk deploy --all --require-approval never -O output.txt

@@ -1,12 +1,16 @@
+import json
 import logging
 from collections import defaultdict
 from datetime import timezone, datetime
+from uuid import uuid4
 
+import boto3
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from common.models.season_pass import SeasonPass
-from common.models.user import UserSeasonPass
+from common.models.user import UserSeasonPass, Claim
+from season_pass import settings
 from season_pass.dependencies import session
 from season_pass.exceptions import SeasonNotFoundError
 from season_pass.schemas.user import ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema
@@ -15,6 +19,8 @@ router = APIRouter(
     prefix="/user",
     tags=["User"],
 )
+
+sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 
 @router.get("/status", response_model=UserSeasonPassSchema)
@@ -67,8 +73,13 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     logging.debug(reward_items)
     logging.debug(reward_currencies)
 
-    # Send message to SQS
-    # TODO: Send Message to SQS
+    claim = Claim(
+        uuid=str(uuid4()),
+        agent_addr=user_season.agent_addr,
+        avatar_addr=user_season.avatar_addr,
+        reward_list={"item": reward_items, "currency": reward_currencies}
+    )
+    sess.add(claim)
 
     user_season.last_normal_claim = user_season.level
     if user_season.is_premium:
@@ -78,9 +89,14 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     sess.commit()
     sess.refresh(user_season)
 
+    # Send message to SQS
+    if settings.SQS_URL:
+        resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
+        logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
+
     # Return result
     return ClaimResultSchema(
-        items=[{"item_id": k, "amount": v} for k, v in reward_items.items()],
+        items=[{"id": k, "amount": v} for k, v in reward_items.items()],
         currencies=[{"ticker": k, "amount": v} for k, v in reward_currencies.items()],
         user=user_season
     )

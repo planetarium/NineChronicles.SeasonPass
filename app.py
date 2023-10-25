@@ -8,6 +8,7 @@ from dotenv import dotenv_values
 from common import Config
 from common.shared_cdk_stack import SharedStack
 from season_pass.api_cdk_stack import APIStack
+from worker.worker_cdk_stack import WorkerStack
 
 stage = os.environ.get("STAGE", "development")
 
@@ -41,6 +42,16 @@ shared = SharedStack(
 
 APIStack(
     app, f"{config.stage}-9c-season-pass-APIStack",
+    env=cdk.Environment(
+        account=config.account_id, region=config.region_name,
+    ),
+    config=config,
+    shared_stack=shared,
+    tags=TAGS,
+)
+
+WorkerStack(
+    app, f"{config.stage}-9c-season-pass-WorkerStack",
     env=cdk.Environment(
         account=config.account_id, region=config.region_name,
     ),

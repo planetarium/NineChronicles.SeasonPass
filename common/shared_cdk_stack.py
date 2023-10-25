@@ -1,7 +1,10 @@
+import logging
+import os
 from dataclasses import dataclass
 from typing import Dict
 
 import aws_cdk as cdk_core
+import boto3
 from aws_cdk import (
     Stack,
     aws_ec2 as _ec2,
@@ -11,6 +14,7 @@ from aws_cdk import (
 from constructs import Construct
 
 from common import Config
+from common.utils.aws import fetch_parameter
 
 
 @dataclass
@@ -76,3 +80,43 @@ class SharedStack(Stack):
             instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.MICRO),
             security_groups=[self.rds_security_group],
         )
+
+        # SecureStrings in Parameter Store
+        PARAMETER_LIST = (
+            ("KMS_KEY_ID", True),
+        )
+        ssm = boto3.client("ssm", region_name=config.region_name,
+                           aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+                           aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY")
+                           )
+
+        param_value_dict = {}
+        for param, secure in PARAMETER_LIST:
+            param_value_dict[param] = None
+            try:
+                prev_param = fetch_parameter(config.region_name, f"{config.stage}_9c_SEASON_PASS_{param}", secure)
+                logging.debug(prev_param["Value"])
+                if prev_param["Value"] != getattr(config, param.lower()):
+                    logging.info(f"The value of {param} has been changed. Update to new value...")
+                    raise ValueError("Update to new value")
+                else:
+                    param_value_dict[param] = prev_param
+                    logging.info(f"{param} has already been set.")
+            except (ssm.exceptions.ParameterNotFound, ValueError):
+                try:
+                    ssm.put_parameter(
+                        Name=f"{config.stage}_9c_SEASON_PASS_{param}",
+                        Value=getattr(config, param.lower()),
+                        Type="SecureString" if secure else "String",
+                        Overwrite=True
+                    )
+                    logging.info(f"{config.stage}_9c_SEASON_PASS_{param} has been set")
+                    param_value_dict[param] = fetch_parameter(
+                        config.region_name, f"{config.stage}_9c_SEASON_PASS_{param}", secure
+                    )
+                except Exception as e:
+                    logging.error(e)
+                    raise e
+
+        for k, v in param_value_dict.items():
+            setattr(self, f"{k.lower()}_arn", v["ARN"])

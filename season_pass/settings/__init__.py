@@ -30,3 +30,4 @@ DB_ECHO = config("DB_ECHO", cast=bool, default=False)
 
 # AWS
 REGION_NAME = config("REGION_NAME")
+SQS_URL = config("SQS_URL")
