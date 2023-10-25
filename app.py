@@ -8,7 +8,7 @@ from dotenv import dotenv_values
 from common import Config
 from common.shared_cdk_stack import SharedStack
 from season_pass.api_cdk_stack import APIStack
-from worker_cdk_stack import WorkerStack
+from worker.worker_cdk_stack import WorkerStack
 
 stage = os.environ.get("STAGE", "development")
 
