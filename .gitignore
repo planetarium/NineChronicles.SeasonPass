@@ -158,7 +158,7 @@ common/alembic.ini
 # Settings
 season_pass/settings/local.py
 
-# AWS CDK
+# AWS
 cdk.out/
 season_pass/requirements.txt
 season_pass/layer/
