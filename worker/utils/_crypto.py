@@ -46,7 +46,6 @@ class Account:
         try:
             self.pubkey_der: bytes = self.client.get_public_key(KeyId=self._kms_key)["PublicKey"]
             self.address: str = self.__der_encoded_public_key_to_eth_address(self.pubkey_der)
-            print(self.address)
         except ClientError as e:
             logging.error(f"An error occurred getting KMS Key with Key ID \"{self._kms_key}\.")
             logging.error(e)
