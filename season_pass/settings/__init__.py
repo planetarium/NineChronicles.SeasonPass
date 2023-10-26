@@ -28,6 +28,8 @@ if db_password is not None:
     DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 DB_ECHO = config("DB_ECHO", cast=bool, default=False)
 
+JWT_TOKEN_SECRET = config("JWT_TOKEN_SECRET")
+
 # AWS
 REGION_NAME = config("REGION_NAME")
 SQS_URL = config("SQS_URL")
