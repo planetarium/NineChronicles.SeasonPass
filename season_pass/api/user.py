@@ -2,18 +2,22 @@ import json
 import logging
 from collections import defaultdict
 from datetime import timezone, datetime
+from typing import Annotated
 from uuid import uuid4
 
 import boto3
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy import select
 
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass, Claim
+from common.utils.season_pass import get_current_season
 from season_pass import settings
 from season_pass.dependencies import session
-from season_pass.exceptions import SeasonNotFoundError
-from season_pass.schemas.user import ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema
+from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, UserNotFoundError,
+                                    InvalidUpgradeRequestError, )
+from season_pass.schemas.user import ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema
+from season_pass.utils import verify_token
 
 router = APIRouter(
     prefix="/user",
@@ -32,6 +36,45 @@ def user_status(season_id: int, avatar_addr: str, sess=Depends(session)):
         return UserSeasonPassSchema(avatar_addr=avatar_addr, season_pass_id=season_id)
 
     return target
+
+
+@router.post("/upgrade", response_model=UserSeasonPassSchema, dependencies=[Depends(verify_token)])
+def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
+    if not (request.is_premium or request.is_premium_plus):
+        raise InvalidUpgradeRequestError(f"Neither premium nor premium_plus requested. Please request at least one.")
+
+    current_season = get_current_season(sess)
+    if request.season_id != current_season.id:
+        raise InvalidSeasonError(f"Requested season {request.season_id} is not current season {current_season.id}")
+
+    target_user = sess.scalar(
+        select(UserSeasonPass)
+        .where(
+            UserSeasonPass.agent_addr == request.agent_addr,
+            UserSeasonPass.avatar_addr == request.avatar_addr,
+            UserSeasonPass.season_pass_id == request.season_id
+        )
+    )
+    if not target_user:
+        raise UserNotFoundError(f"Cannot found requested user data in season {request.season_id}")
+
+    if not target_user.is_premium and not request.is_premium:
+        raise InvalidUpgradeRequestError(
+            f"Avatar {target_user.avatar_addr} is not in premium and doesn't request premium.")
+
+    if target_user.is_premium and target_user.is_premium_plus and not request.is_premium_plus:
+        raise InvalidUpgradeRequestError(
+            f"Avatar {target_user.avatar_addr} is in premium and doesn't request premium plus.")
+
+    if request.is_premium:
+        target_user.is_premium = request.is_premium
+    if request.is_premium_plus:
+        target_user.is_premium_plus = request.is_premium_plus
+
+    sess.add(target_user)
+    sess.commit()
+    sess.refresh(target_user)
+    return target_user
 
 
 @router.post("/claim", response_model=ClaimResultSchema)

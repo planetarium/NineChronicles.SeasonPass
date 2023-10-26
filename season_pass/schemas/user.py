@@ -19,6 +19,14 @@ class UserSeasonPassSchema(BaseSchema):
         from_attributes = True
 
 
+class UpgradeRequestSchema(BaseSchema):
+    agent_addr: str
+    avatar_addr: str
+    season_id: int
+    is_premium: bool = False
+    is_premium_plus: bool = False
+
+
 class ClaimRequestSchema(BaseSchema):
     agent_addr: str
     avatar_addr: str
