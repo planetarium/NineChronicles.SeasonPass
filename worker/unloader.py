@@ -69,8 +69,6 @@ def handle(event, context):
 
             claim.nonce = nonce
             claim.tx_status = TxStatus.CREATED
-            print(claim.reward_list["currency"])
-            print(claim.reward_list["item"])
             unsigned_tx = gql.create_action(
                 "unload_from_garage", pubkey=account.pubkey, nonce=nonce,
                 avatar_addr=claim.avatar_addr,
@@ -84,21 +82,16 @@ def handle(event, context):
                 } for item_id, amount in claim.reward_list["item"].items()],
                 timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat()
             )
-            print("unsigned")
             signature = account.sign_tx(unsigned_tx)
-            print("signature")
             signed_tx = gql.sign(unsigned_tx, signature)
-            print("signed")
             claim.tx = signed_tx.hex()
             sess.add(claim)
             target_claim_list.append(claim)
             nonce += 1
-            print("save")
         sess.commit()
 
         for claim in target_claim_list:
             success, msg, tx_id = gql.stage(bytes.fromhex(claim.tx))
-            print("stage", success, msg, tx_id)
             if not success:
                 message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
                 logging.error(message)
