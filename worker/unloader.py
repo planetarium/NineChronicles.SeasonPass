@@ -85,7 +85,8 @@ def handle(event, context):
                     "fungibleId": ITEM_FUNGIBLE_ID_DICT[item_id],
                     "count": f"{amount}"
                 } for item_id, amount in claim.reward_list["item"].items()],
-                timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat()
+                timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat(),
+                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels}}),
             )
             signature = account.sign_tx(unsigned_tx)
             signed_tx = gql.sign(unsigned_tx, signature)
