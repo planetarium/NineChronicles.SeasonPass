@@ -22,6 +22,8 @@ on:
         required: true
       KMS_KEY_ID:
         required: true
+      JWT_TOKEN_SECRET:
+        required: true
       SLACK_WEBHOOK_URL:
         required: true
 
