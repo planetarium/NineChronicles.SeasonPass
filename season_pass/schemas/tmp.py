@@ -11,6 +11,7 @@ class RegisterRequestSchema(BaseSchema):
 class PremiumRequestSchema(BaseSchema):
     avatar_addr: str
     is_premium: bool
+    is_premium_plus: bool
 
 
 class LevelRequestSchema(BaseSchema):
