@@ -41,6 +41,9 @@ def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
 
     target_user.is_premium = request.is_premium
+    target_user.is_premium_plus = request.is_premium_plus
+    if target_user.is_premium_plus:
+        target_user.is_premium = True
     sess.add(target_user)
     sess.commit()
     sess.refresh(target_user)
