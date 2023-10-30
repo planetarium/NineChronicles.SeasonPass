@@ -19,3 +19,4 @@ class Config:
     region_name: str
 
     kms_key_id: Optional[str] = None
+    jwt_token_secret: Optional[str] = None
