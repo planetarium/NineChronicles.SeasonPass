@@ -46,6 +46,14 @@ class APIStack(Stack):
         )
         role.add_to_policy(
             _iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    shared_stack.jwt_token_secret_arn,
+                ]
+            )
+        )
+        role.add_to_policy(
+            _iam.PolicyStatement(
                 actions=["sqs:sendmessage"],
                 resources=[shared_stack.q.queue_arn]
             )
