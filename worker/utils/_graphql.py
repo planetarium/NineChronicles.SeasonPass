@@ -4,11 +4,12 @@ import os
 import random
 from typing import Union, Dict, Any, Tuple, Optional
 
-from consts import HOST_LIST
 from gql import Client
 from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
+
+from consts import HOST_LIST
 
 
 class GQL:
@@ -56,6 +57,7 @@ class GQL:
         fav_data = kwargs.get("fav_data")
         avatar_addr = kwargs.get("avatar_addr")
         item_data = kwargs.get("item_data")
+        memo = kwargs.get("memo", "")
 
         if not fav_data and not item_data:
             raise ValueError("Nothing to unload")
@@ -71,6 +73,7 @@ class GQL:
                         recipientAvatarAddr=avatar_addr,
                         fungibleAssetValues=fav_data,
                         fungibleIdAndCounts=item_data,
+                        memo=memo,
                     )
                 )
             )

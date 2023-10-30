@@ -57,7 +57,12 @@ def handle(event, context):
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
-        nonce = sess.scalar(select(Claim.nonce).order_by(desc(Claim.nonce)).limit(1)) or 0
+        nonce = sess.scalar(select(Claim.nonce).where(Claim.nonce.is_not(None)).order_by(desc(Claim.nonce)).limit(1))
+        if nonce is None:
+            nonce = -1
+        # Use next nonce
+        nonce += 1
+
         uuid_list = [x.body.get("uuid") for x in message.Records if x.body.get("uuid") is not None]
         claim_dict = {x.uuid: x for x in sess.scalars(select(Claim).where(Claim.uuid.in_(uuid_list)))}
         target_claim_list = []
@@ -80,7 +85,8 @@ def handle(event, context):
                     "fungibleId": ITEM_FUNGIBLE_ID_DICT[item_id],
                     "count": f"{amount}"
                 } for item_id, amount in claim.reward_list["item"].items()],
-                timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat()
+                timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat(),
+                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels}}),
             )
             signature = account.sign_tx(unsigned_tx)
             signed_tx = gql.sign(unsigned_tx, signature)

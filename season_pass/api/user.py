@@ -77,7 +77,9 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         uuid=str(uuid4()),
         agent_addr=user_season.agent_addr,
         avatar_addr=user_season.avatar_addr,
-        reward_list={"item": reward_items, "currency": reward_currencies}
+        reward_list={"item": reward_items, "currency": reward_currencies},
+        normal_levels=available_rewards["normal"],
+        premium_levels=available_rewards["premium"],
     )
     sess.add(claim)
 
