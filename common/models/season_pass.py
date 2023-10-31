@@ -15,6 +15,10 @@ class SeasonPass(TimeStampMixin, Base):
 
     exp_list = relationship("Exp")
 
+    @property
+    def exp_dict(self):
+        return {x.action_type: x.exp for x in self.exp_list}
+
 
 class Level(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "level"
