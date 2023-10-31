@@ -51,3 +51,20 @@ class TxStatus(Enum):
     NOT_FOUND = "Not Found"
     FAIL_TO_CREATE = "Fail to Create"
     UNKNOWN = "Unknown"
+
+
+class ActionType(Enum):
+    """
+    # ActionType
+    ---
+    Action types to give brave exp.
+
+    - **`hack_and_slash`**: Stage adventure. Matches with type_id `hack_and_slash##`
+    - **`hack_and_slash_sweep`**: Sweep stage. Matches with type_id `hack_and_slash_sweep##`
+    - **`battle_arena`**: Arena battle. Matches with type_id `battle_arena##`
+    - **`raid`**: World boss battle. Matches with type_id `raid##`
+    """
+    HAS = "hack_and_slash"
+    SWEEP = "hack_and_slash_sweep"
+    ARENA = "battle_arena"
+    RAID = "raid"
