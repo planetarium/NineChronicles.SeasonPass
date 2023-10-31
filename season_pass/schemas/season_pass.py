@@ -3,6 +3,8 @@ from typing import List
 
 from pydantic import BaseModel as BaseSchema
 
+from common.enums import ActionType
+
 
 class ItemInfoSchema(BaseSchema):
     id: int
@@ -35,3 +37,11 @@ class SeasonPassSchema(BaseSchema):
 class LevelInfoSchema(BaseSchema):
     level: int
     exp: int
+
+
+class ExpInfoSchema(BaseSchema):
+    action_type: ActionType
+    exp: int
+
+    class Config:
+        from_attributes = True
