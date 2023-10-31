@@ -60,7 +60,7 @@ def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
 def handler():
     stage = os.environ.get("STAGE", "development")
     url = f"{random.choice(HOST_LIST[stage])}/graphql"
-    transport = WebsocketsTransport(url=url)
+    transport = WebsocketsTransport(url=url.replace("https", "wss"))
     client = Client(transport=transport, fetch_schema_from_transport=True)
     coef = StakeAPCoef(url)
 
@@ -81,7 +81,7 @@ def handler():
     # Init
     tip = None
     thread_list = []
-    action_data = []
+    action_data = defaultdict(list)
     stake_data = defaultdict(float)
     regex = re.compile(reg)
     sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
@@ -124,7 +124,9 @@ def handler():
             thread_list.append(t)
             t.start()
             for action in result["tx"]["transaction"]["actions"]:
-                action_json = ActionJson(**(json.loads(action["json"].replace(r"\uFEFF", ""))["values"]))
+                action_raw = json.loads(action["json"].replace(r"\uFEFF", ""))
+                type_id = action_raw["type_id"]
+                action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
                 if regex.match(action_json.type_id):
                     action_data[action_json.type_id].append({
                         "agent_addr": signer,
