@@ -1,7 +1,9 @@
 import logging
 import os
+import random
 from typing import List, Dict
 
+import requests
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, scoped_session
 
@@ -10,11 +12,16 @@ from common.models.action import Block
 from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass
 from common.utils.season_pass import get_current_season
+from consts import HOST_LIST
 from schemas.sqs import SQSMessage
+from utils.stake import StakeAPCoef
 
 AP_PER_ADVENTURE = 5
+STAGE = os.environ.get("STAGE", "development")
+GQL_URL = f"{random.choice(HOST_LIST[STAGE])}/graphql"
 
 engine = create_engine(os.environ.get("DB_URI"))
+ap_coef = StakeAPCoef(GQL_URL)
 
 
 def verify_season_pass(sess, current_season: SeasonPass, action_data: Dict[str, List]) -> Dict[str, UserSeasonPass]:
@@ -48,7 +55,27 @@ def apply_exp(user_season_dict: Dict[str, UserSeasonPass], exp: int, level_dict:
               action_data: List[Dict]):
     for d in action_data:
         target = user_season_dict[d["avatar_addr"]]
-        target.exp += exp
+        target.exp += exp * d["count_base"]
+        if target.level < max(level_dict.keys()) and target.exp >= level_dict[target.level + 1]:
+            target.level += 1
+
+
+def handle_sweep(user_season_dict: Dict[str, UserSeasonPass], exp: int, level_dict: Dict[int, int],
+                 action_data: List[Dict], coef_dict: Dict[str, int]):
+    for d in action_data:
+        coef = coef_dict.get(d["agent_addr"])
+        if not coef:
+            resp = requests.post(GQL_URL, json={
+                "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""})
+            data = resp.json()["data"]["stateQuery"]["stakeState"]
+            if data is None:
+                coef = 100
+            else:
+                coef = ap_coef.get_ap_coef(float(data["deposit"]))
+
+        real_count = d["count_base"] // (AP_PER_ADVENTURE * coef / 100)
+        target = user_season_dict[d["avatar_addr"]]
+        target.exp += exp * real_count
         if target.level < max(level_dict.keys()) and target.exp >= level_dict[target.level + 1]:
             target.level += 1
 
@@ -106,7 +133,8 @@ def handle(event, context):
                     apply_exp(user_season_dict, current_season.exp_dict[ActionType.ARENA], level_dict, action_data)
                     logging.info(f"{len(action_data)} Arena applied.")
                 elif "sweep" in type_id:
-                    apply_exp(user_season_dict, current_season.exp_dict[ActionType.SWEEP], level_dict, action_data)
+                    handle_sweep(user_season_dict, current_season.exp_dict[ActionType.SWEEP], level_dict, action_data,
+                                 body["stake"])
                     logging.info(f"{len(action_data)} Sweep applied.")
                 else:
                     apply_exp(user_season_dict, current_season.exp_dict[ActionType.HAS], level_dict, action_data)
