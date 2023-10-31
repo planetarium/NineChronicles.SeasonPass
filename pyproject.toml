@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-gql = { extras = ["requests"], version = "^3.4.1" }
+gql = { extras = ["all"], version = "^3.4.1" }
 requests = "^2.31.0"
 sqlalchemy = "^2.0.22"
 psycopg2-binary = "^2.9.9"
