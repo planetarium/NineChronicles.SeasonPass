@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship, backref, Mapped
 from common.enums import TxStatus
 from common.models.base import Base, TimeStampMixin, AutoIdMixin
 from common.models.season_pass import SeasonPass
+from common.utils.season_pass import get_max_level
 
 
 class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
@@ -22,9 +23,14 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
     last_premium_claim = Column(Integer, nullable=False, default=0,
                                 doc="Last claim order of premium reward. This only activated when is_premium == True")
 
-    @property
-    def available_rewards(self):
-        # TODO: Check level 30. In this case, calculate based on exp
+    def available_rewards(self, sess):
+        max_level, repeat_exp = get_max_level(sess)
+        if self.level == max_level.level:
+            return {
+                "normal": [max_level.level] * ((self.exp - max_level.exp) // repeat_exp),
+                "premium": []
+            }
+
         return {
             "normal": [] if self.level == self.last_normal_claim else list(
                 range(self.last_normal_claim + 1, self.level + 1)),
