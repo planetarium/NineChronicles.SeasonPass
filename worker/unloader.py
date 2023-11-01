@@ -61,7 +61,8 @@ def handle(event, context):
                     "count": f"{amount}"
                 } for item_id, amount in claim.reward_list["item"].items()],
                 timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat(),
-                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels}}),
+                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels,
+                                                 "t": "claim"}}),
             )
             signature = account.sign_tx(unsigned_tx)
             signed_tx = gql.sign(unsigned_tx, signature)
