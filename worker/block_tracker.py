@@ -40,16 +40,16 @@ def handler():
 
     # FIXME: Change actionType to regex: (hack_and_slash.*)|(battle_arena.*)|(raid.*)
     reg = r"(hack_and_slash.*)|(battle_arena.*)|(raid.*)"
-    query = gql("""
-    subscription {
-        tx (actionType: "hack_and_slash21") {
-            txResult {txStatus, blockIndex}
-            transaction {
+    query = gql(f"""
+    subscription {{
+        tx (actionType: "{reg}") {{
+            txResult {{txStatus, blockIndex}}
+            transaction {{
                 signer 
-                actions {json}
-            }
-        }
-    }
+                actions {{json}}
+            }}
+        }}
+    }}
     """)
 
     # Init
