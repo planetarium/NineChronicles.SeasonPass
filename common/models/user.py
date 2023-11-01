@@ -25,9 +25,9 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
 
     def available_rewards(self, sess):
         max_level, repeat_exp = get_max_level(sess)
-        if self.level == 30:
+        if self.level == max_level.level:
             return {
-                "normal": [30] * ((self.exp - max_level.exp) // repeat_exp),
+                "normal": [max_level.level] * ((self.exp - max_level.exp) // repeat_exp),
                 "premium": []
             }
 
