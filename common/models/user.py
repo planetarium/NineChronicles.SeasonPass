@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship, backref, Mapped
 from common.enums import TxStatus
 from common.models.base import Base, TimeStampMixin, AutoIdMixin
 from common.models.season_pass import SeasonPass
-from season_pass.utils import get_max_level
+from common.utils.season_pass import get_max_level
 
 
 class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):

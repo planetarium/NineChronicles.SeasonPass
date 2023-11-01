@@ -10,13 +10,13 @@ from sqlalchemy import select
 
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass, Claim
-from common.utils.season_pass import get_current_season
+from common.utils.season_pass import get_current_season, get_max_level
 from season_pass import settings
 from season_pass.dependencies import session
 from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, UserNotFoundError,
                                     InvalidUpgradeRequestError, )
 from season_pass.schemas.user import ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema
-from season_pass.utils import verify_token, get_max_level
+from season_pass.utils import verify_token
 
 router = APIRouter(
     prefix="/user",
