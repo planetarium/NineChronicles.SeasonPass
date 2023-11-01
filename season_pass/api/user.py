@@ -40,6 +40,16 @@ def user_status(season_id: int, avatar_addr: str, sess=Depends(session)):
 
 @router.post("/upgrade", response_model=UserSeasonPassSchema, dependencies=[Depends(verify_token)])
 def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
+    """
+    # Upgrade SeasonPass status to premium or premium plus
+    ---
+    **NOTE** : This API is server-to-server API between IAP and SeasonPass. Do not call it directly.
+
+    Upgrade user's season pass status to premium(_plus) by purchasing IAP product.
+
+    This API is not opened and should be verified using signed JWT. (See `verify_token` function for details.)
+
+    """
     if not (request.is_premium or request.is_premium_plus):
         raise InvalidUpgradeRequestError(f"Neither premium nor premium_plus requested. Please request at least one.")
 
