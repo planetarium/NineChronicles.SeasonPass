@@ -2,9 +2,7 @@
 import json
 import logging
 import os
-from dataclasses import dataclass
 from datetime import timezone, datetime, timedelta
-from typing import Union, List
 
 from sqlalchemy import create_engine, select, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -13,6 +11,7 @@ from common.enums import TxStatus
 from common.models.user import Claim
 from common.utils.aws import fetch_secrets, fetch_kms_key_id
 from consts import ITEM_FUNGIBLE_ID_DICT
+from schemas.sqs import SQSMessage
 from utils._crypto import Account
 from utils._graphql import GQL
 
@@ -23,30 +22,6 @@ DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 stage = os.environ.get("STAGE", "development")
 region_name = os.environ.get("REGION_NAME", "us-east-2")
 engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
-
-
-@dataclass
-class SQSMessageRecord:
-    messageId: str
-    receiptHandle: str
-    body: Union[dict, str]
-    attributes: dict
-    messageAttributes: dict
-    md5OfBody: str
-    eventSource: str
-    eventSourceARN: str
-    awsRegion: str
-
-    def __post_init__(self):
-        self.body = json.loads(self.body) if type(self.body) == str else self.body
-
-
-@dataclass
-class SQSMessage:
-    Records: Union[List[SQSMessageRecord], dict]
-
-    def __post_init__(self):
-        self.Records = [SQSMessageRecord(**x) for x in self.Records]
 
 
 def handle(event, context):

@@ -86,7 +86,6 @@ class WorkerStack(Stack):
         exclude_list.extend(COMMON_LAMBDA_EXCLUDE)
         exclude_list.extend(WORKER_LAMBDA_EXCLUDE)
 
-        # Unloader Lambda function
         unloader = _lambda.Function(
             self, f"{config.stage}-9c-season_pass-unloader-function",
             function_name=f"{config.stage}-9c-season_pass-unloader",
@@ -94,6 +93,25 @@ class WorkerStack(Stack):
             description="Reward unloader of NineChronicles.SeasonPass",
             code=_lambda.AssetCode("worker/", exclude=exclude_list),
             handler="unloader.handle",
+            layers=[layer],
+            role=role,
+            vpc=shared_stack.vpc,
+            timeout=cdk_core.Duration.seconds(120),
+            environment=env,
+            events=[
+                _evt_src.SqsEventSource(shared_stack.q)
+            ],
+            memory_size=256,
+            reserved_concurrent_executions=1,
+        )
+
+        brave_handler = _lambda.Function(
+            self, f"{config.stage}-9c-saeson_pass-brave_handler-function",
+            function_name=f"{config.stage}-9c-season_pass-brave_handler",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            description="Brave exp handler of NineChronicles.SeasonPass",
+            code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            handler="brave_handler.handle",
             layers=[layer],
             role=role,
             vpc=shared_stack.vpc,
