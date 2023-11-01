@@ -2,11 +2,10 @@ import json
 import logging
 from collections import defaultdict
 from datetime import timezone, datetime
-from typing import Annotated
 from uuid import uuid4
 
 import boto3
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from common.models.season_pass import SeasonPass
@@ -17,7 +16,7 @@ from season_pass.dependencies import session
 from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, UserNotFoundError,
                                     InvalidUpgradeRequestError, )
 from season_pass.schemas.user import ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema
-from season_pass.utils import verify_token
+from season_pass.utils import verify_token, get_max_level
 
 router = APIRouter(
     prefix="/user",
@@ -94,24 +93,28 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         raise SeasonNotFoundError(
             f"No activity recorded for season {target_season.id} for avatar {user_season.avatar_addr}")
 
-    available_rewards = user_season.available_rewards
+    available_rewards = user_season.available_rewards(sess)
     if not (available_rewards["normal"] or available_rewards["premium"]):
         raise SeasonNotFoundError(f"No available rewards to get for avatar {user_season.avatar_addr}")
+
+    max_level, repeat_exp = get_max_level(sess)
 
     # calculate rewards to get
     reward_items = defaultdict(int)
     reward_currencies = defaultdict(int)
-    for reward in target_season.reward_list:
-        if reward["level"] in available_rewards["normal"]:
-            for item in reward["normal"]["item"]:
-                reward_items[item["id"]] += item["amount"]
-            for curr in reward["normal"]["currency"]:
-                reward_currencies[curr["ticker"]] += curr["amount"]
-        if reward["level"] in available_rewards["premium"]:
-            for item in reward["premium"]["item"]:
-                reward_items[item["id"]] += item["amount"]
-            for curr in reward["premium"]["currency"]:
-                reward_currencies[curr["ticker"]] += curr["amount"]
+    reward_dict = {x.level: x.reward_list for x in target_season.reward_list}
+    for reward_level in available_rewards["normal"]:
+        reward = reward_dict[reward_level]
+        for item in reward["normal"]["item"]:
+            reward_items[item["id"]] += item["amount"]
+        for curr in reward["normal"]["currency"]:
+            reward_currencies[curr["ticker"]] += curr["amount"]
+    for reward_level in available_rewards["premium"]:
+        reward = reward_dict[reward_level]
+        for item in reward["premium"]["item"]:
+            reward_items[item["id"]] += item["amount"]
+        for curr in reward["premium"]["currency"]:
+            reward_currencies[curr["ticker"]] += curr["amount"]
 
     logging.debug(reward_items)
     logging.debug(reward_currencies)
@@ -129,6 +132,9 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     user_season.last_normal_claim = user_season.level
     if user_season.is_premium:
         user_season.last_premium_claim = user_season.level
+
+    if user_season.level == max_level.level:
+        user_season.exp -= repeat_exp * len(available_rewards["normal"])
 
     sess.add(user_season)
     sess.commit()
