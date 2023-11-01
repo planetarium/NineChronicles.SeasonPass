@@ -14,9 +14,9 @@ import requests
 from gql import Client, gql
 from gql.transport.websockets import WebsocketsTransport
 
-from consts import HOST_LIST
-from utils.stake import StakeAPCoef
+from worker.consts import HOST_LIST
 from worker.schemas.action import ActionJson
+from worker.utils.stake import StakeAPCoef
 
 
 def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
