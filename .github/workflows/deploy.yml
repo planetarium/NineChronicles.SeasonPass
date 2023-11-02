@@ -118,9 +118,10 @@ jobs:
           REGION_NAME: ${{ vars.REGION_NAME }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          HOST: ${{ needs.deployment.outputs.url }}
         run: |
           source $VENV
-          python ./.github/scripts/upload_host.py ${{ needs.deployment.outputs.url }}
+          python ./.github/scripts/upload_host.py $HOST
 
   slack_notification:
     uses: ./.github/workflows/slack_message.yml
