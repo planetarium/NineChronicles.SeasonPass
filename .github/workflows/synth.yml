@@ -90,6 +90,7 @@ jobs:
     needs: synth
     if: ${{ failure() }}
     with:
+      success: ${{ success() }}
       environment: ${{ inputs.environment }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
