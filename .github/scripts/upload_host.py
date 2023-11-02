@@ -6,7 +6,7 @@ import sys
 
 if __name__ == "__main__":
     host = sys.argv[1]
-    ssm = boto3.client("ssm", region_name=os.environ.get("RERGION_NAME"),
+    ssm = boto3.client("ssm", region_name=os.environ.get("REGION_NAME"),
                        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
                        )
@@ -14,7 +14,7 @@ if __name__ == "__main__":
         ssm.put_parameter(
             Name=f"{os.environ.get('STAGE')}_9c_SEASON_PASS_HOST",
             Value=host,
-            Type="string",
+            Type="String",
             Overwrite=True,
         )
     except Exception as e:
