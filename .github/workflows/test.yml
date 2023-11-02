@@ -69,7 +69,7 @@ jobs:
     needs: test
     if: ${{ failure() }}
     with:
-      success: ${{ success() }}
+      success: false
       environment: ${{ inputs.environment }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
