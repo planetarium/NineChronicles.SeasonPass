@@ -113,6 +113,7 @@ jobs:
 
       - name: Upload host to ParameterStore
         id: upload_host
+        needs: [deployment]
         env:
           STAGE: ${{ vars.STAGE }}
           REGION_NAME: ${{ vars.REGION_NAME }}
@@ -127,7 +128,7 @@ jobs:
     needs: deployment
     if: ${{ always() }}
     with:
-      success: ${{ success() }}
+      success: ${{ jobs.deployment.outcome == 'success' && jobs.upload_host.outcome == 'success' }}
       environment: ${{ inputs.environment }}
       url: ${{ needs.deployment.outputs.url }}
     secrets:
