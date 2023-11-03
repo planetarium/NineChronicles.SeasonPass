@@ -34,7 +34,7 @@ jobs:
 
   build_docker:
     if: ${{ github.event_name == 'push' }}
-    needs: ["test", "synth"]
+    needs: [ "test", "synth" ]
     uses: ./.github/workflows/build_docker.yml
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -57,6 +57,7 @@ jobs:
 
   approval_notice:
     uses: ./.github/workflows/slack_message.yml
+    needs: [ "test", "synth" ]
     if: ${{ github.ref == 'refs/heads/main' }}
     with:
       type: approval
