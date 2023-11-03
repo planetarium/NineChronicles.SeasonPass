@@ -6,11 +6,13 @@ on:
       - development
       - release/*
       - main
+      - feature/test-ec2-stack
   pull_request:
     branches:
       - development
       - release/*
       - main
+      - feature/test-ec2-stack
 
 jobs:
   test:
@@ -33,7 +35,7 @@ jobs:
 
   deploy_without_approval:
     # This is for development / internal deployment
-    if: ${{ github.ref == 'refs/heads/development' || startsWith(github.ref, 'refs/heads/release') }}
+    if: ${{ github.ref == 'refs/heads/feature/test-ec2-stack' || github.ref == 'refs/heads/development' || startsWith(github.ref, 'refs/heads/release') }}
     needs: [ "test", "synth" ]
     uses: ./.github/workflows/deploy.yml
     with:
