@@ -17,6 +17,7 @@ on:
 jobs:
   slack_message:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v3
 
