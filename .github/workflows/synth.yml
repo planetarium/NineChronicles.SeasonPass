@@ -84,6 +84,7 @@ jobs:
         run: |
           source $VENV
           yarn cdk synth
+          yarn cdk diff
 
       - name: Slack Notification on Failure
         id: slack_notification
