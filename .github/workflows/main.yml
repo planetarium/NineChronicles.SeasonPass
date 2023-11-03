@@ -59,6 +59,9 @@ jobs:
     uses: ./.github/workflows/slack_message.yml
     if: ${{ github.ref == 'refs/heads/main' }}
     with:
+      type: approval
+      environment: ${{ startsWith(github.ref, 'refs/heads/release') && 'internal' || 'development' }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   approval:
