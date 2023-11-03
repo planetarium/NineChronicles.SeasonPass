@@ -59,13 +59,6 @@ class SharedStack(Stack):
             dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.brave_dlq),
             visibility_timeout=cdk_core.Duration.seconds(120),
         )
-        # Deprecated
-        self.dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-dlq")
-        self.q = _sqs.Queue(
-            self, f"{config.stage}-9c-season_pass-queue",
-            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.dlq),
-            visibility_timeout=cdk_core.Duration.seconds(120),
-        )
 
         # RDS
         self.rds_security_group = _ec2.SecurityGroup(
