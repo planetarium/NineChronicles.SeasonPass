@@ -104,9 +104,6 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
             f"No activity recorded for season {target_season.id} for avatar {user_season.avatar_addr}")
 
     available_rewards = user_season.available_rewards(sess)
-    if not (available_rewards["normal"] or available_rewards["premium"]):
-        raise SeasonNotFoundError(f"No available rewards to get for avatar {user_season.avatar_addr}")
-
     max_level, repeat_exp = get_max_level(sess)
 
     # calculate rewards to get
