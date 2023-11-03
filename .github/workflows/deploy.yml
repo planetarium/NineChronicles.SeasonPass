@@ -127,6 +127,7 @@ jobs:
     needs: deployment
     if: ${{ always() }}
     with:
+      success: ${{ success() }}
       environment: ${{ inputs.environment }}
       url: ${{ needs.deployment.outputs.url }}
     secrets:
