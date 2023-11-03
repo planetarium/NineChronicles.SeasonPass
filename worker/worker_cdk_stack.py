@@ -99,7 +99,7 @@ class WorkerStack(Stack):
             timeout=cdk_core.Duration.seconds(120),
             environment=env,
             events=[
-                _evt_src.SqsEventSource(shared_stack.q)
+                _evt_src.SqsEventSource(shared_stack.unload_q)
             ],
             memory_size=256,
             reserved_concurrent_executions=1,
@@ -118,7 +118,7 @@ class WorkerStack(Stack):
             timeout=cdk_core.Duration.seconds(120),
             environment=env,
             events=[
-                _evt_src.SqsEventSource(shared_stack.q)
+                _evt_src.SqsEventSource(shared_stack.brave_q)
             ],
             memory_size=256,
             reserved_concurrent_executions=1,
