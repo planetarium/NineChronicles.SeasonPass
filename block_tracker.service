@@ -1,0 +1,11 @@
+[Unit]
+Description=9c SeasonPass block tracker
+
+[Service]
+ExecStart=/app/NineChronicles.SeasonPass/.venv/bin/python -m worker.block_tracker
+WorkingDirectory=/app/NineChronicles.SeasonPass
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

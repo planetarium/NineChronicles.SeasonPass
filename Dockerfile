@@ -9,11 +9,11 @@ RUN apt install -y postgresql-client vim
 RUN pip install -U pip "poetry==${POETRY_VERSION}"
 RUN poetry config virtualenvs.create false
 
-COPY ./worker /app/worker
-COPY ./common /app/worker/common
-COPY pyproject.toml /app
-COPY poetry.lock /app
+COPY ./worker /app/NineChronicles.SeasonPass/worker
+COPY ./common /app/NineChronicles.SeasonPass/common
+COPY pyproject.toml /app/NineChronicles.SeasonPass
+COPY poetry.lock /app/NineChronicles/SeasonPass
 COPY block_tracker.service /etc/systemd/system/block_tracker.service
 
-WORKDIR /app
+WORKDIR /app/NineChronicles.SeasonPass
 RUN poetry install --no-root --no-dev
