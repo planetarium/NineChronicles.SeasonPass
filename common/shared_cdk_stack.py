@@ -47,10 +47,16 @@ class SharedStack(Stack):
         self.vpc = _ec2.Vpc.from_lookup(self, f"{config.stage}-9c-season_pass-vpc", vpc_id=resource_data.vpc_id)
 
         # SQS
-        self.dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-dlq")
-        self.q = _sqs.Queue(
-            self, f"{config.stage}-9c-season_pass-queue",
-            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.dlq),
+        self.unload_dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-unload-dlq")
+        self.unload_q = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-unload-queue",
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.unload_dlq),
+            visibility_timeout=cdk_core.Duration.seconds(120),
+        )
+        self.brave_dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-brave-dlq")
+        self.brave_q = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-brave-queue",
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.brave_dlq),
             visibility_timeout=cdk_core.Duration.seconds(120),
         )
 
