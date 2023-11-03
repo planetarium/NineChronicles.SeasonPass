@@ -91,6 +91,6 @@ jobs:
         uses: ./.github/workflows/slack_message.yml
         if: ${{ failure() }}
         with:
-          success: false
+          type: failure
           environment: ${{ inputs.environment }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
