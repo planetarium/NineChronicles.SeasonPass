@@ -104,15 +104,12 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
             f"No activity recorded for season {target_season.id} for avatar {user_season.avatar_addr}")
 
     available_rewards = user_season.available_rewards(sess)
-    if not (available_rewards["normal"] or available_rewards["premium"]):
-        raise SeasonNotFoundError(f"No available rewards to get for avatar {user_season.avatar_addr}")
-
     max_level, repeat_exp = get_max_level(sess)
 
     # calculate rewards to get
     reward_items = defaultdict(int)
     reward_currencies = defaultdict(int)
-    reward_dict = {x.level: x.reward_list for x in target_season.reward_list}
+    reward_dict = {x["level"]: x for x in target_season.reward_list}
     for reward_level in available_rewards["normal"]:
         reward = reward_dict[reward_level]
         for item in reward["normal"]["item"]:
@@ -144,7 +141,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         user_season.last_premium_claim = user_season.level
 
     if user_season.level == max_level.level:
-        user_season.exp -= repeat_exp * len(available_rewards["normal"])
+        user_season.exp -= repeat_exp * available_rewards["normal"].count(max_level.level + 1)
 
     sess.add(user_season)
     sess.commit()

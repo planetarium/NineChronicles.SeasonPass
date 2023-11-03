@@ -25,18 +25,17 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
 
     def available_rewards(self, sess):
         max_level, repeat_exp = get_max_level(sess)
-        if self.level == max_level.level:
-            return {
-                "normal": [max_level.level] * ((self.exp - max_level.exp) // repeat_exp),
-                "premium": []
-            }
-
-        return {
+        rewards = {
             "normal": [] if self.level == self.last_normal_claim else list(
                 range(self.last_normal_claim + 1, self.level + 1)),
             "premium": [] if (not self.is_premium or self.level == self.last_premium_claim) else list(
                 range(self.last_premium_claim + 1, self.level + 1))
         }
+        if self.level == max_level.level:
+            # Get 31 level achievement
+            rewards["normal"].extend([max_level.level + 1] * ((self.exp - max_level.exp) // repeat_exp))
+
+        return rewards
 
     __table_args__ = (
         Index("avatar_season", "avatar_addr", "season_pass_id"),
