@@ -148,7 +148,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     sess.refresh(user_season)
 
     # Send message to SQS
-    if settings.SQS_URL:
+    if (available_rewards["normal"] or available_rewards["premium"]) and settings.SQS_URL:
         resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
         logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
 
