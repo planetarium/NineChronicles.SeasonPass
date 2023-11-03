@@ -113,7 +113,6 @@ jobs:
 
       - name: Upload host to ParameterStore
         id: upload_host
-        needs: [deployment]
         env:
           STAGE: ${{ vars.STAGE }}
           REGION_NAME: ${{ vars.REGION_NAME }}
@@ -123,16 +122,15 @@ jobs:
           source $VENV
           python ./.github/scripts/upload_host.py ${{ steps.deployment.outputs.SERVICE_HOST }}
 
-  slack_notification:
-    uses: ./.github/workflows/slack_message.yml
-    needs: deployment
-    if: ${{ always() }}
-    with:
-      success: ${{ jobs.deployment.outcome == 'success' && jobs.upload_host.outcome == 'success' }}
-      environment: ${{ inputs.environment }}
-      url: ${{ needs.deployment.outputs.url }}
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Slack Notification
+        id: slack_notification
+        uses: ./.github/workflows/slack_message.yml
+        if: ${{ always() }}
+        with:
+          success: ${{ steps.deployment.outcome == 'success' && steps.upload_host.outcome == 'success' }}
+          environment: ${{ inputs.environment }}
+          url: ${{ steps.deployment.outputs.url }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 #      - name: Upgrade DB Schema
 #        env:
