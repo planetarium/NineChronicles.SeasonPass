@@ -7,6 +7,7 @@ from aws_cdk import (
     Stack, RemovalPolicy,
     aws_lambda as _lambda,
     aws_iam as _iam,
+    aws_ec2 as _ec2,
     aws_lambda_event_sources as _evt_src,
     aws_events as _events,
     aws_events_targets as _event_targets,
@@ -27,6 +28,30 @@ class WorkerStack(Stack):
         if self.shared_stack is None:
             raise ValueError("Shared stack not found. Please provide shared stack.")
         super().__init__(scope, construct_id, **kwargs)
+
+        # EC2 block tracker
+        init_file = ".github/scripts/init_block_tracker.sh"
+        with open(init_file, "r") as f:
+            s = f.read()
+        s.replace("[BRANCH]", os.popen("git branch --show-current").read())
+        with open(init_file, "w") as f:
+            f.write(s)
+
+        block_tracker = _ec2.Instance(
+            self, f"{config.stage}-9c-season_pass-block_tracker",
+            vpc=shared_stack.vpc,
+            instance_name=f"{config.stage}-9c-season_pass-block_tracker",
+            instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL),
+            machine_image=_ec2.MachineImage.from_ssm_parameter(
+                "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
+            ),
+            key_name=shared_stack.resource_data.key_name,
+            security_group=_ec2.SecurityGroup.from_lookup_by_id(
+                self, f"{config.stage}-9c-season_pass-block_tracker-sg",
+                security_group_id=shared_stack.resource_data.sg_id,
+            ),
+            user_data=_ec2.UserData.for_linux().add_execute_file_command(file_path=init_file)
+        )
 
         # Lambda Layer
         layer = _lambda.LayerVersion(
