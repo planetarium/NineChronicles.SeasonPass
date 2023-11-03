@@ -55,6 +55,12 @@ jobs:
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
+  approval_notice:
+    uses: ./.github/workflows/slack_message.yml
+    if: ${{ github.ref == 'refs/heads/main' }}
+    with:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
   approval:
     runs-on: ubuntu-latest
     if: ${{ github.ref == 'refs/heads/main' }}
