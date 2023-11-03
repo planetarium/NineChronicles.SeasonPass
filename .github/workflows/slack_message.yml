@@ -1,9 +1,9 @@
 on:
   workflow_call:
     inputs:
-      success:
+      type:
         required: true
-        type: boolean
+        type: string
       environment:
         required: true
         type: string
@@ -15,20 +15,17 @@ on:
         required: true
 
 jobs:
-  slack_after_success:
+  slack_message:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    if: ${{ inputs.success }}
     steps:
       - uses: actions/checkout@v3
 
       - name: Get Timestamp
         id: get_timestamp
-        run: |
-          echo "TIME=$(date +"%Y-%m-%d %H:%M:%S %Z")" >> $GITHUB_OUTPUT
+        run: echo "TIME=$(date +"%Y-%m-%d %H:%M:%S %Z")" >> $GITHUB_OUTPUT
 
-      - name: Slack message after success
-        if: ${{ success() }}
+      - name: Slack message for success
+        if: ${{ inputs.type == 'success' }}
         uses: slackapi/slack-github-action@v1.24.0
         env:
           STAGE: ${{ vars.STAGE }}
@@ -87,19 +84,10 @@ jobs:
               ]
             }
 
-  slack_after_failure:
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    if: ${{ !inputs.success }}
-    steps:
-      - uses: actions/checkout@v3
 
-      - name: Get Timestamp
-        id: get_timestamp
-        run: |
-          echo "TIME=$(date +"%Y-%m-%d %H:%M:%S %Z")" >> $GITHUB_OUTPUT
 
-      - name: Slack message after failure
+      - name: Slack message for failure
+        if: ${{ inputs.type == 'failure' }}
         uses: slackapi/slack-github-action@v1.24.0
         env:
           STAGE: ${{ vars.STAGE }}

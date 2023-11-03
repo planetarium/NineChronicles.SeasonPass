@@ -122,12 +122,22 @@ jobs:
           source $VENV
           python ./.github/scripts/upload_host.py ${{ steps.deployment.outputs.SERVICE_HOST }}
 
-      - name: Slack Notification
-        id: slack_notification
+      - name: Slack Notification on Success
+        id: slack_notification_success
         uses: ./.github/workflows/slack_message.yml
-        if: ${{ always() }}
+        if: ${{ success() }}
         with:
-          success: ${{ steps.deployment.outcome == 'success' && steps.upload_host.outcome == 'success' }}
+          type: success
+          environment: ${{ inputs.environment }}
+          url: ${{ steps.deployment.outputs.url }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Slack Notification on Failure
+        id: slack_notification_failure
+        uses: ./.github/workflows/slack_message.yml
+        if: ${{ failure() }}
+        with:
+          type: failure
           environment: ${{ inputs.environment }}
           url: ${{ steps.deployment.outputs.url }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
