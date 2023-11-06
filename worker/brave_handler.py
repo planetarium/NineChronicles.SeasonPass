@@ -14,13 +14,17 @@ from common.models.user import UserSeasonPass
 from common.utils.season_pass import get_current_season
 from consts import HOST_LIST
 from schemas.sqs import SQSMessage
+from utils.aws import fetch_secrets
 from utils.stake import StakeAPCoef
 
 AP_PER_ADVENTURE = 5
 STAGE = os.environ.get("STAGE", "development")
 GQL_URL = f"{random.choice(HOST_LIST[STAGE])}/graphql"
 
-engine = create_engine(os.environ.get("DB_URI"))
+DB_URI = os.environ.get("DB_URI")
+db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
+DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
+engine = create_engine(DB_URI)
 ap_coef = StakeAPCoef(GQL_URL)
 
 
