@@ -56,9 +56,9 @@ def verify_token(authorization: Annotated[str, Header()]):
         if ((datetime.utcfromtimestamp(token_data["iat"]) + timedelta(hours=1))
                 < datetime.utcfromtimestamp(token_data["exp"])):
             raise ExpiredSignatureError("Too long token lifetime")
-        if datetime.utcfromtimestamp(token_data["iat"]) > now:
+        if datetime.utcfromtimestamp(token_data["iat"]).astimezone(timezone.utc) > now:
             raise ExpiredSignatureError("Invalid token issue timestamp")
-        if datetime.utcfromtimestamp(token_data["exp"]) < now:
+        if datetime.utcfromtimestamp(token_data["exp"]).astimezone(timezone.utc) < now:
             raise ExpiredSignatureError("Token expired")
 
     except Exception as e:
