@@ -7,6 +7,8 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_iam as _iam,
     aws_lambda_event_sources as _evt_src,
+    aws_events as _events,
+    aws_events_targets as _event_targets,
 )
 from constructs import Construct
 
@@ -120,8 +122,39 @@ class WorkerStack(Stack):
             reserved_concurrent_executions=1,
         )
 
+        role.add_to_policy(
+            _iam.PolicyStatement(
+                actions=["sqs:sendmessage"],
+                resources=[
+                    shared_stack.brave_q.queue_arn,
+                ]
+            )
+        )
+
+        block_tracker = _lambda.Function(
+            self, f"{config.stage}-9c-season_pass-block_tracker-function",
+            function_name=f"{config.stage}-9c-season_pass-block_tracker",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            description="Block tracker of NineChronicles.SeasonPass to send action data to brave_handler",
+            code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            handler="block_tracker.handle",
+            layers=[layer],
+            role=role,
+            vpc=shared_stack.vpc,
+            timeout=cdk_core.Duration.seconds(75),  # NOTE: This must be longer than 1 minute
+            environment=env,
+            memory_size=512,
+        )
+
+        # Every minute
+        minute_event_rule = _events.Rule(
+            self, f"{config.stage}-9c-season_pass-block_tracker-event",
+            schedule=_events.Schedule.cron(minute="*")  # Every minute
+        )
+        minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
+
         brave_handler = _lambda.Function(
-            self, f"{config.stage}-9c-saeson_pass-brave_handler-function",
+            self, f"{config.stage}-9c-season_pass-brave_handler-function",
             function_name=f"{config.stage}-9c-season_pass-brave_handler",
             runtime=_lambda.Runtime.PYTHON_3_11,
             description="Brave exp handler of NineChronicles.SeasonPass",
@@ -136,5 +169,4 @@ class WorkerStack(Stack):
                 _evt_src.SqsEventSource(shared_stack.brave_q)
             ],
             memory_size=256,
-            reserved_concurrent_executions=1,
         )
