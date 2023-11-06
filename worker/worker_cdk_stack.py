@@ -143,7 +143,7 @@ class WorkerStack(Stack):
             vpc=shared_stack.vpc,
             timeout=cdk_core.Duration.seconds(75),  # NOTE: This must be longer than 1 minute
             environment=env,
-            memory_size=256,
+            memory_size=512,
         )
 
         # Every minute
