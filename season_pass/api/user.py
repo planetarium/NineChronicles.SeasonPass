@@ -71,7 +71,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         raise InvalidUpgradeRequestError(
             f"Avatar {target_user.avatar_addr} is not in premium and doesn't request premium.")
 
-    if target_user.is_premium and target_user.is_premium_plus and not request.is_premium_plus:
+    if target_user.is_premium and not target_user.is_premium_plus and not request.is_premium_plus:
         raise InvalidUpgradeRequestError(
             f"Avatar {target_user.avatar_addr} is in premium and doesn't request premium plus.")
 
