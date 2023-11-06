@@ -24,21 +24,6 @@ class WorkerStack(Stack):
             raise ValueError("Shared stack not found. Please provide shared stack.")
         super().__init__(scope, construct_id, **kwargs)
 
-        # Role for block tracker
-        tracker_role = _iam.Role(
-            self, f"{config.stage}-9c-season_pass-block_tracker-role",
-            role_name=f"{config.stage}-9c-season_pass-block_tracker-role",
-            assumed_by=_iam.ServicePrincipal("ec2.amazonaws.com")
-        )
-        tracker_role.add_to_policy(
-            _iam.PolicyStatement(
-                actions=["sqs:sendmessage"],
-                resources=[
-                    shared_stack.brave_q.queue_arn,
-                ]
-            )
-        )
-
         # Lambda Layer
         layer = _lambda.LayerVersion(
             self, f"{config.stage}-9c-season_pass-worker-lambda-layer",
@@ -86,6 +71,14 @@ class WorkerStack(Stack):
                 ]
             )
         )
+        role.add_to_policy(
+            _iam.PolicyStatement(
+                actions=["sqs:sendmessage"],
+                resources=[
+                    shared_stack.brave_q.queue_arn,
+                ]
+            )
+        )
 
         # Environment variables
         env = {
@@ -120,15 +113,6 @@ class WorkerStack(Stack):
             ],
             memory_size=256,
             reserved_concurrent_executions=1,
-        )
-
-        role.add_to_policy(
-            _iam.PolicyStatement(
-                actions=["sqs:sendmessage"],
-                resources=[
-                    shared_stack.brave_q.queue_arn,
-                ]
-            )
         )
 
         block_tracker = _lambda.Function(
