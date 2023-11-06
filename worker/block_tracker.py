@@ -11,9 +11,9 @@ import requests
 from gql import Client, gql
 from gql.transport.websockets import WebsocketsTransport
 
-from worker.consts import HOST_LIST
-from worker.schemas.action import ActionJson
-from worker.utils.stake import StakeAPCoef
+from consts import HOST_LIST
+from schemas.action import ActionJson
+from utils.stake import StakeAPCoef
 
 EXEC_LIMIT = 70  # Finish subscribe after 70 sec. : about 1min + 1block
 
