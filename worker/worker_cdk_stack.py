@@ -137,20 +137,20 @@ class WorkerStack(Stack):
         )
         minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
 
-        brave_handler = _lambda.Function(
-            self, f"{config.stage}-9c-season_pass-brave_handler-function",
-            function_name=f"{config.stage}-9c-season_pass-brave_handler",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            description="Brave exp handler of NineChronicles.SeasonPass",
-            code=_lambda.AssetCode("worker/", exclude=exclude_list),
-            handler="brave_handler.handle",
-            layers=[layer],
-            role=role,
-            vpc=shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(120),
-            environment=env,
-            events=[
-                _evt_src.SqsEventSource(shared_stack.brave_q)
-            ],
-            memory_size=256,
-        )
+        # brave_handler = _lambda.Function(
+        #     self, f"{config.stage}-9c-season_pass-brave_handler-function",
+        #     function_name=f"{config.stage}-9c-season_pass-brave_handler",
+        #     runtime=_lambda.Runtime.PYTHON_3_11,
+        #     description="Brave exp handler of NineChronicles.SeasonPass",
+        #     code=_lambda.AssetCode("worker/", exclude=exclude_list),
+        #     handler="brave_handler.handle",
+        #     layers=[layer],
+        #     role=role,
+        #     vpc=shared_stack.vpc,
+        #     timeout=cdk_core.Duration.seconds(120),
+        #     environment=env,
+        #     events=[
+        #         _evt_src.SqsEventSource(shared_stack.brave_q)
+        #     ],
+        #     memory_size=256,
+        # )
