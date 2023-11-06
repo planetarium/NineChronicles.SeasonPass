@@ -6,6 +6,7 @@ import logging
 import os
 import random
 import re
+import time
 from collections import defaultdict
 from threading import Thread
 
@@ -17,6 +18,8 @@ from gql.transport.websockets import WebsocketsTransport
 from worker.consts import HOST_LIST
 from worker.schemas.action import ActionJson
 from worker.utils.stake import StakeAPCoef
+
+EXEC_LIMIT = 70  # Finish subscribe after 70 sec. : about 1min + 1block
 
 
 def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
@@ -31,7 +34,7 @@ def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
     result[addr] = coef.get_ap_coef(stake_amount)
 
 
-def handler():
+def handle(event, context):
     stage = os.environ.get("STAGE", "development")
     url = f"{random.choice(HOST_LIST[stage])}/graphql"
     transport = WebsocketsTransport(url=url.replace("https", "wss"))
@@ -61,6 +64,7 @@ def handler():
     sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
 
     # Subscribe Tx. Forever
+    start = time.time()
     for result in client.subscribe(query):
         block_index = result["tx"]["txResult"]["blockIndex"]
         if tip is None:
@@ -89,6 +93,10 @@ def handler():
             stake_data = defaultdict(float)
             tip = block_index
 
+            # Finish subscribe after time limit
+            if (time.time() - start) >= EXEC_LIMIT:
+                break
+
         # Save action data and get NCG stake amount for later
         if result["tx"]["txResult"]["txStatus"] == "SUCCESS":
             signer = result["tx"]["transaction"]["signer"]
@@ -110,4 +118,4 @@ def handler():
 
 
 if __name__ == "__main__":
-    handler()
+    handle(None, None)
