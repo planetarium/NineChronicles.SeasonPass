@@ -61,8 +61,11 @@ def apply_exp(sess, user_season_dict: Dict[str, UserSeasonPass], action_type: Ac
     for d in action_data:
         target = user_season_dict[d["avatar_addr"]]
         target.exp += exp * d["count_base"]
-        if target.level < max(level_dict.keys()) and target.exp >= level_dict[target.level + 1]:
-            target.level += 1
+
+        for lvl in sorted(level_dict.keys(), reverse=True):
+            if target.exp >= level_dict[lvl]:
+                target.level = lvl
+                break
 
         sess.add(ActionHistory(
             season_id=target.season_pass_id,
@@ -87,8 +90,11 @@ def handle_sweep(sess, user_season_dict: Dict[str, UserSeasonPass], exp: int, le
         real_count = d["count_base"] // (AP_PER_ADVENTURE * coef / 100)
         target = user_season_dict[d["avatar_addr"]]
         target.exp += exp * real_count
-        if target.level < max(level_dict.keys()) and target.exp >= level_dict[target.level + 1]:
-            target.level += 1
+
+        for lvl in sorted(level_dict.keys(), reverse=True):
+            if target.exp >= level_dict[lvl]:
+                target.level = lvl
+                break
 
         sess.add(ActionHistory(
             season_id=target.season_pass_id,
