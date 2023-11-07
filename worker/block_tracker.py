@@ -27,7 +27,7 @@ def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
     else:
         stake_amount = float(data["deposit"])
 
-    result[addr] = coef.get_ap_coef(stake_amount)
+    result[addr.lower()] = coef.get_ap_coef(stake_amount)
 
 
 def send_message(tip: int, action_data: defaultdict, stake_data: defaultdict):
@@ -100,8 +100,8 @@ def subscribe_action(url: str, thread_dict: defaultdict, stake_data: defaultdict
                 action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
                 if regex.match(action_json.type_id):
                     action_data[block_index][action_json.type_id].append({
-                        "agent_addr": signer,
-                        "avatar_addr": action_json.avatar_addr,
+                        "agent_addr": signer.lower(),
+                        "avatar_addr": action_json.avatar_addr.lower(),
                         "count_base": action_json.count_base,
                     })
 
