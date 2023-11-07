@@ -11,10 +11,10 @@ from common.enums import ActionType
 from common.models.action import Block
 from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass
+from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_current_season
 from consts import HOST_LIST
 from schemas.sqs import SQSMessage
-from utils.aws import fetch_secrets
 from utils.stake import StakeAPCoef
 
 AP_PER_ADVENTURE = 5
