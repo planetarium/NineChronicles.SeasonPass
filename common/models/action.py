@@ -1,6 +1,8 @@
 from sqlalchemy import Column, BigInteger, Text, Integer, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, relationship
 
+from common.enums import ActionType
 from common.models.base import Base, TimeStampMixin, AutoIdMixin
 from common.models.season_pass import SeasonPass
 
@@ -16,7 +18,7 @@ class ActionHistory(AutoIdMixin, TimeStampMixin, Base):
     season: Mapped["SeasonPass"] = relationship("SeasonPass", foreign_keys=[season_id])
     agent_addr = Column(Text, nullable=False)
     avatar_addr = Column(Text, nullable=False)
-    action = Column(Text, nullable=False, index=True)
+    action = Column(ENUM(ActionType), nullable=False, index=True)
     count = Column(Integer, nullable=False)
     exp = Column(Integer, nullable=False)
 
