@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from common.enums import ActionType
-from common.models.action import Block
+from common.models.action import Block, ActionHistory
 from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
@@ -55,7 +55,8 @@ def verify_season_pass(sess, current_season: SeasonPass, action_data: Dict[str, 
     return season_pass_dict
 
 
-def apply_exp(user_season_dict: Dict[str, UserSeasonPass], exp: int, level_dict: Dict[int, int],
+def apply_exp(sess, user_season_dict: Dict[str, UserSeasonPass], action_type: ActionType, exp: int,
+              level_dict: Dict[int, int],
               action_data: List[Dict]):
     for d in action_data:
         target = user_season_dict[d["avatar_addr"]]
@@ -63,8 +64,14 @@ def apply_exp(user_season_dict: Dict[str, UserSeasonPass], exp: int, level_dict:
         if target.level < max(level_dict.keys()) and target.exp >= level_dict[target.level + 1]:
             target.level += 1
 
+        sess.add(ActionHistory(
+            season_id=target.season_pass_id,
+            agent_addr=target.agent_addr, avatar_addr=target.avatar_addr,
+            action=action_type, count=d["count_base"], exp=exp * ["count_base"],
+        ))
 
-def handle_sweep(user_season_dict: Dict[str, UserSeasonPass], exp: int, level_dict: Dict[int, int],
+
+def handle_sweep(sess, user_season_dict: Dict[str, UserSeasonPass], exp: int, level_dict: Dict[int, int],
                  action_data: List[Dict], coef_dict: Dict[str, int]):
     for d in action_data:
         coef = coef_dict.get(d["agent_addr"])
@@ -82,6 +89,12 @@ def handle_sweep(user_season_dict: Dict[str, UserSeasonPass], exp: int, level_di
         target.exp += exp * real_count
         if target.level < max(level_dict.keys()) and target.exp >= level_dict[target.level + 1]:
             target.level += 1
+
+        sess.add(ActionHistory(
+            season_id=target.season_pass_id,
+            agent_addr=target.agent_addr, avatar_addr=target.avatar_addr,
+            action=ActionType.SWEEP, count=real_count, exp=exp * real_count,
+        ))
 
 
 def handle(event, context):
@@ -131,17 +144,21 @@ def handle(event, context):
             user_season_dict = verify_season_pass(sess, current_season, body["action_data"])
             for type_id, action_data in body["action_data"].items():
                 if "raid" in type_id:
-                    apply_exp(user_season_dict, current_season.exp_dict[ActionType.RAID], level_dict, action_data)
+                    apply_exp(sess, user_season_dict, ActionType.RAID, current_season.exp_dict[ActionType.RAID],
+                              level_dict, action_data)
                     logging.info(f"{len(action_data)} Raid applied.")
                 elif "battle_arena" in type_id:
-                    apply_exp(user_season_dict, current_season.exp_dict[ActionType.ARENA], level_dict, action_data)
+                    apply_exp(sess, user_season_dict, ActionType.ARENA, current_season.exp_dict[ActionType.ARENA],
+                              level_dict, action_data)
                     logging.info(f"{len(action_data)} Arena applied.")
                 elif "sweep" in type_id:
-                    handle_sweep(user_season_dict, current_season.exp_dict[ActionType.SWEEP], level_dict, action_data,
+                    handle_sweep(sess, user_season_dict, current_season.exp_dict[ActionType.SWEEP], level_dict,
+                                 action_data,
                                  body["stake"])
                     logging.info(f"{len(action_data)} Sweep applied.")
                 else:
-                    apply_exp(user_season_dict, current_season.exp_dict[ActionType.HAS], level_dict, action_data)
+                    apply_exp(sess, user_season_dict, ActionType.HAS, current_season.exp_dict[ActionType.HAS],
+                              level_dict, action_data)
                     logging.info(f"{len(action_data)} HackAndSlash applied.")
 
             sess.add_all(list(user_season_dict.values()))
