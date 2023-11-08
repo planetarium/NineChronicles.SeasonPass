@@ -2,10 +2,12 @@ from typing import List
 
 from pydantic import BaseModel as BaseSchema
 
+from common.enums import PlanetID
 from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema
 
 
 class UserSeasonPassSchema(BaseSchema):
+    planet_id: PlanetID
     agent_addr: str = ""
     avatar_addr: str
     season_pass_id: int = 0
