@@ -14,7 +14,7 @@ if __name__ == "__main__":
         ssm.put_parameter(
             Name=f"{os.environ.get('STAGE')}_9c_SEASON_PASS_HOST",
             Value=host,
-            Type="string",
+            Type="String",
             Overwrite=True,
         )
     except Exception as e:

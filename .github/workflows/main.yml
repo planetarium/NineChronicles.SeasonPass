@@ -32,6 +32,14 @@ jobs:
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
+  build_docker:
+    if: ${{ github.event_name == 'push' }}
+    needs: [ "test", "synth" ]
+    uses: ./.github/workflows/build_docker.yml
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_ACCESS_TOKEN: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
   deploy_without_approval:
     # This is for development / internal deployment
     if: ${{ github.ref == 'refs/heads/development' || startsWith(github.ref, 'refs/heads/release') }}
@@ -45,6 +53,16 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  approval_notice:
+    uses: ./.github/workflows/slack_message.yml
+    needs: [ "test", "synth" ]
+    if: ${{ github.ref == 'refs/heads/main' }}
+    with:
+      type: approval
+      environment: ${{ startsWith(github.ref, 'refs/heads/release') && 'internal' || 'development' }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   approval:

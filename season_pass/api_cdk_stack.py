@@ -55,7 +55,9 @@ class APIStack(Stack):
         role.add_to_policy(
             _iam.PolicyStatement(
                 actions=["sqs:sendmessage"],
-                resources=[shared_stack.q.queue_arn]
+                resources=[
+                    shared_stack.unload_q.queue_arn,
+                ]
             )
         )
 
@@ -70,7 +72,7 @@ class APIStack(Stack):
                       f"/season_pass",
             "LOGGING_LEVEL": "INFO",
             "DB_ECHO": "False",
-            "SQS_URL": shared_stack.q.queue_url,
+            "SQS_URL": shared_stack.unload_q.queue_url,
         }
 
         # Lambda Function

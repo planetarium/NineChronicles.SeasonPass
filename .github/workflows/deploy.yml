@@ -122,15 +122,25 @@ jobs:
           source $VENV
           python ./.github/scripts/upload_host.py ${{ steps.deployment.outputs.SERVICE_HOST }}
 
-  slack_notification:
-    uses: ./.github/workflows/slack_message.yml
-    needs: deployment
-    if: ${{ always() }}
-    with:
-      environment: ${{ inputs.environment }}
-      url: ${{ needs.deployment.outputs.url }}
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Slack Notification on Success
+        id: slack_notification_success
+        uses: ./.github/workflows/slack_message.yml
+        if: ${{ success() }}
+        with:
+          type: success
+          environment: ${{ inputs.environment }}
+          url: ${{ steps.deployment.outputs.url }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Slack Notification on Failure
+        id: slack_notification_failure
+        uses: ./.github/workflows/slack_message.yml
+        if: ${{ failure() }}
+        with:
+          type: failure
+          environment: ${{ inputs.environment }}
+          url: ${{ steps.deployment.outputs.url }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 #      - name: Upgrade DB Schema
 #        env:

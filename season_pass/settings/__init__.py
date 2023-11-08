@@ -28,9 +28,12 @@ if db_password is not None:
     DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 DB_ECHO = config("DB_ECHO", cast=bool, default=False)
 
-JWT_TOKEN_SECRET = fetch_parameter(region=os.environ.get("REGION_NAME"),
-                                   parameter_name=f"{os.environ.get('STAGE')}_9c_SEASON_PASS_JWT_TOKEN_SECRET",
-                                   secure=True)
+try:
+    JWT_TOKEN_SECRET = fetch_parameter(region=os.environ.get("REGION_NAME"),
+                                       parameter_name=f"{os.environ.get('STAGE')}_9c_SEASON_PASS_JWT_TOKEN_SECRET",
+                                       secure=True)["Value"]
+except:
+    pass
 
 # AWS
 REGION_NAME = config("REGION_NAME")
