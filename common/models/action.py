@@ -16,6 +16,8 @@ class ActionHistory(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "action_history"
     season_id = Column(Integer, ForeignKey("season_pass.id"), nullable=False)
     season: Mapped["SeasonPass"] = relationship("SeasonPass", foreign_keys=[season_id])
+    block_index = Column(Integer, nullable=False)
+    tx_id = Column(Text, nullable=False)
     agent_addr = Column(Text, nullable=False)
     avatar_addr = Column(Text, nullable=False)
     action = Column(ENUM(ActionType), nullable=False, index=True)
