@@ -32,14 +32,6 @@ jobs:
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  build_docker:
-    if: ${{ github.event_name == 'push' }}
-    needs: [ "test", "synth" ]
-    uses: ./.github/workflows/build_docker.yml
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_ACCESS_TOKEN: ${{ secrets.DOCKER_ACCESS_TOKEN }}
-
   deploy_without_approval:
     # This is for development / internal deployment
     if: ${{ github.ref == 'refs/heads/development' || startsWith(github.ref, 'refs/heads/release') }}
