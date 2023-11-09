@@ -15,7 +15,7 @@ from utils.stake import StakeAPCoef
 
 EXEC_LIMIT = 70  # Finish subscribe after 70 sec. : about 1min + 1block
 PLANET_ID = os.environ.get("PLANET_ID")
-HOST = os.environ.get("PLANET_HOST")
+HOST = os.environ.get("GQL_HOST")
 
 
 def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):

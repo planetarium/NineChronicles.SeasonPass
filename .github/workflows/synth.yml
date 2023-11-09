@@ -81,6 +81,7 @@ jobs:
           KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PLANET_URL: ${{ vars.PLANET_URL }}
         run: |
           source $VENV
           yarn cdk synth
