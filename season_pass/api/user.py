@@ -30,12 +30,15 @@ sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 
 @router.get("/status", response_model=UserSeasonPassSchema)
-def user_status(season_id: int, avatar_addr: str, planet_id: str = PlanetID.ODIN.value.decode(),
+def user_status(season_id: int, avatar_addr: str, planet_id: str = "",
                 sess=Depends(session)):
-    try:
-        planet_id = PlanetID(bytes(planet_id, "utf-8"))
-    except Exception:
-        raise HTTPException(status_code=400, detail=f"Invalid planet_id {planet_id}")
+    if not planet_id:
+        planet_id = PlanetID.ODIN if settings.stage == "mainnet" else PlanetID.ODIN_INTERNAL
+    else:
+        try:
+            planet_id = PlanetID(bytes(planet_id, "utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid planet_id {planet_id}")
 
     target = sess.scalar(select(UserSeasonPass).where(
         UserSeasonPass.planet_id == planet_id,
