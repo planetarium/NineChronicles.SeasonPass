@@ -2,7 +2,7 @@ from sqlalchemy import Text, Column, Integer, ForeignKey, Boolean, Index, LargeB
 from sqlalchemy.dialects.postgresql import JSONB, ENUM, ARRAY
 from sqlalchemy.orm import relationship, backref, Mapped
 
-from common.enums import TxStatus, PlanetID
+from common.enums import TxStatus
 from common.models.base import Base, TimeStampMixin, AutoIdMixin
 from common.models.season_pass import SeasonPass
 from common.utils.season_pass import get_max_level
@@ -10,8 +10,7 @@ from common.utils.season_pass import get_max_level
 
 class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "user_season_pass"
-    planet_id = Column(LargeBinary(length=12), nullable=False, default=PlanetID.ODIN.value,
-                       doc="An identifier to distinguish network & planet")
+    planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
     agent_addr = Column(Text, nullable=False, index=True)
     avatar_addr = Column(Text, nullable=False, index=True)
     season_pass_id = Column(Integer, ForeignKey("season_pass.id"), nullable=False)
@@ -52,8 +51,7 @@ class Claim(AutoIdMixin, TimeStampMixin, Base):
     normal_levels = Column(ARRAY(Integer), nullable=False, default=[])
     premium_levels = Column(ARRAY(Integer), nullable=False, default=[])
     reward_list = Column(JSONB, nullable=False)
-    planet_id = Column(LargeBinary(length=12), nullable=False, default=PlanetID.ODIN.value,
-                       doc="An identifier to distinguish network & planet")
+    planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
     nonce = Column(Integer, nullable=True, unique=True)
     tx = Column(Text, nullable=True)
     tx_id = Column(Text, nullable=True)
