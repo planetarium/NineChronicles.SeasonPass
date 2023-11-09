@@ -70,7 +70,7 @@ def apply_exp(sess, user_season_dict: Dict[str, UserSeasonPass], action_type: Ac
         sess.add(ActionHistory(
             season_id=target.season_pass_id,
             agent_addr=target.agent_addr, avatar_addr=target.avatar_addr,
-            action=action_type, count=d["count_base"], exp=exp * ["count_base"],
+            action=action_type, count=d["count_base"], exp=exp * d["count_base"],
         ))
 
 
