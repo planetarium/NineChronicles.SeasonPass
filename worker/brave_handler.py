@@ -46,8 +46,8 @@ def verify_season_pass(sess, current_season: SeasonPass, action_data: Dict[str, 
                 new_season = UserSeasonPass(
                     planet_id=data.get("planet_id", PlanetID.ODIN),
                     season_pass_id=current_season.id,
-                    agent_addr=d["agent_addr"],
-                    avatar_addr=d["avatar_addr"],
+                    agent_addr=d["agent_addr"].lower(),
+                    avatar_addr=d["avatar_addr"].lower(),
                     level=0, exp=0,
                 )
                 season_pass_dict[d["avatar_addr"]] = new_season

@@ -18,6 +18,11 @@ class UserSeasonPassSchema(BaseSchema):
     last_normal_claim: int = 0
     last_premium_claim: int = 0
 
+    @model_validator(mode="after")
+    def lowercase(self):
+        self.agent_addr = self.agent_addr.lower()
+        self.avatar_addr = self.avatar_addr.lower()
+
     class Config:
         from_attributes = True
 
@@ -31,7 +36,9 @@ class UpgradeRequestSchema(BaseSchema):
     is_premium_plus: bool = False
 
     @model_validator(mode="after")
-    def set_planet_id(self):
+    def sanitize(self):
+        self.agent_addr = self.agent_addr.lower()
+        self.avatar_addr = self.avatar_addr.lower()
         if isinstance(self.planet_id, str):
             self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
         return self
@@ -44,7 +51,9 @@ class ClaimRequestSchema(BaseSchema):
     season_id: int
 
     @model_validator(mode="after")
-    def set_planet_id(self):
+    def sanitize(self):
+        self.agent_addr = self.agent_addr.lower()
+        self.avatar_addr = self.avatar_addr.lower()
         if isinstance(self.planet_id, str):
             self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
         return self
