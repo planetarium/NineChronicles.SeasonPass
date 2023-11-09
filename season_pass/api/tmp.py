@@ -19,6 +19,7 @@ router = APIRouter(
 def register_user(request: RegisterRequestSchema, sess=Depends(session)):
     current_season = get_current_season(sess)
     new_data = UserSeasonPass(
+        planet_id=request.planet_id,
         agent_addr=request.agent_addr,
         avatar_addr=request.avatar_addr,
         season_pass_id=current_season.id,

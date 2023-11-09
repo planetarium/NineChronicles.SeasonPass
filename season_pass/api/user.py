@@ -5,9 +5,10 @@ from datetime import timezone, datetime
 from uuid import uuid4
 
 import boto3
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
+from common.enums import PlanetID
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass, Claim
 from common.utils.season_pass import get_current_season, get_max_level
@@ -15,7 +16,9 @@ from season_pass import settings
 from season_pass.dependencies import session
 from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, UserNotFoundError,
                                     InvalidUpgradeRequestError, )
-from season_pass.schemas.user import ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema
+from season_pass.schemas.user import (
+    ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
+)
 from season_pass.utils import verify_token
 
 router = APIRouter(
@@ -27,12 +30,21 @@ sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 
 @router.get("/status", response_model=UserSeasonPassSchema)
-def user_status(season_id: int, avatar_addr: str, sess=Depends(session)):
+def user_status(season_id: int, avatar_addr: str, planet_id: str = PlanetID.ODIN.value.decode(),
+                sess=Depends(session)):
+    try:
+        planet_id = PlanetID(bytes(planet_id, "utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Invalid planet_id {planet_id}")
+
     target = sess.scalar(select(UserSeasonPass).where(
-        UserSeasonPass.season_pass_id == season_id, UserSeasonPass.avatar_addr == avatar_addr
+        UserSeasonPass.planet_id == planet_id,
+        UserSeasonPass.season_pass_id == season_id,
+        UserSeasonPass.avatar_addr == avatar_addr
     ))
     if not target:
-        return UserSeasonPassSchema(avatar_addr=avatar_addr, season_pass_id=season_id)
+        return UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
+                                    season_pass_id=season_id)
 
     return target
 
@@ -59,6 +71,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(
+            UserSeasonPass.planet_id == request.planet_id,
             UserSeasonPass.agent_addr == request.agent_addr,
             UserSeasonPass.avatar_addr == request.avatar_addr,
             UserSeasonPass.season_pass_id == request.season_id
@@ -95,13 +108,14 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         raise SeasonNotFoundError(f"Requested season {request.season_id} does not exist or not active.")
 
     user_season = sess.scalar(select(UserSeasonPass).where(
+        UserSeasonPass.planet_id == request.planet_id,
         UserSeasonPass.avatar_addr == request.avatar_addr,
         UserSeasonPass.season_pass_id == target_season.id
     ))
     if not user_season:
         # No action executed about season pass.
         raise SeasonNotFoundError(
-            f"No activity recorded for season {target_season.id} for avatar {user_season.avatar_addr}")
+            f"No activity recorded for season {target_season.id} for avatar {request.avatar_addr}")
 
     available_rewards = user_season.available_rewards(sess)
     max_level, repeat_exp = get_max_level(sess)
@@ -128,6 +142,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
     claim = Claim(
         uuid=str(uuid4()),
+        planet_id=user_season.planet_id,
         agent_addr=user_season.agent_addr,
         avatar_addr=user_season.avatar_addr,
         reward_list={"item": reward_items, "currency": reward_currencies},

@@ -68,3 +68,21 @@ class ActionType(Enum):
     SWEEP = "hack_and_slash_sweep"
     ARENA = "battle_arena"
     RAID = "raid"
+
+
+class PlanetID(bytes, Enum):
+    """
+    # PlanetID
+    ---
+    Network & Planet recognizing UID
+
+    - *0x000000000000* : Mainnet + Odin
+    - *0x000000000001* : Mainnet + Heimdall
+    - *0x100000000000* : Internal + Odin
+    - *0x100000000001* : Internal + Heimdall
+
+    """
+    ODIN = b'0x000000000000'
+    HEIMDALL = b'0x000000000001'
+    ODIN_INTERNAL = b'0x100000000000'
+    HEIMDALL_INTERNAL = b'0x100000000001'
