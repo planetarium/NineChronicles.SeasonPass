@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import random
 import re
 from collections import defaultdict
 from threading import Thread
@@ -11,11 +10,12 @@ import requests
 from gql import Client, gql
 from gql.transport.websockets import WebsocketsTransport
 
-from consts import HOST_LIST
 from schemas.action import ActionJson
 from utils.stake import StakeAPCoef
 
 EXEC_LIMIT = 70  # Finish subscribe after 70 sec. : about 1min + 1block
+PLANET_ID = os.environ.get("PLANET_ID")
+HOST = os.environ.get("PLANET_HOST")
 
 
 def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
@@ -33,6 +33,7 @@ def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
 def send_message(tip: int, action_data: defaultdict, stake_data: defaultdict):
     sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
     message = {
+        "planet_id": PLANET_ID,
         "block": tip,
         "action_data": dict(action_data),
         "stake": dict(stake_data),
@@ -108,7 +109,7 @@ def subscribe_action(url: str, thread_dict: defaultdict, stake_data: defaultdict
 
 def handle(event, context):
     stage = os.environ.get("STAGE", "development")
-    url = f"{random.choice(HOST_LIST[stage])}/graphql"
+    url = f"{HOST}/graphql"
 
     # Init
     thread_dict = defaultdict(list)
