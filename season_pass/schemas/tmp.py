@@ -11,9 +11,12 @@ class RegisterRequestSchema(BaseSchema):
     avatar_addr: str
 
     @model_validator(mode="after")
-    def set_planet_id(self):
+    def sanitize(self):
+        self.agent_addr = self.agent_addr.lower()
+        self.avatar_addr = self.avatar_addr.lower()
         if isinstance(self.planet_id, str):
             self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
+        return self
 
 
 class PremiumRequestSchema(BaseSchema):
@@ -21,8 +24,16 @@ class PremiumRequestSchema(BaseSchema):
     is_premium: bool
     is_premium_plus: bool
 
+    @model_validator(mode="after")
+    def lowercase(self):
+        self.avatar_addr = self.avatar_addr.lower()
+
 
 class LevelRequestSchema(BaseSchema):
     avatar_addr: str
     level: Optional[int] = None
     exp: Optional[int] = None
+
+    @model_validator(mode="after")
+    def lowercase(self):
+        self.avatar_addr = self.avatar_addr.lower()

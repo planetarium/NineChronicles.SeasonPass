@@ -168,3 +168,19 @@ class WorkerStack(Stack):
             ],
             memory_size=256,
         )
+
+        # Manual signer
+        if config.stage != "mainnet":
+            manual_signer = _lambda.Function(
+                self, f"{config.stage}-9c-season_pass-manual_signer-function",
+                function_name=f"{config.stage}-9c-season_pass-manual_signer",
+                runtime=_lambda.Runtime.PYTHON_3_11,
+                description="Manual Tx. signer from season pass garage address",
+                code=_lambda.AssetCode("worker/", exclude=exclude_list),
+                handler="manual_signer.handle",
+                layers=[layer],
+                role=role,
+                vpc=shared_stack.vpc,
+                timeout=cdk_core.Duration.seconds(10),
+                environment=env,
+            )

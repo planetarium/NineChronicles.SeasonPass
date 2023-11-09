@@ -50,8 +50,8 @@ def verify_season_pass(sess, planet_id: PlanetID, current_season: SeasonPass, ac
                 new_season = UserSeasonPass(
                     planet_id=data.get("planet_id", PlanetID.ODIN if STAGE == "mainnet" else PlanetID.ODIN_INTERNAL),
                     season_pass_id=current_season.id,
-                    agent_addr=d["agent_addr"],
-                    avatar_addr=d["avatar_addr"],
+                    agent_addr=d["agent_addr"].lower(),
+                    avatar_addr=d["avatar_addr"].lower(),
                     level=0, exp=0,
                 )
                 season_pass_dict[d["avatar_addr"]] = new_season
@@ -76,7 +76,7 @@ def apply_exp(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonP
             planet_id=planet_id,
             season_id=target.season_pass_id,
             agent_addr=target.agent_addr, avatar_addr=target.avatar_addr,
-            action=action_type, count=d["count_base"], exp=exp * ["count_base"],
+            action=action_type, count=d["count_base"], exp=exp * d["count_base"],
         ))
 
 
