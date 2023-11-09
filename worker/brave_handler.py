@@ -45,8 +45,8 @@ def verify_season_pass(sess, current_season: SeasonPass, action_data: Dict[str, 
             if d["avatar_addr"] not in season_pass_dict:
                 new_season = UserSeasonPass(
                     season_pass_id=current_season.id,
-                    agent_addr=d["agent_addr"],
-                    avatar_addr=d["avatar_addr"],
+                    agent_addr=d["agent_addr"].lower(),
+                    avatar_addr=d["avatar_addr"].lower(),
                     level=0, exp=0,
                 )
                 season_pass_dict[d["avatar_addr"]] = new_season

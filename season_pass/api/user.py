@@ -28,8 +28,10 @@ sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 @router.get("/status", response_model=UserSeasonPassSchema)
 def user_status(season_id: int, avatar_addr: str, sess=Depends(session)):
+    avatar_addr = avatar_addr.lower()
     target = sess.scalar(select(UserSeasonPass).where(
-        UserSeasonPass.season_pass_id == season_id, UserSeasonPass.avatar_addr == avatar_addr
+        UserSeasonPass.season_pass_id == season_id,
+        UserSeasonPass.avatar_addr == avatar_addr
     ))
     if not target:
         return UserSeasonPassSchema(avatar_addr=avatar_addr, season_pass_id=season_id)
@@ -128,8 +130,8 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
     claim = Claim(
         uuid=str(uuid4()),
-        agent_addr=user_season.agent_addr,
-        avatar_addr=user_season.avatar_addr,
+        agent_addr=user_season.agent_addr.lower(),
+        avatar_addr=user_season.avatar_addr.lower(),
         reward_list={"item": reward_items, "currency": reward_currencies},
         normal_levels=available_rewards["normal"],
         premium_levels=available_rewards["premium"],
