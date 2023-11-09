@@ -2,10 +2,12 @@ from typing import List
 
 from pydantic import BaseModel as BaseSchema, model_validator
 
+from common.enums import PlanetID
 from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema
 
 
 class UserSeasonPassSchema(BaseSchema):
+    planet_id: PlanetID
     agent_addr: str = ""
     avatar_addr: str
     season_pass_id: int = 0
@@ -26,6 +28,7 @@ class UserSeasonPassSchema(BaseSchema):
 
 
 class UpgradeRequestSchema(BaseSchema):
+    planet_id: PlanetID | str = PlanetID.ODIN
     agent_addr: str
     avatar_addr: str
     season_id: int
@@ -33,20 +36,27 @@ class UpgradeRequestSchema(BaseSchema):
     is_premium_plus: bool = False
 
     @model_validator(mode="after")
-    def lowercase(self):
+    def sanitize(self):
         self.agent_addr = self.agent_addr.lower()
         self.avatar_addr = self.avatar_addr.lower()
+        if isinstance(self.planet_id, str):
+            self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
+        return self
 
 
 class ClaimRequestSchema(BaseSchema):
+    planet_id: PlanetID | str = PlanetID.ODIN
     agent_addr: str
     avatar_addr: str
     season_id: int
 
     @model_validator(mode="after")
-    def lowercase(self):
+    def sanitize(self):
         self.agent_addr = self.agent_addr.lower()
         self.avatar_addr = self.avatar_addr.lower()
+        if isinstance(self.planet_id, str):
+            self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
+        return self
 
 
 class ClaimResultSchema(BaseSchema):

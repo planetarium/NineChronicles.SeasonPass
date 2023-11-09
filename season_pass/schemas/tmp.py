@@ -2,15 +2,21 @@ from typing import Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator
 
+from common.enums import PlanetID
+
 
 class RegisterRequestSchema(BaseSchema):
+    planet_id: PlanetID | str = PlanetID.ODIN
     agent_addr: str
     avatar_addr: str
 
     @model_validator(mode="after")
-    def lowercase(self):
+    def sanitize(self):
         self.agent_addr = self.agent_addr.lower()
         self.avatar_addr = self.avatar_addr.lower()
+        if isinstance(self.planet_id, str):
+            self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
+        return self
 
 
 class PremiumRequestSchema(BaseSchema):
