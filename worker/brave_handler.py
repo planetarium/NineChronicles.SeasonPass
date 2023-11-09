@@ -5,6 +5,7 @@ from typing import List, Dict
 
 import requests
 from sqlalchemy import create_engine, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from common.enums import ActionType, PlanetID
@@ -173,7 +174,11 @@ def handle(event, context):
             sess.add(Block(index=block_index))
             sess.commit()
             logging.info(f"All brave exp for block {body['block']} applied.")
-
+    except IntegrityError as e:
+        if str(e) == 'IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_pkey"':
+            logging.warning(e)
+        else:
+            raise e
     finally:
         if sess is not None:
             sess.rollback()
