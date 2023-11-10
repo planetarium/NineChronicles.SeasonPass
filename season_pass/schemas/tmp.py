@@ -27,6 +27,7 @@ class PremiumRequestSchema(BaseSchema):
     @model_validator(mode="after")
     def lowercase(self):
         self.avatar_addr = self.avatar_addr.lower()
+        return self
 
 
 class LevelRequestSchema(BaseSchema):
@@ -37,3 +38,4 @@ class LevelRequestSchema(BaseSchema):
     @model_validator(mode="after")
     def lowercase(self):
         self.avatar_addr = self.avatar_addr.lower()
+        return self
