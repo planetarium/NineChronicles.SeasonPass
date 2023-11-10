@@ -15,7 +15,7 @@ from utils.stake import StakeAPCoef
 
 EXEC_LIMIT = 70  # Finish subscribe after 70 sec. : about 1min + 1block
 PLANET_ID = os.environ.get("PLANET_ID")
-HOST = os.environ.get("GQL_HOST")
+GQL_URL = os.environ.get("GQL_URL")
 
 
 def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
@@ -108,17 +108,14 @@ def subscribe_action(url: str, thread_dict: defaultdict, stake_data: defaultdict
 
 
 def handle(event, context):
-    stage = os.environ.get("STAGE", "development")
-    url = f"{HOST}/graphql"
-
     # Init
     thread_dict = defaultdict(list)
     stake_data = defaultdict(lambda: defaultdict(float))
     action_data = defaultdict(lambda: defaultdict(list))
 
     # Subscribe Tx. Forever
-    tip_thread = Thread(target=subscribe_tip, args=(url, thread_dict, stake_data, action_data))
-    action_thread = Thread(target=subscribe_action, args=(url, thread_dict, stake_data, action_data))
+    tip_thread = Thread(target=subscribe_tip, args=(GQL_URL, thread_dict, stake_data, action_data))
+    action_thread = Thread(target=subscribe_action, args=(GQL_URL, thread_dict, stake_data, action_data))
     tip_thread.start()
     action_thread.start()
     tip_thread.join(timeout=EXEC_LIMIT)

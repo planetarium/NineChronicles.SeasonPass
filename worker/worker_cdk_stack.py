@@ -2,6 +2,7 @@ import os
 
 import aws_cdk as cdk_core
 import boto3
+import requests
 from aws_cdk import (
     Stack, RemovalPolicy,
     aws_lambda as _lambda,
@@ -11,7 +12,6 @@ from aws_cdk import (
     aws_events_targets as _event_targets,
 )
 from constructs import Construct
-import requests
 
 from common import Config, COMMON_LAMBDA_EXCLUDE
 from worker import WORKER_LAMBDA_EXCLUDE
@@ -129,10 +129,8 @@ class WorkerStack(Stack):
         print(f"{len(data)} Planets to track blocks: {[x['name'] for x in data]}")
         for planet in data:
             planet_name = planet["name"].split(" ")[0]
-            planet_id = planet["id"]
-            gql_host = planet["rpcEndpoints"]["headless.gql"][0]
-            env["PLANET_ID"] = planet_id
-            env["GQL_HOST"] = gql_host
+            env["PLANET_ID"] = planet["id"]
+            env["GQL_URL"] = planet["rpcEndpoints"]["headless.gql"][0]
 
             block_tracker = _lambda.Function(
                 self, f"{config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
