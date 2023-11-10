@@ -2,6 +2,7 @@ import os
 
 import aws_cdk as cdk_core
 import boto3
+import requests
 from aws_cdk import (
     Stack, RemovalPolicy,
     aws_lambda as _lambda,
@@ -11,7 +12,6 @@ from aws_cdk import (
     aws_events_targets as _event_targets,
 )
 from constructs import Construct
-import requests
 
 from common import Config, COMMON_LAMBDA_EXCLUDE
 from worker import WORKER_LAMBDA_EXCLUDE
@@ -129,10 +129,8 @@ class WorkerStack(Stack):
         print(f"{len(data)} Planets to track blocks: {[x['name'] for x in data]}")
         for planet in data:
             planet_name = planet["name"].split(" ")[0]
-            planet_id = planet["id"]
-            gql_host = planet["rpcEndpoints"]["headless.gql"][0]
-            env["PLANET_ID"] = planet_id
-            env["GQL_HOST"] = gql_host
+            env["PLANET_ID"] = planet["id"]
+            env["GQL_URL"] = planet["rpcEndpoints"]["headless.gql"][0]
 
             block_tracker = _lambda.Function(
                 self, f"{config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
@@ -151,6 +149,12 @@ class WorkerStack(Stack):
 
             minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
 
+        try:
+            del env["PLANET_ID"]
+            del env["GQL_URL"]
+        except KeyError:
+            pass
+
         brave_handler = _lambda.Function(
             self, f"{config.stage}-9c-season_pass-brave_handler-function",
             function_name=f"{config.stage}-9c-season_pass-brave_handler",
@@ -162,7 +166,7 @@ class WorkerStack(Stack):
             role=role,
             vpc=shared_stack.vpc,
             timeout=cdk_core.Duration.seconds(120),
-            environment=env,
+            environment={**env, "PLANET_URL": os.environ.get("PLANET_URL")},
             events=[
                 _evt_src.SqsEventSource(shared_stack.brave_q)
             ],

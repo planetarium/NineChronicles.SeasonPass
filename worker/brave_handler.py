@@ -1,6 +1,5 @@
 import logging
 import os
-import random
 from typing import List, Dict
 
 import requests
@@ -14,19 +13,24 @@ from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_current_season
-from consts import HOST_LIST
 from schemas.sqs import SQSMessage
 from utils.stake import StakeAPCoef
 
 AP_PER_ADVENTURE = 5
 STAGE = os.environ.get("STAGE", "development")
-GQL_URL = f"{random.choice(HOST_LIST[STAGE])}/graphql"
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
+GQL_DICT = {}
+
+resp = requests.get(os.environ.get("PLANET_URL"))
+data = resp.json()
+for d in data:
+    GQL_DICT[PlanetID(bytes(d["id"], "utf-8"))] = d["rpcEndpoints"]["headless.gql"]
+
 engine = create_engine(DB_URI)
-ap_coef = StakeAPCoef(GQL_URL)
+ap_coef = StakeAPCoef()
 
 
 def verify_season_pass(sess, planet_id: PlanetID, current_season: SeasonPass, action_data: Dict[str, List]) \
@@ -82,8 +86,9 @@ def apply_exp(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonP
 
 
 def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonPass], exp: int,
-                 level_dict: Dict[int, int],
-                 block_index: int, action_data: List[Dict], coef_dict: Dict[str, int]):
+                 level_dict: Dict[int, int], block_index: int, action_data: List[Dict], coef_dict: Dict[str, int]):
+    GQL_URL = GQL_DICT[planet_id]
+    ap_coef.set_url(gql_url=GQL_URL)
     for d in action_data:
         coef = coef_dict.get(d["agent_addr"])
         if not coef:
