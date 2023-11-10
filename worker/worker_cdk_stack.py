@@ -130,7 +130,7 @@ class WorkerStack(Stack):
         for planet in data:
             planet_name = planet["name"]
             planet_id = planet["id"]
-            gql_host = planet["headless.gql"][0]
+            gql_host = planet["rpcEndpoints"]["headless.gql"][0]
             env["PLANET_ID"] = planet_id
             env["GQL_HOST"] = gql_host
 
