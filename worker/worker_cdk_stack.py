@@ -167,9 +167,9 @@ class WorkerStack(Stack):
             vpc=shared_stack.vpc,
             timeout=cdk_core.Duration.seconds(120),
             environment={**env, "PLANET_URL": os.environ.get("PLANET_URL")},
-            # events=[
-            #     _evt_src.SqsEventSource(shared_stack.brave_q)
-            # ],
+            events=[
+                _evt_src.SqsEventSource(shared_stack.brave_q)
+            ],
             memory_size=256,
         )
 
