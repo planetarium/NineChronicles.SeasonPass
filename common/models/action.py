@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, Text, Integer, ForeignKey, Index
+from sqlalchemy import Column, BigInteger, Text, Integer, ForeignKey, Index, LargeBinary
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, relationship
 
@@ -9,11 +9,13 @@ from common.models.season_pass import SeasonPass
 
 class Block(TimeStampMixin, Base):
     __tablename__ = "block"
+    planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
     index = Column(BigInteger, primary_key=True, index=True, nullable=False)
 
 
 class ActionHistory(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "action_history"
+    planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
     season_id = Column(Integer, ForeignKey("season_pass.id"), nullable=False)
     season: Mapped["SeasonPass"] = relationship("SeasonPass", foreign_keys=[season_id])
     block_index = Column(Integer, nullable=False)

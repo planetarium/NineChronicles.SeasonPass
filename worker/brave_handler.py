@@ -29,7 +29,8 @@ engine = create_engine(DB_URI)
 ap_coef = StakeAPCoef(GQL_URL)
 
 
-def verify_season_pass(sess, current_season: SeasonPass, action_data: Dict[str, List]) -> Dict[str, UserSeasonPass]:
+def verify_season_pass(sess, planet_id: PlanetID, current_season: SeasonPass, action_data: Dict[str, List]) \
+        -> Dict[str, UserSeasonPass]:
     avatar_list = set()
     for data in action_data.values():
         for d in data:
@@ -37,15 +38,18 @@ def verify_season_pass(sess, current_season: SeasonPass, action_data: Dict[str, 
 
     season_pass_dict = {x.avatar_addr: x for x in sess.scalars(
         select(UserSeasonPass)
-        .where(UserSeasonPass.season_pass_id == current_season.id, UserSeasonPass.avatar_addr.in_(avatar_list)
-               )
+        .where(
+            UserSeasonPass.planet_id == planet_id,
+            UserSeasonPass.season_pass_id == current_season.id,
+            UserSeasonPass.avatar_addr.in_(avatar_list)
+        )
     ).fetchall()}
 
     for data in action_data.values():
         for d in data:
             if d["avatar_addr"] not in season_pass_dict:
                 new_season = UserSeasonPass(
-                    planet_id=data.get("planet_id", PlanetID.ODIN),
+                    planet_id=data.get("planet_id", PlanetID.ODIN if STAGE == "mainnet" else PlanetID.ODIN_INTERNAL),
                     season_pass_id=current_season.id,
                     agent_addr=d["agent_addr"].lower(),
                     avatar_addr=d["avatar_addr"].lower(),
@@ -57,7 +61,7 @@ def verify_season_pass(sess, current_season: SeasonPass, action_data: Dict[str, 
     return season_pass_dict
 
 
-def apply_exp(sess, user_season_dict: Dict[str, UserSeasonPass], action_type: ActionType, exp: int,
+def apply_exp(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonPass], action_type: ActionType, exp: int,
               level_dict: Dict[int, int], block_index: int, action_data: List[Dict]):
     for d in action_data:
         target = user_season_dict[d["avatar_addr"]]
@@ -69,14 +73,16 @@ def apply_exp(sess, user_season_dict: Dict[str, UserSeasonPass], action_type: Ac
                 break
 
         sess.add(ActionHistory(
-            block_index=block_index, tx_id=d.get("tx_id", "0"*64),
+            planet_id=planet_id,
+            block_index=block_index, tx_id=d.get("tx_id", "0" * 64),
             season_id=target.season_pass_id,
             agent_addr=target.agent_addr, avatar_addr=target.avatar_addr,
             action=action_type, count=d["count_base"], exp=exp * d["count_base"],
         ))
 
 
-def handle_sweep(sess, user_season_dict: Dict[str, UserSeasonPass], exp: int, level_dict: Dict[int, int],
+def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonPass], exp: int,
+                 level_dict: Dict[int, int],
                  block_index: int, action_data: List[Dict], coef_dict: Dict[str, int]):
     for d in action_data:
         coef = coef_dict.get(d["agent_addr"])
@@ -99,7 +105,8 @@ def handle_sweep(sess, user_season_dict: Dict[str, UserSeasonPass], exp: int, le
                 break
 
         sess.add(ActionHistory(
-            block_index=block_index, tx_id=d.get("tx_id", "0"*64),
+            planet_id=planet_id,
+            block_index=block_index, tx_id=d.get("tx_id", "0" * 64),
             season_id=target.season_pass_id,
             agent_addr=target.agent_addr, avatar_addr=target.avatar_addr,
             action=ActionType.SWEEP, count=real_count, exp=exp * real_count,
@@ -147,31 +154,35 @@ def handle(event, context):
         for i, record in enumerate(message.Records):
             body = record.body
             block_index = body["block"]
-            if sess.scalar(select(Block).where(Block.index == block_index)):
-                logging.warning(f"Block index {block_index} already applied. Skip.")
+            if sess.scalar(select(Block).where(
+                    Block.planet_id == planet_id,
+                    Block.index == block_index
+            )):
+                logging.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
                 continue
 
-            user_season_dict = verify_season_pass(sess, current_season, body["action_data"])
+            planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
+            user_season_dict = verify_season_pass(sess, planet_id, current_season, body["action_data"])
             for type_id, action_data in body["action_data"].items():
                 if "raid" in type_id:
-                    apply_exp(sess, user_season_dict, ActionType.RAID, current_season.exp_dict[ActionType.RAID],
-                              level_dict, block_index, action_data)
+                    apply_exp(sess, planet_id, user_season_dict, ActionType.RAID,
+                              current_season.exp_dict[ActionType.RAID], level_dict, block_index, action_data)
                     logging.info(f"{len(action_data)} Raid applied.")
                 elif "battle_arena" in type_id:
-                    apply_exp(sess, user_season_dict, ActionType.ARENA, current_season.exp_dict[ActionType.ARENA],
-                              level_dict, block_index, action_data)
+                    apply_exp(sess, planet_id, user_season_dict, ActionType.ARENA,
+                              current_season.exp_dict[ActionType.ARENA], level_dict, block_index, action_data)
                     logging.info(f"{len(action_data)} Arena applied.")
                 elif "sweep" in type_id:
-                    handle_sweep(sess, user_season_dict, current_season.exp_dict[ActionType.SWEEP], level_dict,
-                                 block_index, action_data, body["stake"])
+                    handle_sweep(sess, planet_id, user_season_dict, current_season.exp_dict[ActionType.SWEEP],
+                                 level_dict, block_index, action_data, body["stake"])
                     logging.info(f"{len(action_data)} Sweep applied.")
                 else:
-                    apply_exp(sess, user_season_dict, ActionType.HAS, current_season.exp_dict[ActionType.HAS],
-                              level_dict, block_index, action_data)
+                    apply_exp(sess, planet_id, user_season_dict, ActionType.HAS,
+                              current_season.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
                     logging.info(f"{len(action_data)} HackAndSlash applied.")
 
             sess.add_all(list(user_season_dict.values()))
-            sess.add(Block(index=block_index))
+            sess.add(Block(planet_id=planet_id, index=block_index))
             sess.commit()
             logging.info(f"All brave exp for block {body['block']} applied.")
     except IntegrityError as e:

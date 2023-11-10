@@ -89,6 +89,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+          PLANET_URL: ${{ vars.PLANET_URL }}
         run: |
           source $VENV
           yarn cdk synth
@@ -103,6 +104,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+          PLANET_URL: ${{ vars.PLANET_URL }}
         run: |
           source $VENV
           yarn cdk deploy --all --require-approval never -O output.txt
@@ -111,16 +113,16 @@ jobs:
           echo "SERVICE_HOST=${ARRAY[-1]}"
           echo "SERVICE_HOST=${ARRAY[-1]}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload host to ParameterStore
-        id: upload_host
-        env:
-          STAGE: ${{ vars.STAGE }}
-          REGION_NAME: ${{ vars.REGION_NAME }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          source $VENV
-          python ./.github/scripts/upload_host.py ${{ steps.deployment.outputs.SERVICE_HOST }}
+#      - name: Upload host to ParameterStore
+#        id: upload_host
+#        env:
+#          STAGE: ${{ vars.STAGE }}
+#          REGION_NAME: ${{ vars.REGION_NAME }}
+#          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#        run: |
+#          source $VENV
+#          python ./.github/scripts/upload_host.py ${{ steps.deployment.outputs.SERVICE_HOST }}
 
       - name: Slack Notification on Success
         id: slack_notification_success

@@ -4,6 +4,7 @@ from pydantic import BaseModel as BaseSchema, model_validator
 
 from common.enums import PlanetID
 from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema
+from season_pass.settings import stage
 
 
 class UserSeasonPassSchema(BaseSchema):
@@ -28,7 +29,7 @@ class UserSeasonPassSchema(BaseSchema):
 
 
 class UpgradeRequestSchema(BaseSchema):
-    planet_id: PlanetID | str = PlanetID.ODIN
+    planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
     avatar_addr: str
     season_id: int
@@ -45,7 +46,7 @@ class UpgradeRequestSchema(BaseSchema):
 
 
 class ClaimRequestSchema(BaseSchema):
-    planet_id: PlanetID | str = PlanetID.ODIN
+    planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
     avatar_addr: str
     season_id: int

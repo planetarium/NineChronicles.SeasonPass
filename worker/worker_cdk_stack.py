@@ -11,6 +11,7 @@ from aws_cdk import (
     aws_events_targets as _event_targets,
 )
 from constructs import Construct
+import requests
 
 from common import Config, COMMON_LAMBDA_EXCLUDE
 from worker import WORKER_LAMBDA_EXCLUDE
@@ -116,27 +117,39 @@ class WorkerStack(Stack):
             reserved_concurrent_executions=1,
         )
 
-        block_tracker = _lambda.Function(
-            self, f"{config.stage}-9c-season_pass-block_tracker-function",
-            function_name=f"{config.stage}-9c-season_pass-block_tracker",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            description="Block tracker of NineChronicles.SeasonPass to send action data to brave_handler",
-            code=_lambda.AssetCode("worker/", exclude=exclude_list),
-            handler="block_tracker.handle",
-            layers=[layer],
-            role=role,
-            vpc=shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(75),  # NOTE: This must be longer than 1 minute
-            environment=env,
-            memory_size=512,
-        )
-
+        # Track blocks by planet
         # Every minute
         minute_event_rule = _events.Rule(
             self, f"{config.stage}-9c-season_pass-block_tracker-event",
             schedule=_events.Schedule.cron(minute="*")  # Every minute
         )
-        minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
+
+        resp = requests.get(os.environ.get("PLANET_URL"))
+        data = resp.json()
+        print(f"{len(data)} Planets to track blocks: {[x['name'] for x in data]}")
+        for planet in data:
+            planet_name = planet["name"].split(" ")[0]
+            planet_id = planet["id"]
+            gql_host = planet["rpcEndpoints"]["headless.gql"][0]
+            env["PLANET_ID"] = planet_id
+            env["GQL_HOST"] = gql_host
+
+            block_tracker = _lambda.Function(
+                self, f"{config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
+                function_name=f"{config.stage}-{planet_name}-9c-season_pass-block_tracker",
+                runtime=_lambda.Runtime.PYTHON_3_11,
+                description="Block tracker of NineChronicles.SeasonPass to send action data to brave_handler",
+                code=_lambda.AssetCode("worker/", exclude=exclude_list),
+                handler="block_tracker.handle",
+                layers=[layer],
+                role=role,
+                vpc=shared_stack.vpc,
+                timeout=cdk_core.Duration.seconds(75),  # NOTE: This must be longer than 1 minute
+                environment=env,
+                memory_size=512,
+            )
+
+            minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
 
         brave_handler = _lambda.Function(
             self, f"{config.stage}-9c-season_pass-brave_handler-function",
