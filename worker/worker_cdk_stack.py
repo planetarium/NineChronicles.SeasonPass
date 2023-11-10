@@ -128,7 +128,7 @@ class WorkerStack(Stack):
         data = resp.json()
         print(f"{len(data)} Planets to track blocks: {[x['name'] for x in data]}")
         for planet in data:
-            planet_name = planet["name"]
+            planet_name = planet["name"].split(" ")[0]
             planet_id = planet["id"]
             gql_host = planet["rpcEndpoints"]["headless.gql"][0]
             env["PLANET_ID"] = planet_id
