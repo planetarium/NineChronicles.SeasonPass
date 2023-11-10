@@ -7,10 +7,14 @@ from common.models.base import Base, TimeStampMixin, AutoIdMixin
 from common.models.season_pass import SeasonPass
 
 
-class Block(TimeStampMixin, Base):
+class Block(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "block"
     planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
-    index = Column(BigInteger, primary_key=True, index=True, nullable=False)
+    index = Column(BigInteger, nullable=False)
+
+    __table_args__ = (
+        Index("idx_block_planet_index", "planet_id", "index"),
+    )
 
 
 class ActionHistory(AutoIdMixin, TimeStampMixin, Base):
