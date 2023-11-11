@@ -22,7 +22,7 @@ class GQL:
         data = resp.json()
         for d in data:
             planet = PlanetID(bytes(d["id"], "utf-8"))
-            self._url[planet] = d["rpcEndpoints"]["headless.gql"]
+            self._url[planet] = d["rpcEndpoints"]["headless.gql"][0]
 
     def __reset(self, planet_id: PlanetID):
         transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
