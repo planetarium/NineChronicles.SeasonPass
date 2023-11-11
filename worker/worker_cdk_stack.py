@@ -91,6 +91,7 @@ class WorkerStack(Stack):
                       f"@{shared_stack.rds.db_instance_endpoint_address}"
                       f"/season_pass",
             "SQS_URL": shared_stack.brave_q.queue_url,
+            "PLANET_URL": config.planet_url,
         }
 
         # Exclude list
@@ -124,7 +125,7 @@ class WorkerStack(Stack):
             schedule=_events.Schedule.cron(minute="*")  # Every minute
         )
 
-        resp = requests.get(os.environ.get("PLANET_URL"))
+        resp = requests.get(config.planet_url)
         data = resp.json()
         print(f"{len(data)} Planets to track blocks: {[x['name'] for x in data]}")
         for planet in data:
@@ -166,7 +167,7 @@ class WorkerStack(Stack):
             role=role,
             vpc=shared_stack.vpc,
             timeout=cdk_core.Duration.seconds(120),
-            environment={**env, "PLANET_URL": os.environ.get("PLANET_URL")},
+            environment=env,
             events=[
                 _evt_src.SqsEventSource(shared_stack.brave_q)
             ],

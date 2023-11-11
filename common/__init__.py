@@ -18,5 +18,6 @@ class Config:
     account_id: str
     region_name: str
 
+    planet_url: str
     kms_key_id: Optional[str] = None
     jwt_token_secret: Optional[str] = None
