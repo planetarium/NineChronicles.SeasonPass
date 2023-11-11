@@ -9,7 +9,7 @@ from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
 
-from enums import PlanetID
+from common.enums import PlanetID
 
 
 class GQL:
@@ -40,6 +40,7 @@ class GQL:
         Get next Tx Nonce to create Transaction.
         -1 will be returned in case of any error.
 
+        :param planet_id: Planet ID to send GQL query.
         :param str address: 9c Address to get next Nonce.
         :return: Next tx Nonce. In case of any error, `-1` will be returned.
         """

@@ -32,24 +32,33 @@ def handle(event, context):
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
-        nonce = sess.scalar(select(Claim.nonce).where(Claim.nonce.is_not(None)).order_by(desc(Claim.nonce)).limit(1))
-        if nonce is None:
-            nonce = -1
-        # Use next nonce
-        nonce += 1
 
         uuid_list = [x.body.get("uuid") for x in message.Records if x.body.get("uuid") is not None]
         claim_dict = {x.uuid: x for x in sess.scalars(select(Claim).where(Claim.uuid.in_(uuid_list)))}
         target_claim_list = []
+        nonce_dict = {}
+
         for i, record in enumerate(message.Records):
             claim = claim_dict.get(record.body.get("uuid"))
             if not claim:
                 logging.error(f"Cannot find claim {record.body.get('uuid')}")
                 continue
+            if claim.planet_id not in nonce_dict:
+                nonce = max(
+                    gql.get_next_nonce(claim.planet_id, account.address),
+                    (sess.scalar(select(Claim.nonce).where(
+                        Claim.nonce.is_not(None),
+                        Claim.planet_id
+                    ).order_by(desc(Claim.nonce)).limit(1)) or -1) + 1
+                )
+                nonce_dict[claim.planet_id] = nonce
+            else:
+                nonce = nonce_dict[claim.planet_id]
 
             claim.nonce = nonce
             claim.tx_status = TxStatus.CREATED
             unsigned_tx = gql.create_action(
+                claim.planet_id,
                 "unload_from_garage", pubkey=account.pubkey, nonce=nonce,
                 avatar_addr=claim.avatar_addr,
                 fav_data=[{
@@ -65,15 +74,16 @@ def handle(event, context):
                                                  "t": "claim"}}),
             )
             signature = account.sign_tx(unsigned_tx)
-            signed_tx = gql.sign(unsigned_tx, signature)
+            signed_tx = gql.sign(claim.planet_id, unsigned_tx, signature)
             claim.tx = signed_tx.hex()
             sess.add(claim)
             target_claim_list.append(claim)
-            nonce += 1
+
+            nonce_dict[claim.planet_id] += 1
         sess.commit()
 
         for claim in target_claim_list:
-            success, msg, tx_id = gql.stage(bytes.fromhex(claim.tx))
+            success, msg, tx_id = gql.stage(claim.planet_id, bytes.fromhex(claim.tx))
             if not success:
                 message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
                 logging.error(message)

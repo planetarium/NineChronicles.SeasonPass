@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, Text, Integer, ForeignKey, Index, LargeBinary
+from sqlalchemy import Column, BigInteger, Text, Integer, ForeignKey, Index, LargeBinary, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, relationship
 
@@ -14,6 +14,7 @@ class Block(AutoIdMixin, TimeStampMixin, Base):
 
     __table_args__ = (
         Index("idx_block_planet_index", "planet_id", "index"),
+        UniqueConstraint("planet_id", "index", name="block_by_planet_unique"),
     )
 
 
