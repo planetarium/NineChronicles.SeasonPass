@@ -1,37 +1,47 @@
 import datetime
 import logging
 import os
-import random
 from typing import Union, Dict, Any, Tuple, Optional
 
+import requests
 from gql import Client
 from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
 
-from consts import HOST_LIST
+from common.enums import PlanetID
+
+PLANET_URL = os.environ.get("PLANET_URL")
 
 
 class GQL:
     def __init__(self):
-        stage = os.environ.get("STAGE", "development")
-        self._url = f"{random.choice(HOST_LIST[stage])}/graphql"
-        transport = RequestsHTTPTransport(url=self._url, verify=True, retries=2)
+        self._url = {}
+        resp = requests.get(PLANET_URL)
+        data = resp.json()
+        for d in data:
+            planet = PlanetID(bytes(d["id"]))
+            self._url[planet] = d["rpcEndpoints"]["headless.gql"]
+
+    def __reset(self, planet_id: PlanetID):
+        transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
         with self.client as _:
             assert self.client.schema is not None
             self.ds = DSLSchema(self.client.schema)
 
-    def execute(self, query: DocumentNode) -> Union[Dict[str, Any], ExecutionResult]:
+    def execute(self, planet_id: PlanetID, query: DocumentNode) -> Union[Dict[str, Any], ExecutionResult]:
+        self.__reset(planet_id)
         with self.client as sess:
             return sess.execute(query)
 
-    def get_next_nonce(self, address: str) -> int:
+    def get_next_nonce(self, planet_id: PlanetID, address: str) -> int:
 
         """
         Get next Tx Nonce to create Transaction.
         -1 will be returned in case of any error.
 
+        :param planet_id: Planet ID to send GQL query.
         :param str address: 9c Address to get next Nonce.
         :return: Next tx Nonce. In case of any error, `-1` will be returned.
         """
@@ -44,7 +54,7 @@ class GQL:
                 )
             )
         )
-        resp = self.execute(query)
+        resp = self.execute(planet_id, query)
 
         if "errors" in resp:
             logging.error(f"GQL failed to get next Nonce: {resp['errors']}")
@@ -52,7 +62,7 @@ class GQL:
 
         return resp["transaction"]["nextTxNonce"]
 
-    def _unload_from_garage(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
+    def _unload_from_garage(self, planet_id: PlanetID, pubkey: bytes, nonce: int, **kwargs) -> bytes:
         ts = kwargs.get("timestamp", datetime.datetime.utcnow().isoformat())
         fav_data = kwargs.get("fav_data")
         avatar_addr = kwargs.get("avatar_addr")
@@ -78,17 +88,17 @@ class GQL:
                 )
             )
         )
-        result = self.execute(query)
+        result = self.execute(planet_id, query)
         return bytes.fromhex(result["actionTxQuery"]["unloadFromMyGarages"])
 
-    def create_action(self, action_type: str, pubkey: bytes, nonce: int, **kwargs) -> bytes:
+    def create_action(self, planet_id: PlanetID, action_type: str, pubkey: bytes, nonce: int, **kwargs) -> bytes:
         fn = getattr(self, f"_{action_type}")
         if not fn:
             raise ValueError(f"Action named {action_type} does not exists.")
 
-        return fn(pubkey, nonce, **kwargs)
+        return fn(planet_id, pubkey, nonce, **kwargs)
 
-    def sign(self, unsigned_tx: bytes, signature: bytes) -> bytes:
+    def sign(self, planet_id: PlanetID, unsigned_tx: bytes, signature: bytes) -> bytes:
         query = dsl_gql(
             DSLQuery(
                 self.ds.StandaloneQuery.transaction.select(
@@ -99,10 +109,10 @@ class GQL:
                 )
             )
         )
-        result = self.execute(query)
+        result = self.execute(planet_id, query)
         return bytes.fromhex(result["transaction"]["signTransaction"])
 
-    def stage(self, signed_tx: bytes) -> Tuple[bool, str, Optional[str]]:
+    def stage(self, planet_id: PlanetID, signed_tx: bytes) -> Tuple[bool, str, Optional[str]]:
         query = dsl_gql(
             DSLMutation(
                 self.ds.StandaloneMutation.stageTransaction.args(
@@ -110,7 +120,7 @@ class GQL:
                 )
             )
         )
-        result = self.execute(query)
+        result = self.execute(planet_id, query)
         if "errors" in result:
             return False, result["errors"][0]["message"], None
         return True, "", result["stageTransaction"]
