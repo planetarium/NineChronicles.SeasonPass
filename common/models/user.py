@@ -1,4 +1,4 @@
-from sqlalchemy import Text, Column, Integer, ForeignKey, Boolean, Index, LargeBinary
+from sqlalchemy import Text, Column, Integer, ForeignKey, Boolean, Index, LargeBinary, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, ENUM, ARRAY
 from sqlalchemy.orm import relationship, backref, Mapped
 
@@ -52,7 +52,11 @@ class Claim(AutoIdMixin, TimeStampMixin, Base):
     premium_levels = Column(ARRAY(Integer), nullable=False, default=[])
     reward_list = Column(JSONB, nullable=False)
     planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
-    nonce = Column(Integer, nullable=True, unique=True)
+    nonce = Column(Integer, nullable=True)
     tx = Column(Text, nullable=True)
     tx_id = Column(Text, nullable=True)
     tx_status = Column(ENUM(TxStatus), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("planet_id", "nonce", name="claim_planet_nonce_unique"),
+    )
