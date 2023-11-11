@@ -48,7 +48,7 @@ def handle(event, context):
                     gql.get_next_nonce(claim.planet_id, account.address),
                     (sess.scalar(select(Claim.nonce).where(
                         Claim.nonce.is_not(None),
-                        Claim.planet_id
+                        Claim.planet_id == claim.planet_id,
                     ).order_by(desc(Claim.nonce)).limit(1)) or -1) + 1
                 )
                 nonce_dict[claim.planet_id] = nonce
