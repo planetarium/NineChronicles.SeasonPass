@@ -53,7 +53,7 @@ def verify_season_pass(sess, planet_id: PlanetID, current_season: SeasonPass, ac
         for d in data:
             if d["avatar_addr"] not in season_pass_dict:
                 new_season = UserSeasonPass(
-                    planet_id=data.get("planet_id", PlanetID.ODIN if STAGE == "mainnet" else PlanetID.ODIN_INTERNAL),
+                    planet_id=planet_id,
                     season_pass_id=current_season.id,
                     agent_addr=d["agent_addr"].lower(),
                     avatar_addr=d["avatar_addr"].lower(),
