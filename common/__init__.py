@@ -1,3 +1,5 @@
+import logging
+import os
 from typing import Optional
 
 from pydantic.dataclasses import dataclass
@@ -10,6 +12,18 @@ COMMON_LAMBDA_EXCLUDE = [
     "common/alembic.ini",
     "common/alembic.ini.example",
 ]
+
+try:
+    loglevel = getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper())
+except AttributeError:
+    loglevel = logging.INFO
+
+logger = logging.Logger("season_pass_logger")
+logger.setLevel(loglevel)
+
+handler = logging.StreamHandler()
+handler.setLevel(loglevel)
+logger.addHandler(handler)
 
 
 @dataclass
