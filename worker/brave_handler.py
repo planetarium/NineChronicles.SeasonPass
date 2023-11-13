@@ -192,7 +192,7 @@ def handle(event, context):
             sess.commit()
             logging.info(f"All brave exp for block {body['block']} applied.")
     except IntegrityError as e:
-        if str(e) == 'IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_pkey"':
+        if str(e) == 'IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_unique"':
             logging.warning(e)
         else:
             raise e
