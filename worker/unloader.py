@@ -1,12 +1,12 @@
 # Receive message from SQS and send season pass reward
 import json
-import logging
 import os
 from datetime import timezone, datetime, timedelta
 
 from sqlalchemy import create_engine, select, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 
+from common import logger
 from common.enums import TxStatus
 from common.models.user import Claim
 from common.utils.aws import fetch_secrets, fetch_kms_key_id
@@ -41,7 +41,7 @@ def handle(event, context):
         for i, record in enumerate(message.Records):
             claim = claim_dict.get(record.body.get("uuid"))
             if not claim:
-                logging.error(f"Cannot find claim {record.body.get('uuid')}")
+                logger.error(f"Cannot find claim {record.body.get('uuid')}")
                 continue
             if claim.planet_id not in nonce_dict:
                 nonce = max(
@@ -86,7 +86,7 @@ def handle(event, context):
             success, msg, tx_id = gql.stage(claim.planet_id, bytes.fromhex(claim.tx))
             if not success:
                 message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
-                logging.error(message)
+                logger.error(message)
                 raise Exception(message)
             claim.tx_status = TxStatus.STAGED
             claim.tx_id = tx_id
