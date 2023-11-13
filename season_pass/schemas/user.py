@@ -23,6 +23,7 @@ class UserSeasonPassSchema(BaseSchema):
     def lowercase(self):
         self.agent_addr = self.agent_addr.lower()
         self.avatar_addr = self.avatar_addr.lower()
+        return self
 
     class Config:
         from_attributes = True

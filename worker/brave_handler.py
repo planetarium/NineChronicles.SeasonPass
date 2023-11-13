@@ -159,6 +159,8 @@ def handle(event, context):
         for i, record in enumerate(message.Records):
             body = record.body
             block_index = body["block"]
+            planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
+
             if sess.scalar(select(Block).where(
                     Block.planet_id == planet_id,
                     Block.index == block_index
@@ -166,7 +168,6 @@ def handle(event, context):
                 logging.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
                 continue
 
-            planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
             user_season_dict = verify_season_pass(sess, planet_id, current_season, body["action_data"])
             for type_id, action_data in body["action_data"].items():
                 if "raid" in type_id:

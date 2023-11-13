@@ -11,8 +11,6 @@ from graphql import DocumentNode, ExecutionResult
 
 from common.enums import PlanetID
 
-PLANET_URL = os.environ.get("PLANET_URL")
-
 
 class GQL:
     def __init__(self):
@@ -20,11 +18,11 @@ class GQL:
         self.client = None
         self.ds = None
 
-        resp = requests.get(PLANET_URL)
+        resp = requests.get(os.environ.get("PLANET_URL"))
         data = resp.json()
         for d in data:
             planet = PlanetID(bytes(d["id"], "utf-8"))
-            self._url[planet] = d["rpcEndpoints"]["headless.gql"]
+            self._url[planet] = d["rpcEndpoints"]["headless.gql"][0]
 
     def __reset(self, planet_id: PlanetID):
         transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
