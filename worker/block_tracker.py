@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import re
 from collections import defaultdict
@@ -10,6 +9,7 @@ import requests
 from gql import Client, gql
 from gql.transport.websockets import WebsocketsTransport
 
+from common import logger
 from schemas.action import ActionJson
 from utils.stake import StakeAPCoef
 
@@ -42,7 +42,7 @@ def send_message(tip: int, action_data: defaultdict, stake_data: defaultdict):
         QueueUrl=os.environ.get("SQS_URL"),
         MessageBody=json.dumps(message),
     )
-    logging.info(f"Message {resp['MessageId']} sent to SQS for block {tip}.")
+    logger.info(f"Message {resp['MessageId']} sent to SQS for block {tip}.")
 
 
 def subscribe_tip(url: str, thread_dict: defaultdict, stake_data: defaultdict, action_data: defaultdict):
@@ -53,9 +53,9 @@ def subscribe_tip(url: str, thread_dict: defaultdict, stake_data: defaultdict, a
         tip = result["tipChanged"]["index"] - 1
         for t in thread_dict[tip]:
             t.join()
-        logging.info(f"{len(action_data[tip])} actions sent to queue for block {tip}")
-        logging.info(f"{len(stake_data[tip])} deposits fetched.")
-        logging.debug(stake_data)
+        logger.info(f"{len(action_data[tip])} actions sent to queue for block {tip}")
+        logger.info(f"{len(stake_data[tip])} deposits fetched.")
+        logger.debug(stake_data)
 
         send_message(tip, action_data[tip], stake_data[tip])
 
@@ -90,7 +90,7 @@ def subscribe_action(url: str, thread_dict: defaultdict, stake_data: defaultdict
         # Save action data and get NCG stake amount for later
         if result["tx"]["txResult"]["txStatus"] == "SUCCESS":
             signer = result["tx"]["transaction"]["signer"]
-            logging.debug(f"Action from {signer}")
+            logger.debug(f"Action from {signer}")
             # FIXME: Call thread only when `"sweep" in action_json.type_id`
             t = Thread(target=get_deposit, args=(coef, url, stake_data, signer))
             thread_dict[block_index].append(t)

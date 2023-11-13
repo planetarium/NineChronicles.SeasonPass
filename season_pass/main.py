@@ -1,4 +1,3 @@
-import logging
 import os
 
 import uvicorn
@@ -10,6 +9,7 @@ from mangum import Mangum
 from starlette.requests import Request
 from starlette.responses import FileResponse
 
+from common import logger
 from season_pass import settings, api
 
 stage = os.environ.get("STAGE", "local")
@@ -25,7 +25,7 @@ app = FastAPI(
 
 @app.middleware("http")
 def log_incoming_url(request: Request, call_next):
-    logging.info(f"[{request.method}] {request.url}")
+    logger.info(f"[{request.method}] {request.url}")
     return call_next(request)
 
 

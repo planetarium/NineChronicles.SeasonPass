@@ -1,4 +1,3 @@
-import logging
 import os
 from typing import List, Dict
 
@@ -7,6 +6,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker, scoped_session
 
+from common import logger
 from common.enums import ActionType, PlanetID
 from common.models.action import Block, ActionHistory
 from common.models.season_pass import SeasonPass, Level
@@ -165,7 +165,7 @@ def handle(event, context):
                     Block.planet_id == planet_id,
                     Block.index == block_index
             )):
-                logging.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
+                logger.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
                 continue
 
             user_season_dict = verify_season_pass(sess, planet_id, current_season, body["action_data"])
@@ -173,27 +173,27 @@ def handle(event, context):
                 if "raid" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.RAID,
                               current_season.exp_dict[ActionType.RAID], level_dict, block_index, action_data)
-                    logging.info(f"{len(action_data)} Raid applied.")
+                    logger.info(f"{len(action_data)} Raid applied.")
                 elif "battle_arena" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.ARENA,
                               current_season.exp_dict[ActionType.ARENA], level_dict, block_index, action_data)
-                    logging.info(f"{len(action_data)} Arena applied.")
+                    logger.info(f"{len(action_data)} Arena applied.")
                 elif "sweep" in type_id:
                     handle_sweep(sess, planet_id, user_season_dict, current_season.exp_dict[ActionType.SWEEP],
                                  level_dict, block_index, action_data, body["stake"])
-                    logging.info(f"{len(action_data)} Sweep applied.")
+                    logger.info(f"{len(action_data)} Sweep applied.")
                 else:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.HAS,
                               current_season.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
-                    logging.info(f"{len(action_data)} HackAndSlash applied.")
+                    logger.info(f"{len(action_data)} HackAndSlash applied.")
 
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index))
             sess.commit()
-            logging.info(f"All brave exp for block {body['block']} applied.")
+            logger.info(f"All brave exp for block {body['block']} applied.")
     except IntegrityError as e:
         if str(e) == 'IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_unique"':
-            logging.warning(e)
+            logger.warning(e)
         else:
             raise e
     finally:
