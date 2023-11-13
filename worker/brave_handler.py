@@ -27,7 +27,7 @@ GQL_DICT = {}
 resp = requests.get(os.environ.get("PLANET_URL"))
 data = resp.json()
 for d in data:
-    GQL_DICT[PlanetID(bytes(d["id"], "utf-8"))] = d["rpcEndpoints"]["headless.gql"]
+    GQL_DICT[PlanetID(bytes(d["id"], "utf-8"))] = d["rpcEndpoints"]["headless.gql"][0]
 
 engine = create_engine(DB_URI)
 ap_coef = StakeAPCoef()
