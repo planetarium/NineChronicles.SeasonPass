@@ -82,13 +82,19 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     if not target_user:
         raise UserNotFoundError(f"Cannot found requested user data in season {request.season_id}")
 
+    # Not Premium and request only premium plus
     if not target_user.is_premium and not request.is_premium:
         raise InvalidUpgradeRequestError(
             f"Avatar {target_user.avatar_addr} is not in premium and doesn't request premium.")
-
-    if target_user.is_premium and target_user.is_premium_plus and not request.is_premium_plus:
+    # Premium and not request premium plus
+    if target_user.is_premium and not target_user.is_premium_plus and not request.is_premium_plus:
         raise InvalidUpgradeRequestError(
             f"Avatar {target_user.avatar_addr} is in premium and doesn't request premium plus.")
+    # Request same or inclusive upgade
+    if (target_user.is_premium and request.is_premium) or (target_user.is_premium_plus and request.is_premium_plus):
+        raise InvalidUpgradeRequestError(
+            f"Avatar {target_user.avatar_addr} already purchased same or inclusive product. Duplicated purchase."
+        )
 
     if request.is_premium:
         target_user.is_premium = request.is_premium
