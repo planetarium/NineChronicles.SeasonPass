@@ -190,10 +190,12 @@ def handle(event, context):
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index))
             sess.commit()
-            logger.info(f"All brave exp for block {body['block']} applied.")
+            logger.info(f"All {len(user_season_dict.values())} brave exp for block {body['block']} applied.")
     except IntegrityError as e:
-        if str(e) == 'IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_unique"':
-            logger.warning(e)
+        err_msg = str(e).split("\n")[0]
+        detail = str(e).split("\n")[1]
+        if err_msg == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_unique"':
+            logger.warning(f"{err_msg} :: {detail}")
         else:
             raise e
     finally:
