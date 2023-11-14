@@ -24,7 +24,7 @@ class GQL:
             planet = PlanetID(bytes(d["id"], "utf-8"))
             self._url[planet] = d["rpcEndpoints"]["headless.gql"][0]
 
-    def __reset(self, planet_id: PlanetID):
+    def reset(self, planet_id: PlanetID):
         transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
         with self.client as _:
@@ -44,7 +44,7 @@ class GQL:
         :param str address: 9c Address to get next Nonce.
         :return: Next tx Nonce. In case of any error, `-1` will be returned.
         """
-        self.__reset(planet_id)
+        self.reset(planet_id)
         query = dsl_gql(
             DSLQuery(
                 self.ds.StandaloneQuery.transaction.select(
@@ -92,7 +92,7 @@ class GQL:
         return bytes.fromhex(result["actionTxQuery"]["unloadFromMyGarages"])
 
     def create_action(self, planet_id: PlanetID, action_type: str, pubkey: bytes, nonce: int, **kwargs) -> bytes:
-        self.__reset(planet_id)
+        self.reset(planet_id)
         fn = getattr(self, f"_{action_type}")
         if not fn:
             raise ValueError(f"Action named {action_type} does not exists.")
@@ -100,7 +100,7 @@ class GQL:
         return fn(pubkey, nonce, **kwargs)
 
     def sign(self, planet_id: PlanetID, unsigned_tx: bytes, signature: bytes) -> bytes:
-        self.__reset(planet_id)
+        self.reset(planet_id)
         query = dsl_gql(
             DSLQuery(
                 self.ds.StandaloneQuery.transaction.select(
@@ -115,7 +115,7 @@ class GQL:
         return bytes.fromhex(result["transaction"]["signTransaction"])
 
     def stage(self, planet_id: PlanetID, signed_tx: bytes) -> Tuple[bool, str, Optional[str]]:
-        self.__reset(planet_id)
+        self.reset(planet_id)
         query = dsl_gql(
             DSLMutation(
                 self.ds.StandaloneMutation.stageTransaction.args(
