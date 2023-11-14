@@ -9,11 +9,12 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from common import logger
 from common.enums import TxStatus
 from common.models.user import Claim
-from common.utils._crypto import Account
-from common.utils._graphql import GQL
 from common.utils.aws import fetch_secrets, fetch_kms_key_id
 from consts import ITEM_FUNGIBLE_ID_DICT
 from schemas.sqs import SQSMessage
+from schemas.user import ClaimSchema
+from utils._crypto import Account
+from utils._graphql import GQL
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -57,22 +58,30 @@ def handle(event, context):
 
             claim.nonce = nonce
             claim.tx_status = TxStatus.CREATED
-            unsigned_tx = gql.create_action(
-                claim.planet_id,
-                "unload_from_garage", pubkey=account.pubkey, nonce=nonce,
-                avatar_addr=claim.avatar_addr,
-                fav_data=[{
-                    "balanceAddr": claim.agent_addr,
-                    "value": {"currencyTicker": ticker, "value": f"{amount}"}
-                } for ticker, amount in claim.reward_list["currency"].items()],
-                item_data=[{
-                    "fungibleId": ITEM_FUNGIBLE_ID_DICT[item_id],
-                    "count": f"{amount}"
-                } for item_id, amount in claim.reward_list["item"].items()],
-                timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat(),
-                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels,
-                                                 "t": "claim"}}),
-            )
+            if "claims" in claim.reward_list:
+                unsigned_tx = gql.create_action(
+                    claim.planet_id,
+                    "claim_items", pubkey=account.pubkey, nonce=nonce,
+                    avatar_addr=claim.avatar_addr,
+                    claim_items=[ClaimSchema(**x) for x in claim.reward_list["claims"]]
+                )
+            else:
+                unsigned_tx = gql.create_action(
+                    claim.planet_id,
+                    "unload_from_garage", pubkey=account.pubkey, nonce=nonce,
+                    avatar_addr=claim.avatar_addr,
+                    fav_data=[{
+                        "balanceAddr": claim.agent_addr,
+                        "value": {"currencyTicker": ticker, "value": f"{amount}"}
+                    } for ticker, amount in claim.reward_list["currency"].items()],
+                    item_data=[{
+                        "fungibleId": ITEM_FUNGIBLE_ID_DICT[item_id],
+                        "count": f"{amount}"
+                    } for item_id, amount in claim.reward_list["item"].items()],
+                    timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat(),
+                    memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels,
+                                                     "t": "claim"}}),
+                )
             signature = account.sign_tx(unsigned_tx)
             signed_tx = gql.sign(claim.planet_id, unsigned_tx, signature)
             claim.tx = signed_tx.hex()
