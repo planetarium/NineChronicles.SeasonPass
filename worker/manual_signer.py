@@ -1,7 +1,7 @@
 import os
 
+from common.utils._crypto import Account
 from common.utils.aws import fetch_kms_key_id
-from utils._crypto import Account
 
 stage = os.environ.get("STAGE", "development")
 region_name = os.environ.get("REGION_NAME", "us-east-2")
