@@ -1,16 +1,20 @@
 import json
 import logging
+import os
 from collections import defaultdict
 from datetime import timezone, datetime
 from uuid import uuid4
 
 import boto3
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends
+from fastapi import HTTPException
+from sqlalchemy import select, desc
 
 from common.enums import PlanetID
+from common.enums import TxStatus
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass, Claim
+from common.utils.aws import fetch_kms_key_id
 from common.utils.season_pass import get_current_season, get_max_level
 from season_pass import settings
 from season_pass.dependencies import session
@@ -20,6 +24,9 @@ from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
 from season_pass.utils import verify_token
+from worker.consts import ITEM_FUNGIBLE_ID_DICT
+from worker.utils._crypto import Account
+from worker.utils._graphql import GQL
 
 router = APIRouter(
     prefix="/user",
@@ -90,16 +97,89 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     if target_user.is_premium and not target_user.is_premium_plus and not request.is_premium_plus:
         raise InvalidUpgradeRequestError(
             f"Avatar {target_user.avatar_addr} is in premium and doesn't request premium plus.")
-    # Request same or inclusive upgade
+    # Request same or inclusive upgrade
     if (target_user.is_premium and request.is_premium) or (target_user.is_premium_plus and request.is_premium_plus):
         raise InvalidUpgradeRequestError(
             f"Avatar {target_user.avatar_addr} already purchased same or inclusive product. Duplicated purchase."
         )
 
+    gql = GQL()
+    account = Account(fetch_kms_key_id(os.environ.get("STAGE"), settings.REGION_NAME))
+
     if request.is_premium:
         target_user.is_premium = request.is_premium
     if request.is_premium_plus:
         target_user.is_premium_plus = request.is_premium_plus
+
+    nonce = max(
+        gql.get_next_nonce(request.planet_id, account.address),
+        (sess.scalar(select(Claim.nonce).where(
+            Claim.nonce.is_not(None),
+            Claim.planet_id == request.planet_id,
+        ).order_by(desc(Claim.nonce)).limit(1)) or -1) + 1
+    )
+
+    if request.reward_list.claims:
+        # ClaimItems
+        claim = Claim(
+            uuid=str(uuid4()),
+            planet_id=request.planet_id,
+            agent_addr=request.agent_addr,
+            avatar_addr=request.avatar_addr,
+            reward_list=request.reward_list.claims
+        )
+        utx = gql.create_action(request.planet_id,
+                                "claim_items", account.pubkey, nonce,
+                                avatar_addr=request.avatar_addr,
+                                claim_items=request.reward_list.claims)
+        signature = account.sign_tx(utx)
+        signed_tx = gql.sign(request.planet_id, utx, signature)
+        claim.tx = signed_tx.hex()
+        claim.nonce = nonce
+        claim.tx_status = TxStatus.CREATED
+        success, msg, tx_id = gql.stage(request.planet_id, signed_tx)
+        if success:
+            claim.tx_id = tx_id
+            claim.tx_status = TxStatus.STAGED
+            nonce += 1
+        sess.add(claim)
+        sess.commit()
+
+    if request.reward_list.items or request.reward_list.currencies:
+        # Unload
+        claim = Claim(
+            uuid=str(uuid4()),
+            planet_id=request.planet_id,
+            agent_addr=request.agent_addr,
+            avatar_addr=request.avatar_addr,
+            reward_list={"item": {x.id: x.amount for x in request.reward_list.items},
+                         "currency": {x.ticker: x.amount for x in request.reward_list.currencies}}
+        )
+        utx = gql.create_action(request.planet_id,
+                                "unload_from_garage", account.pubkey, nonce,
+                                avatar_addr=request.avatar_addr,
+                                item_data=[{
+                                    "fungibleId": ITEM_FUNGIBLE_ID_DICT[x.id],
+                                    "count": x.amount
+                                } for x in request.reward_list.items],
+                                fav_data=[{
+                                    "balanceAddr": request.agent_addr,
+                                    "value": {
+                                        "currencyTicker": x.ticker,
+                                        "value": f"{x.amount}"
+                                    }
+                                } for x in request.reward_list.currencies],
+                                memo=json.dumps({"iap": {"g_sku": request.g_sku, "a_sku": request.a_sku}}))
+        signature = account.sign_tx(utx)
+        signed_tx = gql.sign(request.planet_id, utx, signature)
+        claim.tx = signed_tx.hex()
+        claim.nonce = nonce
+        claim.tx_status = TxStatus.CREATED
+        success, msg, tx_id = gql.stage(request.planet_id, signed_tx)
+        if success:
+            claim.tx_status = TxStatus.STAGED
+            claim.tx_id = tx_id
+        sess.add(claim)
 
     sess.add(target_user)
     sess.commit()

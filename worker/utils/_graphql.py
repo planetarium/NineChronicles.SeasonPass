@@ -1,7 +1,7 @@
 import datetime
 import logging
 import os
-from typing import Union, Dict, Any, Tuple, Optional
+from typing import Union, Dict, Any, Tuple, Optional, List
 
 import requests
 from gql import Client
@@ -10,6 +10,7 @@ from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
 
 from common.enums import PlanetID
+from schemas.user import ClaimSchema
 
 
 class GQL:
@@ -90,6 +91,36 @@ class GQL:
         )
         result = self.execute(query)
         return bytes.fromhex(result["actionTxQuery"]["unloadFromMyGarages"])
+
+    def _claim_items(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
+        ts = kwargs.get("timestamp", datetime.datetime.utcnow().isoformat())
+        avatar_addr: str = kwargs.get("avatar_addr")
+        claim_items: List[ClaimSchema] = kwargs.get("claim_items")
+
+        if not claim_items:
+            raise ValueError("Nothing to claim")
+
+        query = dsl_gql(
+            DSLQuery(
+                self.ds.StandaloneQuery.actionTxQuery.args(
+                    publicKey=pubkey.hex(),
+                    nonce=nonce,
+                    timestamp=ts,
+                ).select(
+                    self.ds.ActionTxQuery.claimItems.args(
+                        claimData=[{
+                            "avatarAddress": avatar_addr,
+                            "claimData": [{
+                                "ticker": x.id,
+                                "amount": x.amount
+                            } for x in claim_items]
+                        }]
+                    )
+                )
+            )
+        )
+        result = self.execute(query)
+        return bytes.fromhex(result["actionTxQuery"]["claimItems"])
 
     def create_action(self, planet_id: PlanetID, action_type: str, pubkey: bytes, nonce: int, **kwargs) -> bytes:
         self.__reset(planet_id)

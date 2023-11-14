@@ -29,6 +29,27 @@ class UserSeasonPassSchema(BaseSchema):
         from_attributes = True
 
 
+class RewardItemSchema(BaseSchema):
+    id: int
+    amount: int
+
+
+class RewardCurrencySchema(BaseSchema):
+    ticker: str
+    amount: str
+
+
+class ClaimSchema(BaseSchema):
+    id: int
+    amount: int
+
+
+class UpgradeRewardSchema(BaseSchema):
+    items: List[RewardItemSchema] = []
+    currencies: List[RewardCurrencySchema] = []
+    claims: List[ClaimSchema] = []
+
+
 class UpgradeRequestSchema(BaseSchema):
     planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
@@ -36,6 +57,9 @@ class UpgradeRequestSchema(BaseSchema):
     season_id: int
     is_premium: bool = False
     is_premium_plus: bool = False
+    g_sku: str
+    a_sku: str
+    reward_list: UpgradeRewardSchema = None
 
     @model_validator(mode="after")
     def sanitize(self):
