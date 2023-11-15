@@ -57,12 +57,12 @@ def handle(event, context):
 
             claim.nonce = nonce
             claim.tx_status = TxStatus.CREATED
-            if "claims" in claim.reward_list:
+            if "claim" in claim.reward_list:
                 unsigned_tx = gql.create_action(
                     claim.planet_id,
                     "claim_items", pubkey=account.pubkey, nonce=nonce,
                     avatar_addr=claim.avatar_addr,
-                    claim_items=claim.reward_list["claims"],
+                    claim_items=claim.reward_list["claim"],
                 )
             else:
                 unsigned_tx = gql.create_action(
