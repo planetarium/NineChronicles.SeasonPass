@@ -40,7 +40,7 @@ class RewardCurrencySchema(BaseSchema):
 
 
 class ClaimSchema(BaseSchema):
-    id: int
+    id: str
     amount: int
 
 

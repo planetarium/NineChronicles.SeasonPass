@@ -10,7 +10,6 @@ from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
 
 from common.enums import PlanetID
-from schemas.user import ClaimSchema
 
 
 class GQL:
@@ -95,7 +94,7 @@ class GQL:
     def _claim_items(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
         ts = kwargs.get("timestamp", datetime.datetime.utcnow().isoformat())
         avatar_addr: str = kwargs.get("avatar_addr")
-        claim_items: List[ClaimSchema] = kwargs.get("claim_items")
+        claim_items: List[Dict] = kwargs.get("claim_items")
 
         if not claim_items:
             raise ValueError("Nothing to claim")
@@ -111,8 +110,8 @@ class GQL:
                         claimData=[{
                             "avatarAddress": avatar_addr,
                             "claimData": [{
-                                "ticker": x.id,
-                                "amount": x.amount
+                                "ticker": x["id"],
+                                "amount": x["amount"],
                             } for x in claim_items]
                         }]
                     )
