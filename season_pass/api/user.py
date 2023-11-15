@@ -109,7 +109,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             planet_id=request.planet_id,
             agent_addr=request.agent_addr,
             avatar_addr=request.avatar_addr,
-            reward_list=request.reward_list.claims
+            reward_list={"claim": {x.id: x.amount for x in request.reward_list.claims}},
         )
         # utx = gql.create_action(request.planet_id,
         #                         "claim_items", account.pubkey, nonce,
