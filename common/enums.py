@@ -78,11 +78,16 @@ class PlanetID(bytes, Enum):
 
     - *0x000000000000* : Mainnet + Odin
     - *0x000000000001* : Mainnet + Heimdall
+    - *0x000000000002* : Mainnet + Idun
     - *0x100000000000* : Internal + Odin
     - *0x100000000001* : Internal + Heimdall
+    - *0x100000000002* : Internal + Idun
 
     """
     ODIN = b'0x000000000000'
     HEIMDALL = b'0x000000000001'
+    IDUN = b'0x000000000002'
+
     ODIN_INTERNAL = b'0x100000000000'
     HEIMDALL_INTERNAL = b'0x100000000001'
+    IDUN_INTERNAL = b'0x100000000002'
