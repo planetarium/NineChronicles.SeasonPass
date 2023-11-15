@@ -12,8 +12,8 @@ from common.models.user import Claim
 from common.utils.aws import fetch_secrets, fetch_kms_key_id
 from consts import ITEM_FUNGIBLE_ID_DICT
 from schemas.sqs import SQSMessage
-from utils._crypto import Account
-from utils._graphql import GQL
+from common.utils._crypto import Account
+from common.utils._graphql import GQL
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
