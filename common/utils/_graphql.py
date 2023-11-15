@@ -109,8 +109,12 @@ class GQL:
                     self.ds.ActionTxQuery.claimItems.args(
                         claimData=[{
                             "avatarAddress": avatar_addr,
-                            "claimData": [{"ticker": k, "amount": v}
-                                          for k, v in claim_items.items()]
+                            "fungibleAssetValues": [{
+                                "ticker": k,
+                                "quantity": v,
+                                "minters": [],
+                                "decimalPlaces": 0
+                            } for k, v in claim_items.items()]
                         }]
                     )
                 )
