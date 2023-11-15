@@ -109,7 +109,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             planet_id=request.planet_id,
             agent_addr=request.agent_addr,
             avatar_addr=request.avatar_addr,
-            reward_list={"claims": [{"id": x.id, "amount": x.amount} for x in request.reward_list.claims]},
+            reward_list=request.reward_list.claims
         )
         # utx = gql.create_action(request.planet_id,
         #                         "claim_items", account.pubkey, nonce,
@@ -138,10 +138,8 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             planet_id=request.planet_id,
             agent_addr=request.agent_addr,
             avatar_addr=request.avatar_addr,
-            reward_list={
-                "items": [{"id": x.id, "amount": x.amount} for x in request.reward_list.items],
-                "currencies": [{"ticker": x.ticker, "amount": x.amount} for x in request.reward_list.currencies]
-            },
+            reward_list={"item": {x.id: x.amount for x in request.reward_list.items},
+                         "currency": {x.ticker: x.amount for x in request.reward_list.currencies}}
         )
         # utx = gql.create_action(request.planet_id,
         #                         "unload_from_garage", account.pubkey, nonce,
