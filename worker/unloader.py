@@ -12,7 +12,6 @@ from common.models.user import Claim
 from common.utils.aws import fetch_secrets, fetch_kms_key_id
 from consts import ITEM_FUNGIBLE_ID_DICT
 from schemas.sqs import SQSMessage
-from schemas.user import ClaimSchema
 from utils._crypto import Account
 from utils._graphql import GQL
 
@@ -63,7 +62,7 @@ def handle(event, context):
                     claim.planet_id,
                     "claim_items", pubkey=account.pubkey, nonce=nonce,
                     avatar_addr=claim.avatar_addr,
-                    claim_items=[ClaimSchema(**x) for x in claim.reward_list["claims"]]
+                    claim_items=claim.reward_list["claims"],
                 )
             else:
                 unsigned_tx = gql.create_action(
