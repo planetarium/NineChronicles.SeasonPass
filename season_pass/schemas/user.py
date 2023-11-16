@@ -65,6 +65,12 @@ class UpgradeRequestSchema(BaseSchema):
     def sanitize(self):
         self.agent_addr = self.agent_addr.lower()
         self.avatar_addr = self.avatar_addr.lower()
+
+        if not self.agent_addr.startswith("0x"):
+            self.agent_addr = f"0x{self.agent_addr}"
+        if not self.avatar_addr.startswith("0x"):
+            self.avatar_addr = f"0x{self.avatar_addr}"
+
         if isinstance(self.planet_id, str):
             self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
         return self
