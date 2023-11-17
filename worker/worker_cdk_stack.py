@@ -64,6 +64,15 @@ class WorkerStack(Stack):
                 _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
             ],
         )
+        # This is just for stack compatibility
+        unloader_role.add_to_policy(
+            _iam.PolicyStatement(
+                actions=["sqs:sendmessage"],
+                resources=[
+                    self.shared_stack.brave_q.queue_arn,
+                ]
+            )
+        )
         unloader_role = self.__add_policy(unloader_role, db_password=True, kms=True)
         unloader = _lambda.Function(
             self, f"{self.config.stage}-9c-season_pass-unloader-function",
