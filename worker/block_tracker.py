@@ -13,7 +13,7 @@ from common import logger
 from schemas.action import ActionJson
 from utils.stake import StakeAPCoef
 
-EXEC_LIMIT = 70  # Finish subscribe after 70 sec. : about 1min + 1block
+EXEC_LIMIT = 60  # Finish subscribe after 60 sec. : about 8~10 block
 PLANET_ID = os.environ.get("PLANET_ID")
 GQL_URL = os.environ.get("GQL_URL")
 
@@ -42,7 +42,7 @@ def send_message(tip: int, action_data: defaultdict, stake_data: defaultdict):
         QueueUrl=os.environ.get("SQS_URL"),
         MessageBody=json.dumps(message),
     )
-    logger.info(f"Message {resp['MessageId']} sent to SQS for block {tip}.")
+    logger.debug(f"Message {resp['MessageId']} sent to SQS for block {tip}.")
 
 
 def subscribe_tip(url: str, thread_dict: defaultdict, stake_data: defaultdict, action_data: defaultdict):
