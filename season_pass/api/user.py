@@ -7,10 +7,10 @@ from uuid import uuid4
 import boto3
 from fastapi import APIRouter, Depends
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
 from common.enums import PlanetID
-from common.models.season_pass import SeasonPass
+from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass, Claim
 from common.utils.season_pass import get_current_season, get_max_level
 from season_pass import settings
@@ -21,6 +21,9 @@ from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
 from season_pass.utils import verify_token
+
+# This is an instant reward of premium plus IAP purchase.
+INSTANT_EXP = 15000
 
 router = APIRouter(
     prefix="/user",
@@ -101,6 +104,11 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         target_user.is_premium = request.is_premium
     if request.is_premium_plus:
         target_user.is_premium_plus = request.is_premium_plus
+        target_user.exp += INSTANT_EXP
+        target_user.level = sess.scalar(
+            select(Level.level).where(Level.exp <= target_user.exp)
+            .order_by(desc(Level.level)).limit(1)
+        )
 
     if request.reward_list.claims:
         # ClaimItems
