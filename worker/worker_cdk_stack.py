@@ -143,9 +143,9 @@ class WorkerStack(Stack):
                 layers=[layer],
                 role=role,
                 vpc=shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(75),  # NOTE: This must be longer than 1 minute
+                timeout=cdk_core.Duration.seconds(70),  # NOTE: This must be longer than 1 minute
                 environment=env,
-                memory_size=512,
+                memory_size=128,
             )
 
             minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
@@ -171,7 +171,7 @@ class WorkerStack(Stack):
             events=[
                 _evt_src.SqsEventSource(shared_stack.brave_q)
             ],
-            memory_size=256,
+            memory_size=192,
         )
 
         # Manual signer
