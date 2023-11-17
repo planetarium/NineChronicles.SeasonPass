@@ -107,7 +107,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             .order_by(desc(Level.level)).limit(1)
         )
 
-    if request.reward_list.claims:
+    if request.reward_list:
         # ClaimItems
         claim = Claim(
             uuid=str(uuid4()),
@@ -116,63 +116,9 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             avatar_addr=request.avatar_addr,
             reward_list={"claim": {x.id: x.amount for x in request.reward_list.claims}},
         )
-        # utx = gql.create_action(request.planet_id,
-        #                         "claim_items", account.pubkey, nonce,
-        #                         avatar_addr=request.avatar_addr,
-        #                         claim_items=request.reward_list.claims)
-        # signature = account.sign_tx(utx)
-        # signed_tx = gql.sign(request.planet_id, utx, signature)
-        # claim.tx = signed_tx.hex()
-        # claim.nonce = nonce
-        # claim.tx_status = TxStatus.CREATED
-        # success, msg, tx_id = gql.stage(request.planet_id, signed_tx)
-        # if success:
-        #     claim.tx_id = tx_id
-        #     claim.tx_status = TxStatus.STAGED
-        #     nonce += 1
-        # Send message to SQS
         resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
         logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
         sess.add(claim)
-        # sess.commit()
-
-    if request.reward_list.items or request.reward_list.currencies:
-        # Unload
-        claim = Claim(
-            uuid=str(uuid4()),
-            planet_id=request.planet_id,
-            agent_addr=request.agent_addr,
-            avatar_addr=request.avatar_addr,
-            reward_list={"item": {x.id: x.amount for x in request.reward_list.items},
-                         "currency": {x.ticker: x.amount for x in request.reward_list.currencies}}
-        )
-        # utx = gql.create_action(request.planet_id,
-        #                         "unload_from_garage", account.pubkey, nonce,
-        #                         avatar_addr=request.avatar_addr,
-        #                         item_data=[{
-        #                             "fungibleId": ITEM_FUNGIBLE_ID_DICT[x.id],
-        #                             "count": x.amount
-        #                         } for x in request.reward_list.items],
-        #                         fav_data=[{
-        #                             "balanceAddr": request.agent_addr,
-        #                             "value": {
-        #                                 "currencyTicker": x.ticker,
-        #                                 "value": f"{x.amount}"
-        #                             }
-        #                         } for x in request.reward_list.currencies],
-        #                         memo=json.dumps({"iap": {"g_sku": request.g_sku, "a_sku": request.a_sku}}))
-        # signature = account.sign_tx(utx)
-        # signed_tx = gql.sign(request.planet_id, utx, signature)
-        # claim.tx = signed_tx.hex()
-        # claim.nonce = nonce
-        # claim.tx_status = TxStatus.CREATED
-        # success, msg, tx_id = gql.stage(request.planet_id, signed_tx)
-        # if success:
-        #     claim.tx_status = TxStatus.STAGED
-        #     claim.tx_id = tx_id
-        sess.add(claim)
-        resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
-        logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
 
     sess.add(target_user)
     sess.commit()
