@@ -12,6 +12,7 @@ class SeasonPass(TimeStampMixin, Base):
     start_date = Column(Date, nullable=False, doc="Start date of pass. Inclusive.")
     end_date = Column(Date, nullable=False, doc="End date of pass. Inclusive.")
     reward_list = Column(JSON, nullable=False, default=[])
+    instant_exp = Column(Integer, nullable=False, doc="Instant reward exp for premium plus user")
 
     exp_list = relationship("Exp")
 
