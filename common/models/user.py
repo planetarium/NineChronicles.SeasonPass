@@ -32,8 +32,8 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
             "premium": [] if (not self.is_premium or self.level == self.last_premium_claim) else list(
                 range(self.last_premium_claim + 1, self.level + 1))
         }
-        if self.level == max_level.level:
-            # Get 31 level achievement
+        # Get repeating reward
+        if self.level > max_level.level:
             rewards["normal"].extend([max_level.level + 1] * ((self.exp - max_level.exp) // repeat_exp))
 
         return rewards
