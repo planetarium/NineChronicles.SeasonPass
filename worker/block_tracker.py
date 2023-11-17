@@ -42,7 +42,7 @@ def send_message(tip: int, action_data: defaultdict, stake_data: defaultdict):
         QueueUrl=os.environ.get("SQS_URL"),
         MessageBody=json.dumps(message),
     )
-    logger.info(f"Message {resp['MessageId']} sent to SQS for block {tip}.")
+    logger.debug(f"Message {resp['MessageId']} sent to SQS for block {tip}.")
 
 
 def subscribe_tip(url: str, thread_dict: defaultdict, stake_data: defaultdict, action_data: defaultdict):
