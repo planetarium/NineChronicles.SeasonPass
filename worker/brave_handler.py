@@ -154,8 +154,7 @@ def handle(event, context):
     try:
         sess = scoped_session(sessionmaker(bind=engine))
         current_season = get_current_season(sess, include_exp=True)
-        # The last level is not a real level. Last level is for repeating reward.
-        level_dict = {x.level: x.exp for x in sess.scalars(select(Level).order_by(Level.level)).fetchall()[:-1]}
+        level_dict = {x.level: x.exp for x in sess.scalars(select(Level)).fetchall()}
 
         for i, record in enumerate(message.Records):
             body = record.body
