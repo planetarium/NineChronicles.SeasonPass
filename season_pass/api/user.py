@@ -22,9 +22,6 @@ from season_pass.schemas.user import (
 )
 from season_pass.utils import verify_token
 
-# This is an instant reward of premium plus IAP purchase.
-INSTANT_EXP = 15000
-
 router = APIRouter(
     prefix="/user",
     tags=["User"],
@@ -104,7 +101,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         target_user.is_premium = request.is_premium
     if request.is_premium_plus:
         target_user.is_premium_plus = request.is_premium_plus
-        target_user.exp += INSTANT_EXP
+        target_user.exp += current_season.instant_exp
         target_user.level = sess.scalar(
             select(Level.level).where(Level.exp <= target_user.exp)
             .order_by(desc(Level.level)).limit(1)
