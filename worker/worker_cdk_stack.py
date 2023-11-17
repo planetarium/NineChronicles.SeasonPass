@@ -91,6 +91,7 @@ class WorkerStack(Stack):
                       f"{shared_stack.credentials.username}:[DB_PASSWORD]"
                       f"@{shared_stack.rds.db_instance_endpoint_address}"
                       f"/season_pass",
+            "SQS_URL": shared_stack.brave_q.queue_url,  # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
             "PLANET_URL": config.planet_url,
         }
 
