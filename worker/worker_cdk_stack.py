@@ -91,7 +91,6 @@ class WorkerStack(Stack):
                       f"{shared_stack.credentials.username}:[DB_PASSWORD]"
                       f"@{shared_stack.rds.db_instance_endpoint_address}"
                       f"/season_pass",
-            "SQS_URL": shared_stack.brave_q.queue_url,
             "PLANET_URL": config.planet_url,
         }
 
@@ -140,6 +139,7 @@ class WorkerStack(Stack):
                 dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=brave_dlq),
                 visibility_timeout=cdk_core.Duration.seconds(120),
             )
+            env["SQS_URL"] = brave_q.queue_url
 
             block_tracker = _lambda.Function(
                 self, f"{config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
@@ -166,7 +166,7 @@ class WorkerStack(Stack):
 
             brave_handler = _lambda.Function(
                 self, f"{config.stage}-{planet_name}-9c-season_pass-brave_handler-function",
-                function_name=f"{config.stage}-{planet_name}9c-season_pass-brave_handler",
+                function_name=f"{config.stage}-{planet_name}-9c-season_pass-brave_handler",
                 runtime=_lambda.Runtime.PYTHON_3_11,
                 description="Brave exp handler of NineChronicles.SeasonPass",
                 code=_lambda.AssetCode("worker/", exclude=exclude_list),
