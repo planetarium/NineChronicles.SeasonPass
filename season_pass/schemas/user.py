@@ -1,6 +1,6 @@
 from typing import List
 
-from pydantic import BaseModel as BaseSchema, model_validator
+from pydantic import BaseModel as BaseSchema, model_validator, Field
 
 from common.enums import PlanetID
 from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema
@@ -29,25 +29,10 @@ class UserSeasonPassSchema(BaseSchema):
         from_attributes = True
 
 
-class RewardItemSchema(BaseSchema):
-    id: int
-    amount: int
-
-
-class RewardCurrencySchema(BaseSchema):
-    ticker: str
-    amount: str
-
-
 class ClaimSchema(BaseSchema):
     id: str
     amount: int
-
-
-class UpgradeRewardSchema(BaseSchema):
-    items: List[RewardItemSchema] = []
-    currencies: List[RewardCurrencySchema] = []
-    claims: List[ClaimSchema] = []
+    decimal_places: int = 0
 
 
 class UpgradeRequestSchema(BaseSchema):
@@ -59,7 +44,7 @@ class UpgradeRequestSchema(BaseSchema):
     is_premium_plus: bool = False
     g_sku: str
     a_sku: str
-    reward_list: UpgradeRewardSchema = None
+    reward_list: List[ClaimSchema] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def sanitize(self):
