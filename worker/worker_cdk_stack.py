@@ -10,6 +10,7 @@ from aws_cdk import (
     aws_lambda_event_sources as _evt_src,
     aws_events as _events,
     aws_events_targets as _event_targets,
+    aws_sqs as _sqs,
 )
 from constructs import Construct
 
@@ -133,6 +134,13 @@ class WorkerStack(Stack):
             env["PLANET_ID"] = planet["id"]
             env["GQL_URL"] = planet["rpcEndpoints"]["headless.gql"][0]
 
+            brave_dlq = _sqs.Queue(self, f"{config.stage}-{planet_name}-9c-season_pass-brave-dlq")
+            brave_q = _sqs.Queue(
+                self, f"{config.stage}-{planet_name}-9c-season_pass-brave-queue",
+                dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=brave_dlq),
+                visibility_timeout=cdk_core.Duration.seconds(120),
+            )
+
             block_tracker = _lambda.Function(
                 self, f"{config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
                 function_name=f"{config.stage}-{planet_name}-9c-season_pass-block_tracker",
@@ -150,29 +158,29 @@ class WorkerStack(Stack):
 
             minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
 
-        try:
-            del env["PLANET_ID"]
-            del env["GQL_URL"]
-        except KeyError:
-            pass
+            try:
+                del env["PLANET_ID"]
+                del env["GQL_URL"]
+            except KeyError:
+                pass
 
-        brave_handler = _lambda.Function(
-            self, f"{config.stage}-9c-season_pass-brave_handler-function",
-            function_name=f"{config.stage}-9c-season_pass-brave_handler",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            description="Brave exp handler of NineChronicles.SeasonPass",
-            code=_lambda.AssetCode("worker/", exclude=exclude_list),
-            handler="brave_handler.handle",
-            layers=[layer],
-            role=role,
-            vpc=shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(120),
-            environment=env,
-            events=[
-                _evt_src.SqsEventSource(shared_stack.brave_q)
-            ],
-            memory_size=192,
-        )
+            brave_handler = _lambda.Function(
+                self, f"{config.stage}-{planet_name}-9c-season_pass-brave_handler-function",
+                function_name=f"{config.stage}-{planet_name}9c-season_pass-brave_handler",
+                runtime=_lambda.Runtime.PYTHON_3_11,
+                description="Brave exp handler of NineChronicles.SeasonPass",
+                code=_lambda.AssetCode("worker/", exclude=exclude_list),
+                handler="brave_handler.handle",
+                layers=[layer],
+                role=role,
+                vpc=shared_stack.vpc,
+                timeout=cdk_core.Duration.seconds(120),
+                environment=env,
+                events=[
+                    _evt_src.SqsEventSource(brave_q)
+                ],
+                memory_size=192,
+            )
 
         # Manual signer
         if config.stage != "mainnet":
