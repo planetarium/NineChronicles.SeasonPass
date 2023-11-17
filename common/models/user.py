@@ -28,9 +28,9 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
         max_level, repeat_exp = get_max_level(sess)
         rewards = {
             "normal": [] if self.level == self.last_normal_claim else list(
-                range(self.last_normal_claim + 1, self.level + 1)),
+                range(self.last_normal_claim + 1, min(self.level + 1, max_level.level + 1))),
             "premium": [] if (not self.is_premium or self.level == self.last_premium_claim) else list(
-                range(self.last_premium_claim + 1, self.level + 1))
+                range(self.last_premium_claim + 1, min(self.level + 1, max_level.level + 1)))
         }
         # Get repeating reward
         if self.level > max_level.level:

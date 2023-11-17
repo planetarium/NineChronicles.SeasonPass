@@ -235,9 +235,9 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     )
     sess.add(claim)
 
-    user_season.last_normal_claim = user_season.level
+    user_season.last_normal_claim = min(user_season.level, max_level.level)
     if user_season.is_premium:
-        user_season.last_premium_claim = user_season.level
+        user_season.last_premium_claim = min(user_season.level, max_level.level)
 
     # Get repeating reward when user is above max level
     if user_season.level > max_level.level:
