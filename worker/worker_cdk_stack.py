@@ -73,14 +73,6 @@ class WorkerStack(Stack):
                 ]
             )
         )
-        role.add_to_policy(
-            _iam.PolicyStatement(
-                actions=["sqs:sendmessage"],
-                resources=[
-                    shared_stack.brave_q.queue_arn,
-                ]
-            )
-        )
 
         # Environment variables
         env = {
@@ -141,6 +133,14 @@ class WorkerStack(Stack):
                 visibility_timeout=cdk_core.Duration.seconds(120),
             )
             env["SQS_URL"] = brave_q.queue_url
+            role.add_to_policy(
+                _iam.PolicyStatement(
+                    actions=["sqs:sendmessage"],
+                    resources=[
+                        brave_q.queue_arn,
+                    ]
+                )
+            )
 
             block_tracker = _lambda.Function(
                 self, f"{config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
