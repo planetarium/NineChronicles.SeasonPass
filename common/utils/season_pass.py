@@ -20,5 +20,6 @@ def get_max_level(sess) -> Tuple[Level, int]:
     Returns max level of season pass and repeating exp.
     Last one of level table is not a real level. Just for repeating reward.
     """
+    # m1 for repeating level, m2 for real max level
     m1, m2 = sess.scalars(select(Level).order_by(desc(Level.level)).limit(2)).fetchall()
     return m2, abs(m1.exp - m2.exp)
