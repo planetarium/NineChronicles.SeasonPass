@@ -107,72 +107,19 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             .order_by(desc(Level.level)).limit(1)
         )
 
-    if request.reward_list.claims:
+    if request.reward_list:
         # ClaimItems
         claim = Claim(
             uuid=str(uuid4()),
             planet_id=request.planet_id,
             agent_addr=request.agent_addr,
             avatar_addr=request.avatar_addr,
-            reward_list={"claim": {x.id: x.amount for x in request.reward_list.claims}},
+            reward_list=[{"ticker": x.ticker, "amount": x.amount, "decimal_places": x.decimal_places}
+                         for x in request.reward_list],
         )
-        # utx = gql.create_action(request.planet_id,
-        #                         "claim_items", account.pubkey, nonce,
-        #                         avatar_addr=request.avatar_addr,
-        #                         claim_items=request.reward_list.claims)
-        # signature = account.sign_tx(utx)
-        # signed_tx = gql.sign(request.planet_id, utx, signature)
-        # claim.tx = signed_tx.hex()
-        # claim.nonce = nonce
-        # claim.tx_status = TxStatus.CREATED
-        # success, msg, tx_id = gql.stage(request.planet_id, signed_tx)
-        # if success:
-        #     claim.tx_id = tx_id
-        #     claim.tx_status = TxStatus.STAGED
-        #     nonce += 1
-        # Send message to SQS
         resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
         logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
         sess.add(claim)
-        # sess.commit()
-
-    if request.reward_list.items or request.reward_list.currencies:
-        # Unload
-        claim = Claim(
-            uuid=str(uuid4()),
-            planet_id=request.planet_id,
-            agent_addr=request.agent_addr,
-            avatar_addr=request.avatar_addr,
-            reward_list={"item": {x.id: x.amount for x in request.reward_list.items},
-                         "currency": {x.ticker: x.amount for x in request.reward_list.currencies}}
-        )
-        # utx = gql.create_action(request.planet_id,
-        #                         "unload_from_garage", account.pubkey, nonce,
-        #                         avatar_addr=request.avatar_addr,
-        #                         item_data=[{
-        #                             "fungibleId": ITEM_FUNGIBLE_ID_DICT[x.id],
-        #                             "count": x.amount
-        #                         } for x in request.reward_list.items],
-        #                         fav_data=[{
-        #                             "balanceAddr": request.agent_addr,
-        #                             "value": {
-        #                                 "currencyTicker": x.ticker,
-        #                                 "value": f"{x.amount}"
-        #                             }
-        #                         } for x in request.reward_list.currencies],
-        #                         memo=json.dumps({"iap": {"g_sku": request.g_sku, "a_sku": request.a_sku}}))
-        # signature = account.sign_tx(utx)
-        # signed_tx = gql.sign(request.planet_id, utx, signature)
-        # claim.tx = signed_tx.hex()
-        # claim.nonce = nonce
-        # claim.tx_status = TxStatus.CREATED
-        # success, msg, tx_id = gql.stage(request.planet_id, signed_tx)
-        # if success:
-        #     claim.tx_status = TxStatus.STAGED
-        #     claim.tx_id = tx_id
-        sess.add(claim)
-        resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
-        logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
 
     sess.add(target_user)
     sess.commit()
@@ -202,31 +149,23 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     max_level, repeat_exp = get_max_level(sess)
 
     # calculate rewards to get
-    reward_items = defaultdict(int)
-    reward_currencies = defaultdict(int)
     reward_dict = {x["level"]: x for x in target_season.reward_list}
+    target_reward_dict = defaultdict(int)
     for reward_level in available_rewards["normal"]:
         reward = reward_dict[reward_level]
-        for item in reward["normal"]["item"]:
-            reward_items[item["id"]] += item["amount"]
-        for curr in reward["normal"]["currency"]:
-            reward_currencies[curr["ticker"]] += curr["amount"]
+        for item in reward["normal"]:
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
     for reward_level in available_rewards["premium"]:
         reward = reward_dict[reward_level]
-        for item in reward["premium"]["item"]:
-            reward_items[item["id"]] += item["amount"]
-        for curr in reward["premium"]["currency"]:
-            reward_currencies[curr["ticker"]] += curr["amount"]
-
-    logging.debug(reward_items)
-    logging.debug(reward_currencies)
+        for item in reward["premium"]:
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
 
     claim = Claim(
         uuid=str(uuid4()),
         planet_id=user_season.planet_id,
         agent_addr=user_season.agent_addr.lower(),
         avatar_addr=user_season.avatar_addr.lower(),
-        reward_list={"item": reward_items, "currency": reward_currencies},
+        reward_list=[{"ticker": k[0], "decimal_places": k[1], "amount": v} for k, v in target_reward_dict.items()],
         normal_levels=available_rewards["normal"],
         premium_levels=available_rewards["premium"],
     )
@@ -252,7 +191,8 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
     # Return result
     return ClaimResultSchema(
-        items=[{"id": k, "amount": v} for k, v in reward_items.items()],
-        currencies=[{"ticker": k, "amount": v} for k, v in reward_currencies.items()],
-        user=user_season
+        reward_list=[{"ticker": k[0], "decimal_places": k[1], "amount": v} for k, v in target_reward_dict.items()],
+        user=user_season,
+        # Deprecated: For backward compatibility
+        items=[], currencies=[],
     )

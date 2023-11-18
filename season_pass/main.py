@@ -7,9 +7,11 @@ __VERSION__ = "0.0.1"
 
 from mangum import Mangum
 from starlette.requests import Request
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
+from starlette.status import HTTP_404_NOT_FOUND
 
 from common import logger
+from season_pass.exceptions import SeasonNotFoundError, UserNotFoundError
 from season_pass import settings, api
 
 stage = os.environ.get("STAGE", "local")
@@ -27,6 +29,21 @@ app = FastAPI(
 def log_incoming_url(request: Request, call_next):
     logger.info(f"[{request.method}] {request.url}")
     return call_next(request)
+
+
+def handle_404(err: str):
+    logger.error(err)
+    return JSONResponse(status_code=HTTP_404_NOT_FOUND, content=err)
+
+
+@app.exception_handler(SeasonNotFoundError)
+def handle_season_not_found(request: Request, e: SeasonNotFoundError):
+    return handle_404(str(e))
+
+
+@app.exception_handler(UserNotFoundError)
+def handle_user_not_found(request: Request, e: UserNotFoundError):
+    return handle_404(str(e))
 
 
 @app.get("/ping", tags=["Default"])
