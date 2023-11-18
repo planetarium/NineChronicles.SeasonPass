@@ -77,6 +77,8 @@ class ClaimRequestSchema(BaseSchema):
 
 
 class ClaimResultSchema(BaseSchema):
+    reward_list: List[ClaimSchema] = []
+    user: UserSeasonPassSchema
+    # Deprecated: For backward compatibility
     items: List[ItemInfoSchema]
     currencies: List[CurrencyInfoSchema]
-    user: UserSeasonPassSchema

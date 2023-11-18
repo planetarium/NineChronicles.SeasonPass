@@ -148,31 +148,23 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     max_level, repeat_exp = get_max_level(sess)
 
     # calculate rewards to get
-    reward_items = defaultdict(int)
-    reward_currencies = defaultdict(int)
     reward_dict = {x["level"]: x for x in target_season.reward_list}
+    target_reward_dict = defaultdict(int)
     for reward_level in available_rewards["normal"]:
         reward = reward_dict[reward_level]
-        for item in reward["normal"]["item"]:
-            reward_items[item["id"]] += item["amount"]
-        for curr in reward["normal"]["currency"]:
-            reward_currencies[curr["ticker"]] += curr["amount"]
+        for item in reward["normal"]:
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
     for reward_level in available_rewards["premium"]:
         reward = reward_dict[reward_level]
-        for item in reward["premium"]["item"]:
-            reward_items[item["id"]] += item["amount"]
-        for curr in reward["premium"]["currency"]:
-            reward_currencies[curr["ticker"]] += curr["amount"]
-
-    logging.debug(reward_items)
-    logging.debug(reward_currencies)
+        for item in reward["premium"]:
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
 
     claim = Claim(
         uuid=str(uuid4()),
         planet_id=user_season.planet_id,
         agent_addr=user_season.agent_addr.lower(),
         avatar_addr=user_season.avatar_addr.lower(),
-        reward_list={"item": reward_items, "currency": reward_currencies},
+        reward_list=[{"ticker": k[0], "decimal_places": k[1], "amount": v} for k, v in target_reward_dict.items()],
         normal_levels=available_rewards["normal"],
         premium_levels=available_rewards["premium"],
     )
@@ -198,7 +190,8 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
     # Return result
     return ClaimResultSchema(
-        items=[{"id": k, "amount": v} for k, v in reward_items.items()],
-        currencies=[{"ticker": k, "amount": v} for k, v in reward_currencies.items()],
-        user=user_season
+        reward_list=[{"ticker": k[0], "decimal_places": k[1], "amount": v} for k, v in target_reward_dict.items()],
+        user=user_season,
+        # Deprecated: For backward compatibility
+        items=[], currencies=[],
     )
