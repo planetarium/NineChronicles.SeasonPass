@@ -58,8 +58,7 @@ def handle(event, context):
             unsigned_tx = gql.create_action(
                 claim.planet_id,
                 "claim_items", pubkey=account.pubkey, nonce=nonce,
-                avatar_addr=claim.avatar_addr,
-                claim_items=claim.reward_list,
+                avatar_addr=claim.avatar_addr, claim_data=claim.reward_list,
                 memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels, "t": "claim"}}),
             )
             signature = account.sign_tx(unsigned_tx)
