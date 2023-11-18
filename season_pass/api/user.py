@@ -114,8 +114,8 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             planet_id=request.planet_id,
             agent_addr=request.agent_addr,
             avatar_addr=request.avatar_addr,
-            reward_list=[{"ticker": x.id, "amount": x.amount, "decimal_places": x.get("decimal_places", 0)}
-                         for x in request.reward_list.claims],
+            reward_list=[{"ticker": x.ticker, "amount": x.amount, "decimal_places": x.decimal_places}
+                         for x in request.reward_list],
         )
         resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
         logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
