@@ -29,17 +29,36 @@ class ClaimSchema(BaseSchema):
         return self
 
 
-class RewardSchema(BaseSchema):
+class NewRewardSchema(BaseSchema):
     level: int
     normal: List[ClaimSchema]
     premium: List[ClaimSchema]
 
 
+class RewardDetailSchema(BaseSchema):
+    item: List[ItemInfoSchema]
+    currency: List[CurrencyInfoSchema]
+
+
+class RewardSchema(BaseSchema):
+    level: int
+    normal: RewardDetailSchema
+    premium: RewardDetailSchema
+
+
 class SeasonPassSchema(BaseSchema):
+    # Deprecated
     id: int
     start_date: date
     end_date: date
     reward_list: List[RewardSchema]
+
+
+class NewSeasonPassSchema(BaseSchema):
+    id: int
+    start_date: date
+    end_date: date
+    reward_list: List[NewRewardSchema]
 
 
 class LevelInfoSchema(BaseSchema):
