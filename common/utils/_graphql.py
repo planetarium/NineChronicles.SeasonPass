@@ -1,7 +1,7 @@
 import datetime
 import logging
 import os
-from typing import Union, Dict, Any, Tuple, Optional
+from typing import Union, Dict, Any, Tuple, Optional, List
 
 import requests
 from gql import Client
@@ -94,7 +94,8 @@ class GQL:
     def _claim_items(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
         ts = kwargs.get("timestamp", datetime.datetime.utcnow().isoformat())
         avatar_addr: str = kwargs.get("avatar_addr")
-        claim_items: Dict[Dict[str, int]] = kwargs.get("claim_items")
+        claim_items: List[Dict[str, Any]] = kwargs.get("claim_items")
+        memo = kwargs.get("memo")
 
         if not claim_items:
             raise ValueError("Nothing to claim")
@@ -109,8 +110,10 @@ class GQL:
                     self.ds.ActionTxQuery.claimItems.args(
                         claimData=[{
                             "avatarAddress": avatar_addr,
-                            "fungibleAssetValues": [{"ticker": k, "quantity": v, "decimalPlaces": 0, "minters": []}
-                                                    for k, v in claim_items.items()]
+                            "fungibleAssetValues": [{"ticker": x["ticker"], "quantity": x["amount"],
+                                                     "decimalPlaces": x.get("decimal_places", 0), "minters": []}
+                                                    for x in claim_items],
+                            "memo": memo
                         }]
                     )
                 )
