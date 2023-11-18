@@ -33,7 +33,7 @@ try:
                                        parameter_name=f"{os.environ.get('STAGE')}_9c_SEASON_PASS_JWT_TOKEN_SECRET",
                                        secure=True)["Value"]
 except:
-    pass
+    JWT_TOKEN_SECRET = config("JWT_TOKEN_SECRET")
 
 # AWS
 REGION_NAME = config("REGION_NAME")
