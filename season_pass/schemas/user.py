@@ -3,7 +3,7 @@ from typing import List
 from pydantic import BaseModel as BaseSchema, model_validator, Field
 
 from common.enums import PlanetID
-from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema
+from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema, ClaimSchema
 from season_pass.settings import stage
 
 
@@ -27,12 +27,6 @@ class UserSeasonPassSchema(BaseSchema):
 
     class Config:
         from_attributes = True
-
-
-class ClaimSchema(BaseSchema):
-    id: str
-    amount: int
-    decimal_places: int = 0
 
 
 class UpgradeRequestSchema(BaseSchema):

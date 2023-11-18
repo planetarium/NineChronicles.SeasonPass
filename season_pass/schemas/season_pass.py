@@ -1,7 +1,7 @@
 from datetime import date
-from typing import List
+from typing import List, Optional
 
-from pydantic import BaseModel as BaseSchema
+from pydantic import BaseModel as BaseSchema, model_validator
 
 from common.enums import ActionType
 
@@ -16,15 +16,23 @@ class CurrencyInfoSchema(BaseSchema):
     amount: float
 
 
-class RewardDetailSchema(BaseSchema):
-    item: List[ItemInfoSchema]
-    currency: List[CurrencyInfoSchema]
+class ClaimSchema(BaseSchema):
+    ticker: str
+    amount: int
+    decimal_places: int = 0
+    id: Optional[str] = ""
+
+    # Compatibility
+    @model_validator(mode="after")
+    def _id(self):
+        self.id = self.ticker.split("_")[-1]
+        return self
 
 
 class RewardSchema(BaseSchema):
     level: int
-    normal: RewardDetailSchema
-    premium: RewardDetailSchema
+    normal: List[ClaimSchema]
+    premium: List[ClaimSchema]
 
 
 class SeasonPassSchema(BaseSchema):
