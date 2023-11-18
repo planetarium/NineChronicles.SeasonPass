@@ -53,12 +53,12 @@ def verify_token(authorization: Annotated[str, Header()]):
         if prefix != "Bearer":
             raise Exception("Invalid token type. Use `Bearer [TOKEN]`.")
         token_data = jwt.decode(body, settings.JWT_TOKEN_SECRET, audience="SeasonPass", algorithms=["HS256"])
-        if ((datetime.utcfromtimestamp(token_data["iat"]) + timedelta(hours=1))
-                < datetime.utcfromtimestamp(token_data["exp"])):
+        if ((datetime.fromtimestamp(token_data["iat"], tz=timezone.utc) + timedelta(hours=1))
+                < datetime.fromtimestamp(token_data["exp"], tz=timezone.utc)):
             raise ExpiredSignatureError("Too long token lifetime")
-        if datetime.utcfromtimestamp(token_data["iat"]).astimezone(timezone.utc) > now:
+        if datetime.fromtimestamp(token_data["iat"], tz=timezone.utc) > now:
             raise ExpiredSignatureError("Invalid token issue timestamp")
-        if datetime.utcfromtimestamp(token_data["exp"]).astimezone(timezone.utc) < now:
+        if datetime.fromtimestamp(token_data["exp"], tz=timezone.utc) < now:
             raise ExpiredSignatureError("Token expired")
 
     except Exception as e:
