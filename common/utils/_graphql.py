@@ -113,8 +113,8 @@ class GQL:
                             "fungibleAssetValues": [{"ticker": x["ticker"], "quantity": x["amount"],
                                                      "decimalPlaces": x.get("decimal_places", 0), "minters": []}
                                                     for x in claim_data],
-                            "memo": memo
-                        }]
+                        }],
+                        memo=memo
                     )
                 )
             )
