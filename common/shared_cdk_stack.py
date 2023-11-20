@@ -98,17 +98,30 @@ class SharedStack(Stack):
             description="Allow PSQL from outside",
         )
         self.credentials = _rds.Credentials.from_username("season_pass")
-        self.rds = _rds.DatabaseInstance(
-            self, f"{config.stage}-9c-season_pass-rds",
-            instance_identifier=f"{config.stage}-9c-season-pass-rds",
-            engine=_rds.DatabaseInstanceEngine.postgres(version=_rds.PostgresEngineVersion.VER_15_2),
-            vpc=self.vpc,
-            vpc_subnets=_ec2.SubnetSelection(),
-            database_name="season_pass",
-            credentials=self.credentials,
-            instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.MICRO),
-            security_groups=[self.rds_security_group],
-        )
+        if config.stage == "mainnet":
+            self.rds = _rds.ServerlessCluster(
+                self, f"{config.stage}-9c-season_pass-aurora-cluster",
+                cluster_identifier=f"{config.stage}-9c-season-pass-aurora-cluster",
+                engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_2),
+                default_database_name="season_pass",
+                credentials=self.credentials,
+                vpc=self.vpc, vpc_subnets=_ec2.SubnetSelection(),
+                security_groups=[self.rds_security_group],
+            )
+            self.rds_endpoint = self.rds.cluster_endpoint.socket_address
+        else:
+            self.rds = _rds.DatabaseInstance(
+                self, f"{config.stage}-9c-season_pass-rds",
+                instance_identifier=f"{config.stage}-9c-season-pass-rds",
+                engine=_rds.DatabaseInstanceEngine.postgres(version=_rds.PostgresEngineVersion.VER_15_2),
+                vpc=self.vpc,
+                vpc_subnets=_ec2.SubnetSelection(),
+                database_name="season_pass",
+                credentials=self.credentials,
+                instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.MICRO),
+                security_groups=[self.rds_security_group],
+            )
+            self.rds_endpoint = self.rds.db_instance_endpoint_address
 
         # SecureStrings in Parameter Store
         PARAMETER_LIST = (

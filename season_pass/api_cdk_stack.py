@@ -68,7 +68,7 @@ class APIStack(Stack):
             "SECRET_ARN": shared_stack.rds.secret.secret_arn,
             "DB_URI": f"postgresql://"
                       f"{shared_stack.credentials.username}:[DB_PASSWORD]"
-                      f"@{shared_stack.rds.db_instance_endpoint_address}"
+                      f"@{shared_stack.rds_endpoint}"
                       f"/season_pass",
             "LOGGING_LEVEL": "INFO",
             "DB_ECHO": "False",

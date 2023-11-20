@@ -75,7 +75,7 @@ class WorkerStack(Stack):
             "SECRET_ARN": self.shared_stack.rds.secret.secret_arn,
             "DB_URI": f"postgresql://"
                       f"{self.shared_stack.credentials.username}:[DB_PASSWORD]"
-                      f"@{self.shared_stack.rds.db_instance_endpoint_address}"
+                      f"@{self.shared_stack.rds_endpoint}"
                       f"/season_pass",
             "SQS_URL": self.shared_stack.brave_q.queue_url,
             # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
