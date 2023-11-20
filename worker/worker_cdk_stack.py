@@ -37,20 +37,27 @@ class WorkerStack(Stack):
         with open(init_file, "w") as f:
             f.write(s)
 
+        tracker_role = _iam.Role(
+            self, f"{self.config.stage}-9c-season_pass-tracker-role",
+            assumed_by=_iam.ServicePrincipal("ec2.amazonaws.com"),
+        )
+        self.shared_stack.brave_q.grant_send_messages(tracker_role)
+
         block_tracker = _ec2.Instance(
-            self, f"{config.stage}-9c-season_pass-block_tracker",
-            vpc=shared_stack.vpc,
-            instance_name=f"{config.stage}-9c-season_pass-block_tracker",
+            self, f"{self.config.stage}-9c-season_pass-block_tracker",
+            vpc=self.shared_stack.vpc,
+            instance_name=f"{self.config.stage}-9c-season_pass-block_tracker",
             instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL),
             machine_image=_ec2.MachineImage.from_ssm_parameter(
                 "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
             ),
-            key_name=shared_stack.resource_data.key_name,
+            key_name=self.shared_stack.resource_data.key_name,
             security_group=_ec2.SecurityGroup.from_lookup_by_id(
-                self, f"{config.stage}-9c-season_pass-block_tracker-sg",
-                security_group_id=shared_stack.resource_data.sg_id,
+                self, f"{self.config.stage}-9c-season_pass-block_tracker-sg",
+                security_group_id=self.shared_stack.resource_data.sg_id,
             ),
-            user_data=_ec2.UserData.for_linux().add_execute_file_command(file_path=init_file)
+            user_data=_ec2.UserData.for_linux().add_execute_file_command(file_path=init_file),
+            role=tracker_role,
         )
 
         # Lambda Layer
@@ -141,38 +148,22 @@ class WorkerStack(Stack):
             env["GQL_URL"] = planet["rpcEndpoints"]["headless.gql"][0]
             env["SQS_URL"] = self.shared_stack.brave_q.queue_url
 
-            tracker_role = _iam.Role(
-                self, f"{self.config.stage}-{planet_name}-9c-season_pass-tracker-role",
-                assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
-                managed_policies=[
-                    _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
-                ],
-            )
-            tracker_role.add_to_policy(
-                _iam.PolicyStatement(
-                    actions=["sqs:sendmessage"],
-                    resources=[
-                        self.shared_stack.brave_q.queue_arn,
-                    ]
-                )
-            )
-
-            block_tracker = _lambda.Function(
-                self, f"{self.config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
-                function_name=f"{self.config.stage}-{planet_name}-9c-season_pass-block_tracker",
-                runtime=_lambda.Runtime.PYTHON_3_11,
-                description="Block tracker of NineChronicles.SeasonPass to send action data to brave_handler",
-                code=_lambda.AssetCode("worker/", exclude=exclude_list),
-                handler="block_tracker.handle",
-                layers=[layer],
-                role=tracker_role,
-                vpc=self.shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(70),  # NOTE: This must be longer than 1 minute
-                environment=env,
-                memory_size=128,
-            )
-
-            minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
+            # block_tracker = _lambda.Function(
+            #     self, f"{self.config.stage}-{planet_name}-9c-season_pass-block_tracker-function",
+            #     function_name=f"{self.config.stage}-{planet_name}-9c-season_pass-block_tracker",
+            #     runtime=_lambda.Runtime.PYTHON_3_11,
+            #     description="Block tracker of NineChronicles.SeasonPass to send action data to brave_handler",
+            #     code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            #     handler="block_tracker.handle",
+            #     layers=[layer],
+            #     role=tracker_role,
+            #     vpc=self.shared_stack.vpc,
+            #     timeout=cdk_core.Duration.seconds(70),  # NOTE: This must be longer than 1 minute
+            #     environment=env,
+            #     memory_size=128,
+            # )
+            #
+            # minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
 
             try:
                 del env["PLANET_ID"]
