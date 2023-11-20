@@ -17,6 +17,8 @@ from constructs import Construct
 from common import COMMON_LAMBDA_EXCLUDE
 from worker import WORKER_LAMBDA_EXCLUDE
 
+PLANET_ON_LINE = ("odin", "heimdall")
+
 
 class WorkerStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
@@ -106,6 +108,9 @@ class WorkerStack(Stack):
         print(f"{len(data)} Planets to track blocks: {[x['name'] for x in data]}")
         for planet in data:
             planet_name = planet["name"].split(" ")[0]
+            if planet_name not in PLANET_ON_LINE:
+                print(f"Planet {planet_name} is not on line. Skip.")
+                continue
 
             brave_dlq = _sqs.Queue(self, f"{self.config.stage}-{planet_name}-9c-season_pass-brave-dlq")
             brave_q = _sqs.Queue(
