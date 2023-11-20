@@ -154,7 +154,7 @@ class WorkerStack(Stack):
                 memory_size=128,
             )
 
-            # minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
+            minute_event_rule.add_target(_event_targets.LambdaFunction(block_tracker))
 
             try:
                 del env["PLANET_ID"]
