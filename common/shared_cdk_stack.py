@@ -68,6 +68,21 @@ class SharedStack(Stack):
             visibility_timeout=cdk_core.Duration.seconds(120),
         )
 
+        # EC2 SG
+        self.ec2_sg = _ec2.SecurityGroup(
+            self, f"{config.stage}-9c-season_pass-ec2-sg", vpc=self.vpc, allow_all_outbound=True
+        )
+        self.ec2_sg.add_ingress_rule(
+            peer=_ec2.Peer.ipv4("0.0.0.0/0"),
+            connection=_ec2.Port.tcp(22),
+            description="Allow SSH from outside",
+        )
+        self.ec2_sg.add_ingress_rule(
+            peer=self.ec2_sg,
+            connection=_ec2.Port.tcp(22),
+            description="Allow SSH from outside",
+        )
+
         # RDS
         self.rds_security_group = _ec2.SecurityGroup(
             self, f"{config.stage}-9c-season_pass-rds-sg", vpc=self.vpc, allow_all_outbound=True

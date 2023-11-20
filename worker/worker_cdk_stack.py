@@ -52,10 +52,7 @@ class WorkerStack(Stack):
                 "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
             ),
             key_name=self.shared_stack.resource_data.key_name,
-            security_group=_ec2.SecurityGroup.from_lookup_by_id(
-                self, f"{self.config.stage}-9c-season_pass-block_tracker-sg",
-                security_group_id=self.shared_stack.resource_data.sg_id,
-            ),
+            security_group=self.shared_stack.ec2_sg,
             user_data=_ec2.UserData.for_linux().add_execute_file_command(file_path=init_file),
             role=tracker_role,
         )
