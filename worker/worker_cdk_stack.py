@@ -137,16 +137,9 @@ class WorkerStack(Stack):
                 print(f"Planet {planet_name} is not on line. Skip.")
                 continue
 
-            brave_dlq = _sqs.Queue(self, f"{self.config.stage}-{planet_name}-9c-season_pass-brave-dlq")
-            brave_q = _sqs.Queue(
-                self, f"{self.config.stage}-{planet_name}-9c-season_pass-brave-queue",
-                dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=brave_dlq),
-                visibility_timeout=cdk_core.Duration.seconds(120),
-            )
-
             env["PLANET_ID"] = planet["id"]
             env["GQL_URL"] = planet["rpcEndpoints"]["headless.gql"][0]
-            env["SQS_URL"] = brave_q.queue_url
+            env["SQS_URL"] = self.shared_stack.brave_q.queue_url
 
             tracker_role = _iam.Role(
                 self, f"{self.config.stage}-{planet_name}-9c-season_pass-tracker-role",
@@ -159,7 +152,7 @@ class WorkerStack(Stack):
                 _iam.PolicyStatement(
                     actions=["sqs:sendmessage"],
                     resources=[
-                        brave_q.queue_arn,
+                        self.shared_stack.brave_q.queue_arn,
                     ]
                 )
             )
@@ -209,7 +202,7 @@ class WorkerStack(Stack):
                 timeout=cdk_core.Duration.seconds(120),
                 environment=env,
                 events=[
-                    _evt_src.SqsEventSource(brave_q)
+                    _evt_src.SqsEventSource(self.shared_stack.brave_q)
                 ],
                 memory_size=192,
             )
