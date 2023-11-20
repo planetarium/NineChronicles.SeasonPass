@@ -1,0 +1,74 @@
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: github_actions
+          POSTGRES_PASSWORD: f8bf4c09239
+          POSTGRES_DB: iap
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.6.1
+          virtualenvs-in-project: true
+
+      - name: Cache Poetry
+        id: cache-poetry
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: poetry-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        run: |
+          poetry install
+
+      - name: Check alembic schema
+        env:
+          POSTGRES_USER: github_actions
+          POSTGRES_PASSWORD: f8bf4c09239
+          POSTGRES_DB: iap
+        run: |
+          source $VENV
+          pushd common
+          cp alembic.ini.example alembic.ini
+          sed -i "s/sqlalchemy.url = postgresql:\/\/\[ID\]:\[PW\]@\[HOST\]\/\[DATABASE\]/sqlalchemy.url = postgresql:\/\/${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost\/${POSTGRES_DB}/" alembic.ini
+          alembic upgrade head
+          popd
+
+      - name: Slack Notification on Failure
+        id: slack_notification
+        uses: ./.github/workflows/slack_message.yml
+        if: ${{ failure() }}
+        with:
+          type: failure
+          environment: ${{ inputs.environment }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
