@@ -110,6 +110,10 @@ class SharedStack(Stack):
                 instance_update_behaviour=_rds.InstanceUpdateBehaviour.ROLLING,
                 deletion_protection=True,
                 storage_type=_rds.DBClusterStorageType.AURORA,
+                writer=_rds.ClusterInstance.provisioned(
+                    "writer",
+                    instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.M6G, _ec2.InstanceSize.LARGE)
+                )
             )
             self.rds_endpoint = self.rds.cluster_endpoint.socket_address
         else:
