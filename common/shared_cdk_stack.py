@@ -112,7 +112,7 @@ class SharedStack(Stack):
                 storage_type=_rds.DBClusterStorageType.AURORA,
                 writer=_rds.ClusterInstance.provisioned(
                     "writer",
-                    instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.M6G, _ec2.InstanceSize.LARGE)
+                    instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.R6G, _ec2.InstanceSize.LARGE)
                 )
             )
             self.rds_endpoint = self.rds.cluster_endpoint.socket_address
