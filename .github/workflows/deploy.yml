@@ -22,6 +22,8 @@ on:
         required: true
       KMS_KEY_ID:
         required: true
+      JWT_TOKEN_SECRET:
+        required: true
       SLACK_WEBHOOK_URL:
         required: true
 
@@ -86,6 +88,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
+          JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+          PLANET_URL: ${{ vars.PLANET_URL }}
         run: |
           source $VENV
           yarn cdk synth
@@ -99,6 +103,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
+          JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+          PLANET_URL: ${{ vars.PLANET_URL }}
         run: |
           source $VENV
           yarn cdk deploy --all --require-approval never -O output.txt
@@ -107,15 +113,36 @@ jobs:
           echo "SERVICE_HOST=${ARRAY[-1]}"
           echo "SERVICE_HOST=${ARRAY[-1]}" >> "$GITHUB_OUTPUT"
 
-  slack_notification:
-    uses: ./.github/workflows/slack_message.yml
-    needs: deployment
-    if: ${{ always() }}
-    with:
-      environment: ${{ inputs.environment }}
-      url: ${{ needs.deployment.outputs.url }}
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+#      - name: Upload host to ParameterStore
+#        id: upload_host
+#        env:
+#          STAGE: ${{ vars.STAGE }}
+#          REGION_NAME: ${{ vars.REGION_NAME }}
+#          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#        run: |
+#          source $VENV
+#          python ./.github/scripts/upload_host.py ${{ steps.deployment.outputs.SERVICE_HOST }}
+
+      - name: Slack Notification on Success
+        id: slack_notification_success
+        uses: ./.github/workflows/slack_message.yml
+        if: ${{ success() }}
+        with:
+          type: success
+          environment: ${{ inputs.environment }}
+          url: ${{ steps.deployment.outputs.url }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Slack Notification on Failure
+        id: slack_notification_failure
+        uses: ./.github/workflows/slack_message.yml
+        if: ${{ failure() }}
+        with:
+          type: failure
+          environment: ${{ inputs.environment }}
+          url: ${{ steps.deployment.outputs.url }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 #      - name: Upgrade DB Schema
 #        env:

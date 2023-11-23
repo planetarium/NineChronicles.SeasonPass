@@ -1,21 +1,31 @@
 import datetime
 import logging
 import os
-import random
-from typing import Union, Dict, Any, Tuple, Optional
+from typing import Union, Dict, Any, Tuple, Optional, List
 
-from consts import HOST_LIST
+import requests
 from gql import Client
 from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
 
+from common.enums import PlanetID
+
 
 class GQL:
     def __init__(self):
-        stage = os.environ.get("STAGE", "development")
-        self._url = f"{random.choice(HOST_LIST[stage])}/graphql"
-        transport = RequestsHTTPTransport(url=self._url, verify=True, retries=2)
+        self._url = {}
+        self.client = None
+        self.ds = None
+
+        resp = requests.get(os.environ.get("PLANET_URL"))
+        data = resp.json()
+        for d in data:
+            planet = PlanetID(bytes(d["id"], "utf-8"))
+            self._url[planet] = d["rpcEndpoints"]["headless.gql"][0]
+
+    def reset(self, planet_id: PlanetID):
+        transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
         with self.client as _:
             assert self.client.schema is not None
@@ -25,15 +35,16 @@ class GQL:
         with self.client as sess:
             return sess.execute(query)
 
-    def get_next_nonce(self, address: str) -> int:
-
+    def get_next_nonce(self, planet_id: PlanetID, address: str) -> int:
         """
         Get next Tx Nonce to create Transaction.
         -1 will be returned in case of any error.
 
+        :param planet_id: Planet ID to send GQL query.
         :param str address: 9c Address to get next Nonce.
         :return: Next tx Nonce. In case of any error, `-1` will be returned.
         """
+        self.reset(planet_id)
         query = dsl_gql(
             DSLQuery(
                 self.ds.StandaloneQuery.transaction.select(
@@ -56,6 +67,7 @@ class GQL:
         fav_data = kwargs.get("fav_data")
         avatar_addr = kwargs.get("avatar_addr")
         item_data = kwargs.get("item_data")
+        memo = kwargs.get("memo", "")
 
         if not fav_data and not item_data:
             raise ValueError("Nothing to unload")
@@ -71,6 +83,7 @@ class GQL:
                         recipientAvatarAddr=avatar_addr,
                         fungibleAssetValues=fav_data,
                         fungibleIdAndCounts=item_data,
+                        memo=memo,
                     )
                 )
             )
@@ -78,14 +91,47 @@ class GQL:
         result = self.execute(query)
         return bytes.fromhex(result["actionTxQuery"]["unloadFromMyGarages"])
 
-    def create_action(self, action_type: str, pubkey: bytes, nonce: int, **kwargs) -> bytes:
+    def _claim_items(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
+        ts = kwargs.get("timestamp", datetime.datetime.utcnow().isoformat())
+        avatar_addr: str = kwargs.get("avatar_addr")
+        claim_data: List[Dict[str, Any]] = kwargs.get("claim_data")
+        memo = kwargs.get("memo")
+
+        if not claim_data:
+            raise ValueError("Nothing to claim")
+
+        query = dsl_gql(
+            DSLQuery(
+                self.ds.StandaloneQuery.actionTxQuery.args(
+                    publicKey=pubkey.hex(),
+                    nonce=nonce,
+                    timestamp=ts,
+                ).select(
+                    self.ds.ActionTxQuery.claimItems.args(
+                        claimData=[{
+                            "avatarAddress": avatar_addr,
+                            "fungibleAssetValues": [{"ticker": x["ticker"], "quantity": x["amount"],
+                                                     "decimalPlaces": x.get("decimal_places", 0), "minters": []}
+                                                    for x in claim_data],
+                        }],
+                        memo=memo
+                    )
+                )
+            )
+        )
+        result = self.execute(query)
+        return bytes.fromhex(result["actionTxQuery"]["claimItems"])
+
+    def create_action(self, planet_id: PlanetID, action_type: str, pubkey: bytes, nonce: int, **kwargs) -> bytes:
+        self.reset(planet_id)
         fn = getattr(self, f"_{action_type}")
         if not fn:
             raise ValueError(f"Action named {action_type} does not exists.")
 
         return fn(pubkey, nonce, **kwargs)
 
-    def sign(self, unsigned_tx: bytes, signature: bytes) -> bytes:
+    def sign(self, planet_id: PlanetID, unsigned_tx: bytes, signature: bytes) -> bytes:
+        self.reset(planet_id)
         query = dsl_gql(
             DSLQuery(
                 self.ds.StandaloneQuery.transaction.select(
@@ -99,7 +145,8 @@ class GQL:
         result = self.execute(query)
         return bytes.fromhex(result["transaction"]["signTransaction"])
 
-    def stage(self, signed_tx: bytes) -> Tuple[bool, str, Optional[str]]:
+    def stage(self, planet_id: PlanetID, signed_tx: bytes) -> Tuple[bool, str, Optional[str]]:
+        self.reset(planet_id)
         query = dsl_gql(
             DSLMutation(
                 self.ds.StandaloneMutation.stageTransaction.args(

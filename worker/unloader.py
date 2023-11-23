@@ -1,20 +1,17 @@
 # Receive message from SQS and send season pass reward
 import json
-import logging
 import os
-from dataclasses import dataclass
-from datetime import timezone, datetime, timedelta
-from typing import Union, List
 
 from sqlalchemy import create_engine, select, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 
+from common import logger
 from common.enums import TxStatus
 from common.models.user import Claim
+from common.utils._crypto import Account
+from common.utils._graphql import GQL
 from common.utils.aws import fetch_secrets, fetch_kms_key_id
-from consts import ITEM_FUNGIBLE_ID_DICT
-from utils._crypto import Account
-from utils._graphql import GQL
+from schemas.sqs import SQSMessage
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -25,30 +22,6 @@ region_name = os.environ.get("REGION_NAME", "us-east-2")
 engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
 
 
-@dataclass
-class SQSMessageRecord:
-    messageId: str
-    receiptHandle: str
-    body: Union[dict, str]
-    attributes: dict
-    messageAttributes: dict
-    md5OfBody: str
-    eventSource: str
-    eventSourceARN: str
-    awsRegion: str
-
-    def __post_init__(self):
-        self.body = json.loads(self.body) if type(self.body) == str else self.body
-
-
-@dataclass
-class SQSMessage:
-    Records: Union[List[SQSMessageRecord], dict]
-
-    def __post_init__(self):
-        self.Records = [SQSMessageRecord(**x) for x in self.Records]
-
-
 def handle(event, context):
     message = SQSMessage(Records=event.get("Records", []))
     sess = None
@@ -57,51 +30,51 @@ def handle(event, context):
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
-        nonce = sess.scalar(select(Claim.nonce).order_by(desc(Claim.nonce)).limit(1)) or 0
+
         uuid_list = [x.body.get("uuid") for x in message.Records if x.body.get("uuid") is not None]
         claim_dict = {x.uuid: x for x in sess.scalars(select(Claim).where(Claim.uuid.in_(uuid_list)))}
         target_claim_list = []
+        nonce_dict = {}
+
         for i, record in enumerate(message.Records):
             claim = claim_dict.get(record.body.get("uuid"))
             if not claim:
-                logging.error(f"Cannot find claim {record.body.get('uuid')}")
+                logger.error(f"Cannot find claim {record.body.get('uuid')}")
                 continue
+            if claim.planet_id not in nonce_dict:
+                nonce = max(
+                    gql.get_next_nonce(claim.planet_id, account.address),
+                    (sess.scalar(select(Claim.nonce).where(
+                        Claim.nonce.is_not(None),
+                        Claim.planet_id == claim.planet_id,
+                    ).order_by(desc(Claim.nonce)).limit(1)) or -1) + 1
+                )
+                nonce_dict[claim.planet_id] = nonce
+            else:
+                nonce = nonce_dict[claim.planet_id]
 
             claim.nonce = nonce
             claim.tx_status = TxStatus.CREATED
-            print(claim.reward_list["currency"])
-            print(claim.reward_list["item"])
             unsigned_tx = gql.create_action(
-                "unload_from_garage", pubkey=account.pubkey, nonce=nonce,
-                avatar_addr=claim.avatar_addr,
-                fav_data=[{
-                    "balanceAddr": claim.agent_addr,
-                    "value": {"currencyTicker": ticker, "value": f"{amount}"}
-                } for ticker, amount in claim.reward_list["currency"].items()],
-                item_data=[{
-                    "fungibleId": ITEM_FUNGIBLE_ID_DICT[item_id],
-                    "count": f"{amount}"
-                } for item_id, amount in claim.reward_list["item"].items()],
-                timestamp=(datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat()
+                claim.planet_id,
+                "claim_items", pubkey=account.pubkey, nonce=nonce,
+                avatar_addr=claim.avatar_addr, claim_data=claim.reward_list,
+                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels, "t": "claim"}}),
             )
-            print("unsigned")
             signature = account.sign_tx(unsigned_tx)
-            print("signature")
-            signed_tx = gql.sign(unsigned_tx, signature)
-            print("signed")
+            signed_tx = gql.sign(claim.planet_id, unsigned_tx, signature)
             claim.tx = signed_tx.hex()
             sess.add(claim)
             target_claim_list.append(claim)
-            nonce += 1
-            print("save")
+
+            nonce_dict[claim.planet_id] += 1
         sess.commit()
 
         for claim in target_claim_list:
-            success, msg, tx_id = gql.stage(bytes.fromhex(claim.tx))
-            print("stage", success, msg, tx_id)
+            success, msg, tx_id = gql.stage(claim.planet_id, bytes.fromhex(claim.tx))
             if not success:
                 message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
-                logging.error(message)
+                logger.error(message)
                 raise Exception(message)
             claim.tx_status = TxStatus.STAGED
             claim.tx_id = tx_id

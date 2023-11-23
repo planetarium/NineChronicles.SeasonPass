@@ -6,11 +6,13 @@ on:
       - development
       - release/*
       - main
+      - feature/test-ec2-stack
   pull_request:
     branches:
       - development
       - release/*
       - main
+      - feature/test-ec2-stack
 
 jobs:
   test:
@@ -29,11 +31,12 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
+      JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   deploy_without_approval:
     # This is for development / internal deployment
-    if: ${{ github.ref == 'refs/heads/development' || startsWith(github.ref, 'refs/heads/release') }}
+    if: ${{ github.ref == 'refs/heads/feature/test-ec2-stack' || github.ref == 'refs/heads/development' || startsWith(github.ref, 'refs/heads/release') }}
     needs: [ "test", "synth" ]
     uses: ./.github/workflows/deploy.yml
     with:
@@ -43,6 +46,17 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
+      JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  approval_notice:
+    uses: ./.github/workflows/slack_message.yml
+    needs: [ "test", "synth" ]
+    if: ${{ github.ref == 'refs/heads/main' }}
+    with:
+      type: approval
+      environment: ${{ startsWith(github.ref, 'refs/heads/release') && 'internal' || 'development' }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   approval:
@@ -69,4 +83,5 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
+      JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

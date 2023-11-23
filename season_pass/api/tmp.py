@@ -19,6 +19,7 @@ router = APIRouter(
 def register_user(request: RegisterRequestSchema, sess=Depends(session)):
     current_season = get_current_season(sess)
     new_data = UserSeasonPass(
+        planet_id=request.planet_id,
         agent_addr=request.agent_addr,
         avatar_addr=request.avatar_addr,
         season_pass_id=current_season.id,
@@ -41,6 +42,9 @@ def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
 
     target_user.is_premium = request.is_premium
+    target_user.is_premium_plus = request.is_premium_plus
+    if target_user.is_premium_plus:
+        target_user.is_premium = True
     sess.add(target_user)
     sess.commit()
     sess.refresh(target_user)

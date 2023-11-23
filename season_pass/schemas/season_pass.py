@@ -1,7 +1,9 @@
 from datetime import date
-from typing import List
+from typing import List, Optional
 
-from pydantic import BaseModel as BaseSchema
+from pydantic import BaseModel as BaseSchema, model_validator
+
+from common.enums import ActionType
 
 
 class ItemInfoSchema(BaseSchema):
@@ -12,6 +14,25 @@ class ItemInfoSchema(BaseSchema):
 class CurrencyInfoSchema(BaseSchema):
     ticker: str
     amount: float
+
+
+class ClaimSchema(BaseSchema):
+    ticker: str
+    amount: int
+    decimal_places: int = 0
+    id: Optional[str] = ""
+
+    # Compatibility
+    @model_validator(mode="after")
+    def _id(self):
+        self.id = self.ticker.split("_")[-1]
+        return self
+
+
+class NewRewardSchema(BaseSchema):
+    level: int
+    normal: List[ClaimSchema]
+    premium: List[ClaimSchema]
 
 
 class RewardDetailSchema(BaseSchema):
@@ -26,12 +47,28 @@ class RewardSchema(BaseSchema):
 
 
 class SeasonPassSchema(BaseSchema):
+    # Deprecated
     id: int
     start_date: date
     end_date: date
     reward_list: List[RewardSchema]
 
 
+class NewSeasonPassSchema(BaseSchema):
+    id: int
+    start_date: date
+    end_date: date
+    reward_list: List[NewRewardSchema]
+
+
 class LevelInfoSchema(BaseSchema):
     level: int
     exp: int
+
+
+class ExpInfoSchema(BaseSchema):
+    action_type: ActionType
+    exp: int
+
+    class Config:
+        from_attributes = True
