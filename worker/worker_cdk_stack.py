@@ -111,12 +111,12 @@ class WorkerStack(Stack):
             layers=[layer],
             role=unloader_role,
             vpc=self.shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(120),
+            timeout=cdk_core.Duration.seconds(15),
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.unload_q)
             ],
-            memory_size=256,
+            memory_size=1024,
             reserved_concurrent_executions=1,
         )
 
@@ -139,12 +139,12 @@ class WorkerStack(Stack):
             layers=[layer],
             role=handler_role,
             vpc=self.shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(120),
+            timeout=cdk_core.Duration.seconds(15),
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.brave_q)
             ],
-            memory_size=192,
+            memory_size=256,
         )
 
         # Tracker Lambda Function
