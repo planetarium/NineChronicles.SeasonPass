@@ -62,27 +62,27 @@ def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], O
 def track_tx(event, context):
     logger.info("Tracking unfinished transactions")
     sess = scoped_session(sessionmaker(bind=engine))
-    receipt_list = sess.scalars(
-        select(Claim).where(Claim.tx_status.in_(TxStatus.STAGED, TxStatus.INVALID))
+    claim_list = sess.scalars(
+        select(Claim).where(Claim.tx_status.in_((TxStatus.STAGED, TxStatus.INVALID,)))
         .order_by(Claim.id).limit(BLOCK_LIMIT)
     ).fetchall()
     result = defaultdict(list)
 
     futures = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        for receipt in receipt_list:
-            futures.append(executor.submit(process, PlanetID(receipt.planet_id), receipt.tx_id))
+        for claim in claim_list:
+            futures.append(executor.submit(process, PlanetID(claim.planet_id), claim.tx_id))
 
         for future in concurrent.futures.as_completed(futures):
             tx_id, tx_status, msg = future.result()
             result[tx_status.name].append(tx_id)
-            receipt.tx_status = tx_status
+            claim.tx_status = tx_status
             if msg:
-                receipt.msg = "\n".join([receipt.msg, msg])
-            sess.add(receipt)
+                claim.msg = "\n".join([claim.msg, msg])
+            sess.add(claim)
     sess.commit()
 
-    logger.info(f"{len(receipt_list)} transactions are found to track status")
+    logger.info(f"{len(claim_list)} transactions are found to track status: {claim_list[0].id} ~ {claim_list[-1].id}")
     for status, tx_list in result.items():
         if status is None:
             logger.error(f"{len(tx_list)} transactions are not able to track.")
