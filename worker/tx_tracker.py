@@ -54,9 +54,9 @@ def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], O
 
     try:
         return tx_id, TxStatus[resp["transaction"]["transactionResult"]["txStatus"]], json.dumps(
-            TxStatus[resp["transaction"]["transactionResult"]["exceptionNames"]])
+            resp["transaction"]["transactionResult"]["exceptionNames"])
     except:
-        return tx_id, None, json.dumps(TxStatus[resp["transaction"]["transactionResult"]["exceptionNames"]])
+        return tx_id, None, json.dumps(resp["transaction"]["transactionResult"]["exceptionNames"])
 
 
 def track_tx(event, context):
