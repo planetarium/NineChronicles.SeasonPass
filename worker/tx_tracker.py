@@ -77,8 +77,8 @@ def track_tx(event, context):
             tx_id, tx_status, msg = future.result()
             result[tx_status.name].append(tx_id)
             claim.tx_status = tx_status
-            if msg:
-                claim.msg = "\n".join([claim.msg, msg])
+            # if msg:
+            #     claim.msg = "\n".join([claim.msg, msg])
             sess.add(claim)
     sess.commit()
 
