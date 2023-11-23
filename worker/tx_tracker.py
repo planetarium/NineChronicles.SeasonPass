@@ -68,18 +68,19 @@ def track_tx(event, context):
     ).fetchall()
     result = defaultdict(list)
 
-    futures = []
+    futures = {}
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for claim in claim_list:
-            futures.append(executor.submit(process, PlanetID(claim.planet_id), claim.tx_id))
+            futures[executor.submit(process, PlanetID(claim.planet_id), claim.tx_id)] = claim
 
         for future in concurrent.futures.as_completed(futures):
             tx_id, tx_status, msg = future.result()
+            target_claim = futures[future]
             result[tx_status.name].append(tx_id)
-            claim.tx_status = tx_status
+            target_claim.tx_status = tx_status
             # if msg:
             #     claim.msg = "\n".join([claim.msg, msg])
-            sess.add(claim)
+            sess.add(target_claim)
     sess.commit()
 
     logger.info(f"{len(claim_list)} transactions are found to track status: {claim_list[0].id} ~ {claim_list[-1].id}")
