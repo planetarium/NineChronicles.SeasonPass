@@ -58,14 +58,14 @@ class SharedStack(Stack):
         self.unload_dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-unload-dlq")
         self.unload_q = _sqs.Queue(
             self, f"{config.stage}-9c-season_pass-unload-queue",
-            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.unload_dlq),
-            visibility_timeout=cdk_core.Duration.seconds(120),
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=15, queue=self.unload_dlq),
+            visibility_timeout=cdk_core.Duration.seconds(20),
         )
         self.brave_dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-brave-dlq")
         self.brave_q = _sqs.Queue(
             self, f"{config.stage}-9c-season_pass-brave-queue",
-            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=2, queue=self.brave_dlq),
-            visibility_timeout=cdk_core.Duration.seconds(120),
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.brave_dlq),
+            visibility_timeout=cdk_core.Duration.seconds(20),
         )
 
         # EC2 SG
