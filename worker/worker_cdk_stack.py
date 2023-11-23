@@ -159,7 +159,7 @@ class WorkerStack(Stack):
 
         tracker = _lambda.Function(
             self, f"{self.config.stage}-9c-season_pass-tracker-function",
-            function_name=f"{self.config.stage}-9c-season-pass-tx-tracker",
+            function_name=f"{self.config.stage}-9c-season_pass-tx-tracker",
             runtime=_lambda.Runtime.PYTHON_3_11,
             description="9c transaction status tracker of NineChronicles.SaesonPass",
             code=_lambda.AssetCode("worker/", exclude=exclude_list),
