@@ -117,9 +117,12 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             reward_list=[{"ticker": x.ticker, "amount": x.amount, "decimal_places": x.decimal_places}
                          for x in request.reward_list],
         )
+        sess.add(claim)
+        sess.commit()
+        sess.refresh(claim)
+
         resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
         logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
-        sess.add(claim)
 
     sess.add(target_user)
     sess.commit()
