@@ -1,9 +1,7 @@
 import datetime
 import logging
-import os
 from typing import Union, Dict, Any, Tuple, Optional, List
 
-import requests
 from gql import Client
 from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
@@ -14,15 +12,12 @@ from common.enums import PlanetID
 
 class GQL:
     def __init__(self):
-        self._url = {}
+        self._url = {
+            PlanetID.ODIN: "https://9c-main-full-state.nine-chronicles.com/graphql",
+            PlanetID.HEIMDALL: "https://heimdall-full-state.nine-chronicles.com/graphql"
+        }
         self.client = None
         self.ds = None
-
-        resp = requests.get(os.environ.get("PLANET_URL"))
-        data = resp.json()
-        for d in data:
-            planet = PlanetID(bytes(d["id"], "utf-8"))
-            self._url[planet] = d["rpcEndpoints"]["headless.gql"][0]
 
     def reset(self, planet_id: PlanetID):
         transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
