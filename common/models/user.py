@@ -40,6 +40,7 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
 
     __table_args__ = (
         Index("avatar_season", "avatar_addr", "season_pass_id"),
+        UniqueConstraint("planet_id", "season_pass_id", "avatar_addr", name="user_season_pass_unique"),
     )
 
 
