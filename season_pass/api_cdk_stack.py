@@ -73,6 +73,8 @@ class APIStack(Stack):
             "LOGGING_LEVEL": "INFO",
             "DB_ECHO": "False",
             "SQS_URL": shared_stack.unload_q.queue_url,
+            "ODIN_VALIDATOR_URL": config.odin_validator_url,
+            "HEIMDALL_VALIDATOR_URL": config.heimdall_validator_url,
         }
 
         # Lambda Function
