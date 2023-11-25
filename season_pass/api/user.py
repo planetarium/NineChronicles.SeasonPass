@@ -8,6 +8,7 @@ import boto3
 from fastapi import APIRouter, Depends
 from fastapi import HTTPException
 from sqlalchemy import select, desc
+from sqlalchemy.exc import IntegrityError
 
 from common.enums import PlanetID
 from common.models.season_pass import SeasonPass, Level
@@ -81,7 +82,28 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         )
     )
     if not target_user:
-        raise UserNotFoundError(f"Cannot found requested user data in season {request.season_id}")
+        target_user = UserSeasonPass(
+            planet_id=request.planet_id,
+            agent_addr=request.agent_addr,
+            avatar_addr=request.avatar_addr,
+            season_pass_id=request.season_id,
+        )
+        sess.add(target_user)
+        try:
+            sess.commit()
+            sess.refresh(target_user)
+        except IntegrityError:
+            logging.warning(f"{request.planet_id.value}::{request.avatar_addr}::{request.season_id} already exists.")
+            sess.rollback()
+            target_user = sess.scalar(
+                select(UserSeasonPass)
+                .where(
+                    UserSeasonPass.planet_id == request.planet_id,
+                    UserSeasonPass.agent_addr == request.agent_addr,
+                    UserSeasonPass.avatar_addr == request.avatar_addr,
+                    UserSeasonPass.season_pass_id == request.season_id
+                )
+            )
 
     # Not Premium and request only premium plus
     if not target_user.is_premium and not request.is_premium:
@@ -117,9 +139,12 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             reward_list=[{"ticker": x.ticker, "amount": x.amount, "decimal_places": x.decimal_places}
                          for x in request.reward_list],
         )
+        sess.add(claim)
+        sess.commit()
+        sess.refresh(claim)
+
         resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
         logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
-        sess.add(claim)
 
     sess.add(target_user)
     sess.commit()
