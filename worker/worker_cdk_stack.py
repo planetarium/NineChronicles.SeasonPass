@@ -7,6 +7,8 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_iam as _iam,
     aws_ec2 as _ec2,
+    aws_events as _events,
+    aws_events_targets as _event_targets,
     aws_lambda_event_sources as _evt_src,
 )
 from constructs import Construct
@@ -109,12 +111,12 @@ class WorkerStack(Stack):
             layers=[layer],
             role=unloader_role,
             vpc=self.shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(120),
+            timeout=cdk_core.Duration.seconds(15),
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.unload_q)
             ],
-            memory_size=256,
+            memory_size=1024,
             reserved_concurrent_executions=1,
         )
 
@@ -137,13 +139,45 @@ class WorkerStack(Stack):
             layers=[layer],
             role=handler_role,
             vpc=self.shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(120),
+            timeout=cdk_core.Duration.seconds(15),
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.brave_q)
             ],
-            memory_size=192,
+            memory_size=256,
         )
+
+        # Tracker Lambda Function
+        tx_tracker_role = _iam.Role(
+            self, f"{self.config.stage}-9c-season_pass-tx_tracker-role",
+            assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
+            ],
+        )
+        self.__add_policy(tx_tracker_role, db_password=True)
+
+        tracker = _lambda.Function(
+            self, f"{self.config.stage}-9c-season_pass-tracker-function",
+            function_name=f"{self.config.stage}-9c-season_pass-tx-tracker",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            description="9c transaction status tracker of NineChronicles.SaesonPass",
+            code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            handler="tx_tracker.track_tx",
+            layers=[layer],
+            role=tx_tracker_role,
+            vpc=self.shared_stack.vpc,
+            timeout=cdk_core.Duration.seconds(50),
+            memory_size=256,
+            environment=env,
+        )
+
+        # Every minute
+        minute_event_rule = _events.Rule(
+            self, f"{self.config.stage}-9c-iap-tracker-event",
+            schedule=_events.Schedule.cron(minute="*")  # Every minute
+        )
+        minute_event_rule.add_target(_event_targets.LambdaFunction(tracker))
 
         # Manual signer
         manual_signer_role = _iam.Role(

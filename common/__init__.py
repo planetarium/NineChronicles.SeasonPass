@@ -32,6 +32,9 @@ class Config:
     account_id: str
     region_name: str
 
+    odin_validator_url: str
+    heimdall_validator_url: str
+
     planet_url: str
     kms_key_id: Optional[str] = None
     jwt_token_secret: Optional[str] = None

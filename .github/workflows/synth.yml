@@ -82,6 +82,8 @@ jobs:
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           PLANET_URL: ${{ vars.PLANET_URL }}
+          ODIN_VALIDATOR_URL: ${{ vars.ODIN_VALIDATOR_URL }}
+          HEIMDALL_VALIDATOR_URL: ${{ vars.HEIMDALL_VALIDATOR_URL }}
         run: |
           source $VENV
           yarn cdk synth
