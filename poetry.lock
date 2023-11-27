@@ -310,6 +310,17 @@ files = [
 ]
 
 [[package]]
+name = "bencodex"
+version = "1.0.1"
+description = "Bencodex reader/writer for Python"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "bencodex-1.0.1-py3-none-any.whl", hash = "sha256:8d16764f1621eaaf06258abc167bcecd2f762be7e1e4958f7e715784ae3da59b"},
+    {file = "bencodex-1.0.1.tar.gz", hash = "sha256:a15c9f1cd3ca6c0b012bd03c1c936fadfa4c24ce476a6582e0ef91298d045547"},
+]
+
+[[package]]
 name = "bitarray"
 version = "2.8.3"
 description = "efficient arrays of booleans -- C extension"
@@ -2790,4 +2801,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "24ae79f5387333514c9d2b14a876e3ba5418d2c6910ae38a362c642314e94fa2"
+content-hash = "3f4860c0d0a27c60c3aa421ef259484f7fc4d72abc9b55e36bcc3d5b9c0747b7"
