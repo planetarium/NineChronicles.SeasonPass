@@ -23,8 +23,8 @@ DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 GQL_DICT = {
-    PlanetID.ODIN: "https://9c-main-full-state.nine-chronicles.com/graphql",
-    PlanetID.HEIMDALL: "https://heimdall-full-state.nine-chronicles.com/graphql"
+    PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
+    PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
 }
 
 engine = create_engine(DB_URI)

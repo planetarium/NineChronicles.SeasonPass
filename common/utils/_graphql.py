@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 from typing import Union, Dict, Any, Tuple, Optional, List
 
 from gql import Client
@@ -13,8 +14,8 @@ from common.enums import PlanetID
 class GQL:
     def __init__(self):
         self._url = {
-            PlanetID.ODIN: "https://9c-main-full-state.nine-chronicles.com/graphql",
-            PlanetID.HEIMDALL: "https://heimdall-full-state.nine-chronicles.com/graphql"
+            PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
+            PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
         }
         self.client = None
         self.ds = None
