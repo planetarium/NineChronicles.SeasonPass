@@ -50,13 +50,13 @@ def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], O
 
     if "errors" in resp:
         logger.error(f"GQL failed to get transaction status: {resp['errors']}")
-        return tx_id, None, json.dumps(resp["errors"])
+        return tx_id, TxStatus.INVALID, json.dumps(resp["errors"])
 
     try:
         return tx_id, TxStatus[resp["transaction"]["transactionResult"]["txStatus"]], json.dumps(
             resp["transaction"]["transactionResult"]["exceptionNames"])
     except:
-        return tx_id, None, json.dumps(resp["transaction"]["transactionResult"]["exceptionNames"])
+        return tx_id, TxStatus.INVALID, json.dumps(resp["transaction"]["transactionResult"]["exceptionNames"])
 
 
 def track_tx(event, context):
