@@ -213,6 +213,8 @@ class WorkerStack(Stack):
                     ]
                 )
             )
+            self.__add_policy(scraper_role, db_password=True)
+
             env["SCAN_URL"] = data["SCAN_URL"]
             env["GQL_URL"] = data["GQL_URL"]
 
