@@ -215,20 +215,20 @@ class WorkerStack(Stack):
 
             env.update(data)
 
-            # scraper = _lambda.Function(
-            #     self, f"{self.config.stage}-{planet.lower}-9c-season_pass-block_scraper-function",
-            #     function_name=f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper",
-            #     runtime=_lambda.Runtime.PYTHON_3_11,
-            #     code=_lambda.AssetCode("worker/", exclude=exclude_list),
-            #     handler="block_scraper.scrap_block",
-            #     layers=[layer],
-            #     role=scraper_role,
-            #     vpc=self.shared_stack.vpc,
-            #     timeout=cdk_core.Duration.seconds(55),
-            #     memory_size=2048,
-            #     environment=env,
-            # )
-            # minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
+            scraper = _lambda.Function(
+                self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-function",
+                function_name=f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper",
+                runtime=_lambda.Runtime.PYTHON_3_11,
+                code=_lambda.AssetCode("worker/", exclude=exclude_list),
+                handler="block_scraper.scrap_block",
+                layers=[layer],
+                role=scraper_role,
+                vpc=self.shared_stack.vpc,
+                timeout=cdk_core.Duration.seconds(55),
+                memory_size=2048,
+                environment=env,
+            )
+            minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
 
         # Manual signer
         manual_signer_role = _iam.Role(
