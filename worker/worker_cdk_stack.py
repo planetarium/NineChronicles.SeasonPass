@@ -182,10 +182,12 @@ class WorkerStack(Stack):
         # Block scraper
         PLANET_DATA = {
             "ODIN": {
+                "PLANET_ID": "0x000000000000" if self.config.stage == "mainnet" else "0x100000000000",
                 "SCAN_URL": self.config.odin_scan_url,
                 "GQL_URL": self.config.odin_gql_url,
             },
             "HEIMDALL": {
+                "PLANET_ID": "0x000000000001" if self.config.stage == "mainnet" else "0x100000000001",
                 "SCAN_URL": self.config.heimdall_scan_url,
                 "GQL_URL": self.config.heimdall_gql_url,
             }
@@ -215,8 +217,7 @@ class WorkerStack(Stack):
             )
             self.__add_policy(scraper_role, db_password=True)
 
-            env["SCAN_URL"] = data["SCAN_URL"]
-            env["GQL_URL"] = data["GQL_URL"]
+            env.update(data)
 
             scraper = _lambda.Function(
                 self, f"{self.config.stage}-{planet.lower}-9c-season_pass-block_scraper-function",

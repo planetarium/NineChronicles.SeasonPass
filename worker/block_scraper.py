@@ -13,6 +13,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from block_tracker import get_deposit, send_message
 from common import logger
+from common.enums import PlanetID
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
 from utils.stake import StakeAPCoef
@@ -21,6 +22,7 @@ DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 SCAN_URL = os.environ.get("SCAN_URL")
+CURRENT_PLANET = PlanetID(bytes(os.environ.get("PLANET_ID", "utf-8")))
 
 
 class GameAction:
@@ -51,14 +53,17 @@ class GameAction:
 
 
 async def fetch_txs():
-    min_index = int(os.environ.get("START_BLOCK"))
+    engine = create_engine(DB_URI)
+    sess = scoped_session(sessionmaker(bind=engine))
+    min_inde = (sess.query(Block.index)
+                 .filter(Block.planet_id == CURRENT_PLANET)
+                 .order_by(Block.index.desc())
+                 ).first()[0]
     block_url = urllib.parse.urljoin(SCAN_URL, 'blocks')
     resp = requests.get(block_url, {'limit': 1})
     blocks = resp.json()['blocks']
     block = blocks[0]
     limit = block['index']
-    engine = create_engine(DB_URI)
-    sess = scoped_session(sessionmaker(bind=engine))
     index_range = [i for i in range(min_index, limit)]
     exist_index = [i[0] for i in sess.query(Block.index).where(
         Block.index.in_(index_range)
