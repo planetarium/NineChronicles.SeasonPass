@@ -17,6 +17,7 @@ eth-account = "^0.9.0"
 pyasn1 = "^0.5.0"
 pycryptodome = "^3.19.0"
 hexbytes = "^0.3.1"
+bencodex = "^1.0.1"
 
 [tool.poetry.group.api.dependencies]
 fastapi = "^0.103.2"

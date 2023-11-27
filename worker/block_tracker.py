@@ -77,6 +77,7 @@ def subscribe_action(url: str, thread_dict: defaultdict, stake_data: defaultdict
         tx (actionType: "{reg}") {{
             txResult {{txStatus, blockIndex}}
             transaction {{
+                id
                 signer 
                 actions {{json}}
             }}
@@ -101,6 +102,7 @@ def subscribe_action(url: str, thread_dict: defaultdict, stake_data: defaultdict
                 action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
                 if regex.match(action_json.type_id):
                     action_data[block_index][action_json.type_id].append({
+                        "tx_id": result["tx"]["transaction"]["id"],
                         "agent_addr": signer.lower(),
                         "avatar_addr": action_json.avatar_addr.lower(),
                         "count_base": action_json.count_base,
