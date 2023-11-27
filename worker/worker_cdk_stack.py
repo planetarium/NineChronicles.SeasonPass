@@ -199,7 +199,7 @@ class WorkerStack(Stack):
                 layers=[layer],
                 role=manual_signer_role,
                 vpc=self.shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(10),
+                timeout=cdk_core.Duration.seconds(150),
                 environment=env,
             )
 
