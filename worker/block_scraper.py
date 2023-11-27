@@ -149,7 +149,6 @@ async def update_tx(index, block_index, total_count):
                 logger.info(f'load success txs {success_file_name}({len(synced_success_txs)})')
         logger.info(f'start get({block_index}) tx result from node')
         await get_tx_results(url, synced_txs, synced_deposit, coef, synced_success_txs)
-        # await asyncio.gather(*[get_tx_result(url, query, k, synced_txs[k], synced_deposit, coef, synced_success_txs) for k in synced_txs])
         logger.info(f'finish get({block_index} tx result from node')
         before = len(synced_txs)
         success_txs = {}
