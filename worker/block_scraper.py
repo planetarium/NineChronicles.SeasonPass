@@ -22,7 +22,7 @@ DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 SCAN_URL = os.environ.get("SCAN_URL")
-CURRENT_PLANET = PlanetID(bytes(os.environ.get("PLANET_ID", "utf-8")))
+CURRENT_PLANET = PlanetID(bytes(os.environ.get("PLANET_ID"), "utf-8"))
 
 
 class GameAction:
@@ -55,7 +55,7 @@ class GameAction:
 async def fetch_txs():
     engine = create_engine(DB_URI)
     sess = scoped_session(sessionmaker(bind=engine))
-    min_inde = (sess.query(Block.index)
+    min_index = (sess.query(Block.index)
                  .filter(Block.planet_id == CURRENT_PLANET)
                  .order_by(Block.index.desc())
                  ).first()[0]
@@ -274,7 +274,7 @@ query($addresses: [Address]!) {
 
 def scrap_block(event, context):
     if not os.path.exists("/tmp/block_data"):
-        os.makedirs("tmp/block_data")
+        os.makedirs("/tmp/block_data")
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(fetch_txs())
@@ -283,7 +283,7 @@ def scrap_block(event, context):
 
 if __name__ == "__main__":
     if not os.path.exists("/tmp/block_data"):
-        os.makedirs("tmp/block_data")
+        os.makedirs("/tmp/block_data")
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(fetch_txs())

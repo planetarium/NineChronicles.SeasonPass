@@ -195,40 +195,41 @@ class WorkerStack(Stack):
             }
         }
 
-        for planet, data in PLANET_DATA.items():
-            scraper_role = _iam.Role(
-                self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-role",
-                assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
-                managed_policies=[
-                    _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
-                ],
-            )
-            scraper_role.add_to_policy(
-                _iam.PolicyStatement(
-                    actions=["sqs:sendmessage"],
-                    resources=[
-                        self.shared_stack.brave_q.queue_arn,
-                    ]
-                )
-            )
-            self.__add_policy(scraper_role, db_password=True)
-
-            env.update(data)
-
-            scraper = _lambda.Function(
-                self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-function",
-                function_name=f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper",
-                runtime=_lambda.Runtime.PYTHON_3_11,
-                code=_lambda.AssetCode("worker/", exclude=exclude_list),
-                handler="block_scraper.scrap_block",
-                layers=[layer],
-                role=scraper_role,
-                vpc=self.shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(55),
-                memory_size=2048,
-                environment=env,
-            )
-            minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
+        # Block scraper by planet. This is currently run as services on EC2 machine.
+        # for planet, data in PLANET_DATA.items():
+        #     scraper_role = _iam.Role(
+        #         self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-role",
+        #         assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
+        #         managed_policies=[
+        #             _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
+        #         ],
+        #     )
+        #     scraper_role.add_to_policy(
+        #         _iam.PolicyStatement(
+        #             actions=["sqs:sendmessage"],
+        #             resources=[
+        #                 self.shared_stack.brave_q.queue_arn,
+        #             ]
+        #         )
+        #     )
+        #     self.__add_policy(scraper_role, db_password=True)
+        #
+        #     env.update(data)
+        #
+        #     scraper = _lambda.Function(
+        #         self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-function",
+        #         function_name=f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper",
+        #         runtime=_lambda.Runtime.PYTHON_3_11,
+        #         code=_lambda.AssetCode("worker/", exclude=exclude_list),
+        #         handler="block_scraper.scrap_block",
+        #         layers=[layer],
+        #         role=scraper_role,
+        #         vpc=self.shared_stack.vpc,
+        #         timeout=cdk_core.Duration.seconds(40),
+        #         memory_size=1024,
+        #         environment=env,
+        #     )
+        #     minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
 
         # Manual signer
         manual_signer_role = _iam.Role(
