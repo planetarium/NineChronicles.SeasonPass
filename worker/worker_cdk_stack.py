@@ -182,12 +182,12 @@ class WorkerStack(Stack):
         # Block scraper
         PLANET_DATA = {
             "ODIN": {
-                "SCAN_URL": "",
-                "GQL_URL": "",
+                "SCAN_URL": self.config.odin_scan_url,
+                "GQL_URL": self.config.odin_gql_url,
             },
             "HEIMDALL": {
-                "SCAN_URL": "",
-                "GQL_URL": "",
+                "SCAN_URL": self.config.heimdall_scan_url,
+                "GQL_URL": self.config.heimdall_gql_url,
             }
         }
 
