@@ -163,14 +163,14 @@ class WorkerStack(Stack):
             self, f"{self.config.stage}-9c-season_pass-tracker-function",
             function_name=f"{self.config.stage}-9c-season_pass-tx-tracker",
             runtime=_lambda.Runtime.PYTHON_3_11,
-            description="9c transaction status tracker of NineChronicles.SaesonPass",
+            description="9c transaction status tracker of NineChronicles.SeasonPass",
             code=_lambda.AssetCode("worker/", exclude=exclude_list),
             handler="tx_tracker.track_tx",
             layers=[layer],
             role=tx_tracker_role,
             vpc=self.shared_stack.vpc,
             timeout=cdk_core.Duration.seconds(50),
-            memory_size=256,
+            memory_size=1024,
             environment=env,
         )
 
