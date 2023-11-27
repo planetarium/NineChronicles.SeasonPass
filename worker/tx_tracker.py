@@ -18,7 +18,7 @@ DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 
-BLOCK_LIMIT = 100
+BLOCK_LIMIT = 200
 
 planet_dict = {
     PlanetID.ODIN: "https://odin-full-state.nine-chronicles.com/graphql",
