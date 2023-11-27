@@ -179,6 +179,58 @@ class WorkerStack(Stack):
         )
         minute_event_rule.add_target(_event_targets.LambdaFunction(tracker))
 
+        # Block scraper
+        PLANET_DATA = {
+            "ODIN": {
+                "SCAN_URL": "",
+                "GQL_URL": "",
+            },
+            "HEIMDALL": {
+                "SCAN_URL": "",
+                "GQL_URL": "",
+            }
+        }
+
+        # Every 5 minute
+        five_minute_event_rule = _events.Rule(
+            self, f"{self.config.stage}-9c-season_pass-scraper-event",
+            schedule=_events.Schedule.cron(minute="*/5")  # Every 5 minute
+        )
+
+        for planet, data in PLANET_DATA.items():
+            scraper_role = _iam.Role(
+                self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-role",
+                assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
+                managed_policies=[
+                    _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
+                ],
+            )
+            scraper_role.add_to_policy(
+                _iam.PolicyStatement(
+                    actions=["sqs:sendmessage"],
+                    resources=[
+                        self.shared_stack.brave_q.queue_arn,
+                    ]
+                )
+            )
+            env["SCAN_URL"] = data["SCAN_URL"]
+            env["GQL_URL"] = data["GQL_URL"]
+
+            scraper = _lambda.Function(
+                self, f"{self.config.stage}-{planet.lower}-9c-season_pass-block_scraper-function",
+                function_name=f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper",
+                runtime=_lambda.Runtime.PYTHON_3_11,
+                code=_lambda.AssetCode("worker/", exclude=exclude_list),
+                handler="block_scraper.scrap_block",
+                layers=[layer],
+                role=scraper_role,
+                vpc=self.shared_stack.vpc,
+                timeout=cdk_core.Duration.seconds(300),
+                memory_size=2048,
+                environment=env,
+            )
+            five_minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
+
         # Manual signer
         manual_signer_role = _iam.Role(
             self, f"{self.config.stage}-9c-season_pass-signer-role",
