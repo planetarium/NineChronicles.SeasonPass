@@ -193,12 +193,6 @@ class WorkerStack(Stack):
             }
         }
 
-        # Every 5 minute
-        five_minute_event_rule = _events.Rule(
-            self, f"{self.config.stage}-9c-season_pass-scraper-event",
-            schedule=_events.Schedule.cron(minute="*/5")  # Every 5 minute
-        )
-
         for planet, data in PLANET_DATA.items():
             scraper_role = _iam.Role(
                 self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-role",
@@ -228,11 +222,11 @@ class WorkerStack(Stack):
                 layers=[layer],
                 role=scraper_role,
                 vpc=self.shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(60),
+                timeout=cdk_core.Duration.seconds(55),
                 memory_size=2048,
                 environment=env,
             )
-            # five_minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
+            minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
 
         # Manual signer
         manual_signer_role = _iam.Role(
