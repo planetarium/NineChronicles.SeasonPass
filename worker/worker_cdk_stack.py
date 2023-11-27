@@ -76,6 +76,8 @@ class WorkerStack(Stack):
             "SQS_URL": self.shared_stack.brave_q.queue_url,
             # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
             "PLANET_URL": self.config.planet_url,
+            "ODIN_GQL_URL": self.config.odin_gql_url,
+            "HEIMDALL_GQL_URL": self.config.heimdall_gql_url,
         }
 
         # Exclude list

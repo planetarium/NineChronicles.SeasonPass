@@ -22,12 +22,10 @@ STAGE = os.environ.get("STAGE", "development")
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
-GQL_DICT = {}
-
-resp = requests.get(os.environ.get("PLANET_URL"))
-data = resp.json()
-for d in data:
-    GQL_DICT[PlanetID(bytes(d["id"], "utf-8"))] = d["rpcEndpoints"]["headless.gql"][0]
+GQL_DICT = {
+    PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
+    PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+}
 
 engine = create_engine(DB_URI)
 ap_coef = StakeAPCoef()
