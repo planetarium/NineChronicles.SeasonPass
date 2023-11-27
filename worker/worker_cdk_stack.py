@@ -227,11 +227,11 @@ class WorkerStack(Stack):
                 layers=[layer],
                 role=scraper_role,
                 vpc=self.shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(300),
+                timeout=cdk_core.Duration.seconds(60),
                 memory_size=2048,
                 environment=env,
             )
-            five_minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
+            # five_minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
 
         # Manual signer
         manual_signer_role = _iam.Role(
