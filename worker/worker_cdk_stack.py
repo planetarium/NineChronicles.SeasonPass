@@ -224,8 +224,8 @@ class WorkerStack(Stack):
                 layers=[layer],
                 role=scraper_role,
                 vpc=self.shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(55),
-                memory_size=2048,
+                timeout=cdk_core.Duration.seconds(40),
+                memory_size=1024,
                 environment=env,
             )
             minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
