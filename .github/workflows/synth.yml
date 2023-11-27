@@ -85,9 +85,9 @@ jobs:
           ODIN_VALIDATOR_URL: ${{ vars.ODIN_VALIDATOR_URL }}
           HEIMDALL_VALIDATOR_URL: ${{ vars.HEIMDALL_VALIDATOR_URL }}
           ODIN_GQL_URL: ${{ vars.ODIN_GQL_URL }}
-          ODIN_SCAN_URL: ${{ var.ODIN_SCAN_URL }}
+          ODIN_SCAN_URL: ${{ vars.ODIN_SCAN_URL }}
           HEIMDALL_GQL_URL: ${{ vars.HEIMDALL_GQL_URL }}
-          HEIMDALL_SCAN_URL: ${{ var.HEIMDALL_SCAN_URL }}
+          HEIMDALL_SCAN_URL: ${{ vars.HEIMDALL_SCAN_URL }}
         run: |
           source $VENV
           yarn cdk synth
