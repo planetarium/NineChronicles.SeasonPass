@@ -176,7 +176,7 @@ class WorkerStack(Stack):
 
         # Every minute
         minute_event_rule = _events.Rule(
-            self, f"{self.config.stage}-9c-iap-tracker-event",
+            self, f"{self.config.stage}-9c-season_pass-tracker-event",
             schedule=_events.Schedule.cron(minute="*")  # Every minute
         )
         minute_event_rule.add_target(_event_targets.LambdaFunction(tracker))
