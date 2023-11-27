@@ -13,6 +13,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from block_tracker import get_deposit, send_message
 from common import logger
+from common.enums import PlanetID
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
 from utils.stake import StakeAPCoef
@@ -21,6 +22,7 @@ DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 SCAN_URL = os.environ.get("SCAN_URL")
+CURRENT_PLANET = PlanetID(bytes(os.environ.get("PLANET_ID", "utf-8")))
 
 
 class GameAction:
@@ -51,14 +53,17 @@ class GameAction:
 
 
 async def fetch_txs():
-    min_index = int(os.environ.get("START_BLOCK"))
+    engine = create_engine(DB_URI)
+    sess = scoped_session(sessionmaker(bind=engine))
+    min_inde = (sess.query(Block.index)
+                 .filter(Block.planet_id == CURRENT_PLANET)
+                 .order_by(Block.index.desc())
+                 ).first()[0]
     block_url = urllib.parse.urljoin(SCAN_URL, 'blocks')
     resp = requests.get(block_url, {'limit': 1})
     blocks = resp.json()['blocks']
     block = blocks[0]
     limit = block['index']
-    engine = create_engine(DB_URI)
-    sess = scoped_session(sessionmaker(bind=engine))
     index_range = [i for i in range(min_index, limit)]
     exist_index = [i[0] for i in sess.query(Block.index).where(
         Block.index.in_(index_range)
@@ -78,7 +83,7 @@ async def save_tx(index, block_index, total_count):
     block_data = resp.json()
     transactions = block_data['transactions']
     synced_txs = {}
-    file_name = f'./block_data/block_{block_index}_txs.json'
+    file_name = f'/tmp/block_data/block_{block_index}_txs.json'
     if os.path.exists(file_name):
         with open(file_name, 'r') as f:
             synced_txs = json.load(f)
@@ -106,8 +111,8 @@ async def save_tx(index, block_index, total_count):
     await update_tx(index, block_index, total_count)
     data = prepare_action_data(block_index, block_index + 1)
     queue_action_data(data)
-    deposit_file_name = f'./block_data/block_{block_index}_deposit.json'
-    success_file_name = f'./block_data/block_{block_index}_success_txs.json'
+    deposit_file_name = f'/tmp/block_data/block_{block_index}_deposit.json'
+    success_file_name = f'/tmp/block_data/block_{block_index}_success_txs.json'
     for file_path in [file_name, deposit_file_name, success_file_name]:
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -129,8 +134,8 @@ async def update_tx(index, block_index, total_count):
     """
     coef = StakeAPCoef(url)
     logger.info(f'run fetch tx result({block_index}) {index}/{total_count}')
-    file_name = f'./block_data/block_{block_index}_txs.json'
-    deposit_file_name = f'./block_data/block_{block_index}_deposit.json'
+    file_name = f'/tmp/block_data/block_{block_index}_txs.json'
+    deposit_file_name = f'/tmp/block_data/block_{block_index}_deposit.json'
     if not os.path.exists(file_name):
         logger.info(f'skip fetch tx result {file_name}/{total_count}')
     else:
@@ -141,7 +146,7 @@ async def update_tx(index, block_index, total_count):
                 logger.info(f'load deposit {deposit_file_name}({len(synced_deposit)})')
         with open(file_name, 'r') as f:
             synced_txs = json.load(f)
-        success_file_name = f'./block_data/block_{block_index}_success_txs.json'
+        success_file_name = f'/tmp/block_data/block_{block_index}_success_txs.json'
         synced_success_txs = None
         if os.path.exists(success_file_name):
             with open(success_file_name, 'r') as f:
@@ -217,8 +222,8 @@ query($txIds: [TxId]!) {
 def prepare_action_data(min_index: int, limit: int):
     action_data = defaultdict(lambda: defaultdict(list))
     for index, i in enumerate(range(min_index, limit)):
-        file_name = f'./block_data/block_{i}_success_txs.json'
-        target_file_name = f'./block_data/block_{i}_action_data.json'
+        file_name = f'/tmp/block_data/block_{i}_success_txs.json'
+        target_file_name = f'/tmp/block_data/block_{i}_action_data.json'
         if not os.path.exists(file_name):
             logger.info(f'skip target index {i}')
             continue
@@ -240,7 +245,7 @@ def prepare_action_data(min_index: int, limit: int):
 
 def queue_action_data(action_data: defaultdict):
     for i in action_data:
-        deposit_file_name = f'./block_data/block_{i}_deposit.json'
+        deposit_file_name = f'/tmp/block_data/block_{i}_deposit.json'
         with open(deposit_file_name, 'r') as f:
             stake_data = json.load(f)
         send_message(i, action_data[i], stake_data)
@@ -268,12 +273,18 @@ query($addresses: [Address]!) {
 
 
 def scrap_block(event, context):
+    if not os.path.exists("/tmp/block_data"):
+        os.makedirs("tmp/block_data")
+
     loop = asyncio.get_event_loop()
     loop.run_until_complete(fetch_txs())
     loop.close()
 
 
 if __name__ == "__main__":
+    if not os.path.exists("/tmp/block_data"):
+        os.makedirs("tmp/block_data")
+
     loop = asyncio.get_event_loop()
     loop.run_until_complete(fetch_txs())
     loop.close()

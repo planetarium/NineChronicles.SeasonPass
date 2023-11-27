@@ -184,20 +184,16 @@ class WorkerStack(Stack):
         # Block scraper
         PLANET_DATA = {
             "ODIN": {
+                "PLANET_ID": "0x000000000000" if self.config.stage == "mainnet" else "0x100000000000",
                 "SCAN_URL": self.config.odin_scan_url,
                 "GQL_URL": self.config.odin_gql_url,
             },
             "HEIMDALL": {
+                "PLANET_ID": "0x000000000001" if self.config.stage == "mainnet" else "0x100000000001",
                 "SCAN_URL": self.config.heimdall_scan_url,
                 "GQL_URL": self.config.heimdall_gql_url,
             }
         }
-
-        # Every 5 minute
-        five_minute_event_rule = _events.Rule(
-            self, f"{self.config.stage}-9c-season_pass-scraper-event",
-            schedule=_events.Schedule.cron(minute="*/5")  # Every 5 minute
-        )
 
         for planet, data in PLANET_DATA.items():
             scraper_role = _iam.Role(
@@ -217,8 +213,7 @@ class WorkerStack(Stack):
             )
             self.__add_policy(scraper_role, db_password=True)
 
-            env["SCAN_URL"] = data["SCAN_URL"]
-            env["GQL_URL"] = data["GQL_URL"]
+            env.update(data)
 
             scraper = _lambda.Function(
                 self, f"{self.config.stage}-{planet.lower}-9c-season_pass-block_scraper-function",
@@ -229,11 +224,11 @@ class WorkerStack(Stack):
                 layers=[layer],
                 role=scraper_role,
                 vpc=self.shared_stack.vpc,
-                timeout=cdk_core.Duration.seconds(60),
+                timeout=cdk_core.Duration.seconds(55),
                 memory_size=2048,
                 environment=env,
             )
-            # five_minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
+            minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
 
         # Manual signer
         manual_signer_role = _iam.Role(
