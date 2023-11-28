@@ -3,7 +3,6 @@ import logging
 import os
 from typing import Union, Dict, Any, Tuple, Optional, List
 
-import requests
 from gql import Client
 from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
@@ -14,15 +13,12 @@ from common.enums import PlanetID
 
 class GQL:
     def __init__(self):
-        self._url = {}
+        self._url = {
+            PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
+            PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+        }
         self.client = None
         self.ds = None
-
-        resp = requests.get(os.environ.get("PLANET_URL"))
-        data = resp.json()
-        for d in data:
-            planet = PlanetID(bytes(d["id"], "utf-8"))
-            self._url[planet] = d["rpcEndpoints"]["headless.gql"][0]
 
     def reset(self, planet_id: PlanetID):
         transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
@@ -63,7 +59,7 @@ class GQL:
         return resp["transaction"]["nextTxNonce"]
 
     def _unload_from_garage(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
-        ts = kwargs.get("timestamp", datetime.datetime.utcnow().isoformat())
+        ts = kwargs.get("timestamp", (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat())
         fav_data = kwargs.get("fav_data")
         avatar_addr = kwargs.get("avatar_addr")
         item_data = kwargs.get("item_data")
@@ -92,7 +88,7 @@ class GQL:
         return bytes.fromhex(result["actionTxQuery"]["unloadFromMyGarages"])
 
     def _claim_items(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
-        ts = kwargs.get("timestamp", datetime.datetime.utcnow().isoformat())
+        ts = kwargs.get("timestamp", (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat())
         avatar_addr: str = kwargs.get("avatar_addr")
         claim_data: List[Dict[str, Any]] = kwargs.get("claim_data")
         memo = kwargs.get("memo")
