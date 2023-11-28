@@ -18,7 +18,7 @@ DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 
-BLOCK_LIMIT = 100
+BLOCK_LIMIT = 200
 
 planet_dict = {
     PlanetID.ODIN: "https://odin-full-state.nine-chronicles.com/graphql",
@@ -50,13 +50,13 @@ def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], O
 
     if "errors" in resp:
         logger.error(f"GQL failed to get transaction status: {resp['errors']}")
-        return tx_id, None, json.dumps(resp["errors"])
+        return tx_id, TxStatus.INVALID, json.dumps(resp["errors"])
 
     try:
         return tx_id, TxStatus[resp["transaction"]["transactionResult"]["txStatus"]], json.dumps(
             resp["transaction"]["transactionResult"]["exceptionNames"])
     except:
-        return tx_id, None, json.dumps(resp["transaction"]["transactionResult"]["exceptionNames"])
+        return tx_id, TxStatus.INVALID, json.dumps(resp["transaction"]["transactionResult"]["exceptionNames"])
 
 
 def track_tx(event, context):
