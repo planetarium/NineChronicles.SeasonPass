@@ -16,6 +16,8 @@ class GQL:
         self._url = {
             PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
             PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+            PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_INTERNAL_GQL_URL"),
+            PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_INTERNAL_GQL_URL"),
         }
         self.client = None
         self.ds = None
