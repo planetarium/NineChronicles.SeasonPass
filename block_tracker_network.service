@@ -1,0 +1,12 @@
+[Unit]
+Description=9c SeasonPass block tracker for [NETWORK] network
+
+[Service]
+EnvironmentFile=/PATH/TO/PROJECT/ROOT/.env.[NETWORK]
+ExecStart=/PATH/TO/PYTHON/EXECUTABLE/python -m block_tracker
+WorkingDirectory=/PATH/TO/PROJECT/ROOT/worker
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

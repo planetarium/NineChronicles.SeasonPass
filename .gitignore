@@ -166,6 +166,7 @@ worker/requirements.txt
 worker/layer/
 worker/.aws-sam/
 .env.*
+!.env.network
 
 # Google
 credential.pickle
