@@ -20,11 +20,6 @@ DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 
 BLOCK_LIMIT = 200
 
-planet_dict = {
-    PlanetID.ODIN: "https://odin-full-state.nine-chronicles.com/graphql",
-    PlanetID.HEIMDALL: "https://heimdall-full-state.nine-chronicles.com/graphql"
-}
-
 engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
 
 
