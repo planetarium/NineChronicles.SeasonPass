@@ -41,7 +41,7 @@ jobs:
                   "text": {
                     "type": "plain_text",
                     "text": "[NineChronicles.SeasonPass] Needs approval to deploy :meow_party:",
-                    "emoji: true
+                    "emoji": true
                   }
                 },
                 {
@@ -53,22 +53,20 @@ jobs:
                     },
                     {
                       "type": "mrkdwn",
-                      "text": *Branch*\n${{ github.ref_name }}
+                      "text": "*Branch*\n${{ github.ref_name }}"
                     },
                   ]
                 },
                 {
                   "type": "section",
-                  "text": 
-                  {
+                  "text": {
                     "type": "mrkdwn",
                     "text": " "
                   },
                   "accessory": 
                   {
                     "type": "button",
-                    "text": 
-                    {
+                    "text": {
                       "type": "plain_text",
                       "text": "Go and Approve",
                       "emoji": true
