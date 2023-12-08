@@ -145,7 +145,7 @@ jobs:
     with:
       type: success
       environment: ${{ inputs.environment }}
-      url: ${{ steps.deployment.outputs.url }}
+      url: ${{ needs.deployment.outputs.url }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
@@ -156,7 +156,7 @@ jobs:
     with:
       type: failure
       environment: ${{ inputs.environment }}
-      url: ${{ steps.deployment.outputs.url }}
+      url: ${{ needs.deployment.outputs.url }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
