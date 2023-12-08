@@ -4,6 +4,7 @@ from aws_cdk import (
     aws_apigateway as _apig,
     aws_iam as _iam,
     aws_lambda as _lambda,
+    aws_certificatemanager as _acm,
 )
 from constructs import Construct
 
@@ -98,9 +99,31 @@ class APIStack(Stack):
             memory_size=256,
         )
 
+        # ACM & Custom Domain
+        if config.stage != "development":
+            certificate = _acm.Certificate.from_certificate_arn(
+                self, "9c-acm",
+                certificate_arn="arn:aws:acm:us-east-1:319679068466:certificate/8e3f8d11-ead8-4a90-bda0-94a35db71678",
+            )
+            custom_domain = _apig.DomainNameOptions(
+                domain_name=f"season-pass{'-internal' if config.stage == 'internal' else ''}.9c.gg",
+                certificate=certificate,
+                security_policy=_apig.SecurityPolicy.TLS_1_2,
+                endpoint_type=_apig.EndpointType.EDGE,
+            )
+
+        else:
+            custom_domain = None
+
         # API Gateway
         apig = _apig.LambdaRestApi(
             self, f"{config.stage}-9c_season_pass-api-apig",
             handler=function,
-            deploy_options=_apig.StageOptions(stage_name=config.stage),
+            deploy_options=_apig.StageOptions(
+                stage_name=config.stage,
+                logging_level=_apig.MethodLoggingLevel.INFO,
+                metrics_enabled=True,
+                data_trace_enabled=True,
+            ),
+            domain_name=custom_domain,
         )
