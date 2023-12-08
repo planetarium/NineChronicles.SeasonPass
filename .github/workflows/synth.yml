@@ -81,7 +81,6 @@ jobs:
           KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          PLANET_URL: ${{ vars.PLANET_URL }}
           ODIN_VALIDATOR_URL: ${{ vars.ODIN_VALIDATOR_URL }}
           HEIMDALL_VALIDATOR_URL: ${{ vars.HEIMDALL_VALIDATOR_URL }}
           ODIN_GQL_URL: ${{ vars.ODIN_GQL_URL }}
