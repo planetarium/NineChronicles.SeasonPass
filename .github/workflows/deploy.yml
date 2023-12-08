@@ -146,6 +146,7 @@ jobs:
       type: success
       environment: ${{ inputs.environment }}
       url: ${{ steps.deployment.outputs.url }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   slack_notification_on_failure:
@@ -156,6 +157,7 @@ jobs:
       type: failure
       environment: ${{ inputs.environment }}
       url: ${{ steps.deployment.outputs.url }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 #      - name: Upgrade DB Schema

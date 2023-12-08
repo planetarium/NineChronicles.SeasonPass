@@ -54,7 +54,7 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "*Branch*\n${{ github.ref_name }}"
-                    },
+                    }
                   ]
                 },
                 {

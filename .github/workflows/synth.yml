@@ -101,4 +101,5 @@ jobs:
     with:
       type: failure
       environment: ${{ inputs.environment }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
