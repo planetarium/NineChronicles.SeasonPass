@@ -40,11 +40,16 @@ class WorkerStack(Stack):
         self.shared_stack.brave_q.grant_send_messages(tracker_role)
         self.__add_policy(tracker_role, db_password=True)
 
+        if self.config.stage == "mainnet":
+            instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.M6G, _ec2.InstanceSize.LARGE)
+        else:
+            instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
+
         block_tracker = _ec2.Instance(
             self, f"{self.config.stage}-9c-season_pass-block_tracker",
             vpc=self.shared_stack.vpc,
             instance_name=f"{self.config.stage}-9c-season_pass-block_tracker",
-            instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL),
+            instance_type=instance_type,
             machine_image=_ec2.MachineImage.from_ssm_parameter(
                 "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
             ),
