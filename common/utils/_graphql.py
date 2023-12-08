@@ -13,12 +13,16 @@ from common.enums import PlanetID
 
 class GQL:
     def __init__(self):
-        self._url = {
-            PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
-            PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
-            PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_INTERNAL_GQL_URL"),
-            PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_INTERNAL_GQL_URL"),
-        }
+        if os.environ.get("STAGE") == "mainnet":
+            self._url = {
+                PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
+                PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+            }
+        else:
+            self._url = {
+                PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
+                PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
+            }
         self.client = None
         self.ds = None
 
