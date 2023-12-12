@@ -77,7 +77,7 @@ def process_block(coef: StakeAPCoef, block_index: int):
     tx_id_list = [x["id"] for x in tx_data]
 
     # Fetch Tx. results
-    tx_result_query = f"""{{ transaction {{ transactionResults (txIds: {tx_id_list}) {{ txStatus }} }} }}"""
+    tx_result_query = f"""{{ transaction {{ transactionResults (txIds: {json.dumps(tx_id_list)}) {{ txStatus }} }} }}"""
     resp = requests.post(GQL_URL, json={"query": tx_result_query})
     tx_result_list = [x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]]
 

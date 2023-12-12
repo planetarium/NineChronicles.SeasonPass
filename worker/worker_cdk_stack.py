@@ -40,14 +40,23 @@ class WorkerStack(Stack):
         self.shared_stack.brave_q.grant_send_messages(tracker_role)
         self.__add_policy(tracker_role, db_password=True)
 
+        if self.config.stage == "internal":
+            instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.M6G, _ec2.InstanceSize.LARGE)
+            ami = _ec2.MachineImage.lookup(
+                name="internal-9c-season_pass-block_tracker-20231209",
+            )
+        else:
+            instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
+            ami = _ec2.MachineImage.from_ssm_parameter(
+                "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
+            )
+
         block_tracker = _ec2.Instance(
             self, f"{self.config.stage}-9c-season_pass-block_tracker",
             vpc=self.shared_stack.vpc,
             instance_name=f"{self.config.stage}-9c-season_pass-block_tracker",
-            instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL),
-            machine_image=_ec2.MachineImage.from_ssm_parameter(
-                "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
-            ),
+            instance_type=instance_type,
+            machine_image=ami,
             key_name=self.shared_stack.resource_data.key_name,
             security_group=self.shared_stack.ec2_sg,
             user_data=_ec2.UserData.for_linux().add_execute_file_command(file_path=init_file),
