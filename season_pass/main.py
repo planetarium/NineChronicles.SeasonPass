@@ -1,18 +1,14 @@
 import os
 
-import requests
 import uvicorn
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from mangum import Mangum
-from sqlalchemy import func
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 from starlette.status import HTTP_404_NOT_FOUND
 
 from common import logger
-from common.models.action import Block
 from season_pass import settings, api
-from season_pass.dependencies import session
 from season_pass.exceptions import SeasonNotFoundError, UserNotFoundError
 
 __VERSION__ = "0.2.0"
@@ -57,39 +53,6 @@ def ping():
 @app.get("/robots.txt", response_class=FileResponse, tags=["Default"], summary="Return robots.txt")
 def robots():
     return "season_pass/robots.txt"
-
-
-@app.get("/block-status")
-def block_status(sess=Depends(session)):
-    resp = requests.post(
-        os.environ["ODIN_VALIDATOR_URL"],
-        json={"query": "{ nodeStatus { tip { index } } }"}
-    )
-    odin_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
-    resp = requests.post(
-        os.environ["HEIMDALL_VALIDATOR_URL"],
-        json={"query": "{ nodeStatus { tip { index } } }"}
-    )
-    heimdall_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
-
-    latest = (sess.query(Block.planet_id, func.max(Block.index))
-              .group_by(Block.planet_id).order_by(Block.planet_id)
-              ).all()
-
-    err = abs(latest[0][1] - odin_tip) > 10 or abs(latest[1][1] - heimdall_tip) > 10
-    msg = {
-        latest[0][0].decode(): {
-            "tip": odin_tip,
-            "latest": latest[0][1],
-            "diverge": abs(odin_tip - latest[0][1]),
-        },
-        latest[1][0].decode(): {
-            "tip": heimdall_tip,
-            "latest": latest[1][1],
-            "diverge": abs(heimdall_tip - latest[1][1]),
-        },
-    }
-    return JSONResponse(status_code=503 if err else 200, content=msg, )
 
 
 app.include_router(api.router)
