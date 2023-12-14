@@ -7,12 +7,12 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
-from dependencies import session
-from enums import TxStatus
-from models.action import Block
-from models.user import Claim
+from common.enums import TxStatus
+from common.models.action import Block
+from common.models.user import Claim
 from season_pass import settings
 from season_pass.api import season_pass, user, tmp
+from season_pass.dependencies import session
 
 router = APIRouter(
     prefix="/api",
