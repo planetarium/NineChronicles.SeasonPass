@@ -25,6 +25,8 @@ def old_current_season(sess=Depends(session)):
         id=curr_season.id,
         start_date=curr_season.start_date,
         end_date=curr_season.end_date,
+        start_timestamp=curr_season.start_timestamp,
+        end_timestamp=curr_season.end_timestamp,
         reward_list=[
             {
                 "level": reward["level"],
