@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator
@@ -51,6 +51,8 @@ class SeasonPassSchema(BaseSchema):
     id: int
     start_date: date
     end_date: date
+    start_timestamp: datetime
+    end_timestamp: datetime
     reward_list: List[RewardSchema]
 
 
@@ -58,6 +60,8 @@ class NewSeasonPassSchema(BaseSchema):
     id: int
     start_date: date
     end_date: date
+    start_timestamp: datetime
+    end_timestamp: datetime
     reward_list: List[NewRewardSchema]
 
 
