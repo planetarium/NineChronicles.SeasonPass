@@ -4,15 +4,15 @@ on:
   push:
     branches:
       - development
+      - internal
       - release/*
       - main
-      - feature/test-ec2-stack
   pull_request:
     branches:
       - development
+      - internal
       - release/*
       - main
-      - feature/test-ec2-stack
 
 jobs:
   test:
