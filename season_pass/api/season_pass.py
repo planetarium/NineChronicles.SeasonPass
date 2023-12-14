@@ -40,7 +40,7 @@ def old_current_season(sess=Depends(session)):
                     ],
                     "currency": [
                         {
-                            "ticker": x["ticker"].split("_")[-1],
+                            "ticker": x["ticker"].split("__")[-1],
                             "amount": x["amount"]
                         }
                         for x in reward["normal"] if x["ticker"].startswith("FAV__")
@@ -56,7 +56,7 @@ def old_current_season(sess=Depends(session)):
                     ],
                     "currency": [
                         {
-                            "ticker": x["ticker"].split("_")[-1],
+                            "ticker": x["ticker"].split("__")[-1],
                             "amount": x["amount"]
                         }
                         for x in reward["premium"] if x["ticker"].startswith("FAV__")
