@@ -42,7 +42,7 @@ class LevelRequestSchema(BaseSchema):
         return self
 
 
-class SaesonChangeRequestSchema(BaseSchema):
+class SeasonChangeRequestSchema(BaseSchema):
     season_id: int
     timestamp: str | datetime
 
@@ -50,3 +50,4 @@ class SaesonChangeRequestSchema(BaseSchema):
     def to_datetime(self):
         if isinstance(self.timestamp, str):
             self.timestamp = datetime.strptime(self.timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
+        return self
