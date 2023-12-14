@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, desc
+from sqlalchemy.orm import Session
 
-from common.models.season_pass import Level
+from common.models.season_pass import Level, SeasonPass
 from common.models.user import UserSeasonPass
-from season_pass.schemas.tmp import PremiumRequestSchema, LevelRequestSchema, RegisterRequestSchema
+from schemas.season_pass import SeasonPassSchema
+from season_pass.schemas.tmp import (PremiumRequestSchema, LevelRequestSchema, RegisterRequestSchema,
+                                     SaesonChangeRequestSchema, )
 from season_pass.schemas.user import UserSeasonPassSchema
 from season_pass.dependencies import session
-from season_pass.exceptions import UserNotFoundError
+from season_pass.exceptions import UserNotFoundError, SeasonNotFoundError
 from common.utils.season_pass import get_current_season
 
 router = APIRouter(
@@ -77,3 +80,16 @@ def set_level(request: LevelRequestSchema, sess=Depends(session)):
     sess.commit()
     sess.refresh(target_user)
     return target_user
+
+
+@router.post("/change-season", response_model=SeasonPassSchema)
+def change_season(request: SaesonChangeRequestSchema, sess: Session = Depends(session)):
+    target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
+    if not target_season:
+        raise SeasonNotFoundError(f"Season {request.season_id} not found")
+    next_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id+1))
+    if not next_season:
+        raise SeasonNotFoundError(f"Next season (Season ID {request.season_id+1}) not found")
+
+    target_season.end_timestamp = request.timestamp
+    next_season.start_timestamp = request.timestamp
