@@ -25,6 +25,8 @@ def old_current_season(sess=Depends(session)):
         id=curr_season.id,
         start_date=curr_season.start_date,
         end_date=curr_season.end_date,
+        start_timestamp=curr_season.start_timestamp,
+        end_timestamp=curr_season.end_timestamp,
         reward_list=[
             {
                 "level": reward["level"],
@@ -38,7 +40,7 @@ def old_current_season(sess=Depends(session)):
                     ],
                     "currency": [
                         {
-                            "ticker": x["ticker"].split("_")[-1],
+                            "ticker": x["ticker"].split("__")[-1],
                             "amount": x["amount"]
                         }
                         for x in reward["normal"] if x["ticker"].startswith("FAV__")
@@ -54,7 +56,7 @@ def old_current_season(sess=Depends(session)):
                     ],
                     "currency": [
                         {
-                            "ticker": x["ticker"].split("_")[-1],
+                            "ticker": x["ticker"].split("__")[-1],
                             "amount": x["amount"]
                         }
                         for x in reward["premium"] if x["ticker"].startswith("FAV__")

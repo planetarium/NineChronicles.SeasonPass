@@ -49,9 +49,17 @@ class ActionJson:
     p: Optional[bool] = None
     # r: Optional[List[List[int]]] = None
 
+    # event_dungeon_battle6
+    l: List = None
+
     @property
     def avatar_addr(self) -> str:
-        return self.avatarAddress or self.maa or self.a
+        return (
+                self.avatarAddress  # HAS / Sweep
+                or self.maa  # Arena
+                or self.a  # Raid
+                or self.l[0]  # Event dungeon
+        )
 
     @property
     def count_base(self) -> int:
@@ -62,5 +70,7 @@ class ActionJson:
         elif "sweep" in self.type_id:
             # !!! WARNING: This returns used AP, not play count !!!
             return self.actionPoint + self.apStoneCount * AP_PER_STONE
+        elif "event" in self.type_id:
+            return 1
         else:  # hack_and_slash
             return self.totalPlayCount  # This includes AP and AP Potion usage + Staking modification.

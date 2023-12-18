@@ -1,40 +1,47 @@
+import concurrent.futures
 import json
 import os
-import re
 from collections import defaultdict
-from threading import Thread
+from typing import Dict
 
 import boto3
 import requests
-from gql import Client, gql
-from gql.transport.websockets import WebsocketsTransport
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 from common import logger
+from common.enums import PlanetID
+from common.models.action import Block
+from common.utils.aws import fetch_secrets
 from schemas.action import ActionJson
 from utils.stake import StakeAPCoef
 
-EXEC_LIMIT = 60  # Finish subscribe after 60 sec. : about 8~10 block
-PLANET_ID = os.environ.get("PLANET_ID")
 GQL_URL = os.environ.get("GQL_URL")
+CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
+DB_URI = os.environ.get("DB_URI")
+db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
+DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
+
+engine = create_engine(DB_URI)
 
 
-def get_deposit(coef: StakeAPCoef, url: str, result: dict, addr: str):
-    query = '{{stateQuery {{stakeState(address: "{addr}") {{deposit}}}}}}'.format(addr=addr)
-    resp = requests.post(url, json={"query": query})
+def get_deposit(coef: StakeAPCoef, addr: str) -> float:
+    query = f'{{ stateQuery {{ stakeState(address: "{addr}") {{ deposit }} }} }}'
+    resp = requests.post(GQL_URL, json={"query": query})
     data = resp.json()["data"]["stateQuery"]["stakeState"]
     if data is None:
-        stake_amount = 0
+        stake_amount = 0.
     else:
         stake_amount = float(data["deposit"])
 
-    result[addr.lower()] = coef.get_ap_coef(stake_amount)
+    return coef.get_ap_coef(stake_amount)
 
 
-def send_message(tip: int, action_data: defaultdict, stake_data: defaultdict):
+def send_message(index: int, action_data: defaultdict, stake_data: Dict[str, int]):
     sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
     message = {
-        "planet_id": PLANET_ID,
-        "block": tip,
+        "planet_id": CURRENT_PLANET.value.decode(),
+        "block": index,
         "action_data": dict(action_data),
         "stake": dict(stake_data),
     }
@@ -42,92 +49,101 @@ def send_message(tip: int, action_data: defaultdict, stake_data: defaultdict):
         QueueUrl=os.environ.get("SQS_URL"),
         MessageBody=json.dumps(message),
     )
-    logger.debug(f"Message {resp['MessageId']} sent to SQS for block {tip}.")
+    logger.info(f"Message {resp['MessageId']} sent to SQS for block {index}.")
 
 
-def subscribe_tip(url: str, thread_dict: defaultdict, stake_data: defaultdict, action_data: defaultdict):
-    query = gql(""" subscription { tipChanged { index } } """)
-    transport = WebsocketsTransport(url=url.replace("https", "wss"))
-    client = Client(transport=transport, fetch_schema_from_transport=True)
-    for result in client.subscribe(query):
-        tip = result["tipChanged"]["index"] - 1
-        for t in thread_dict[tip]:
-            t.join()
-        logger.info(f"{len(action_data[tip])} actions sent to queue for block {tip}")
-        logger.info(f"{len(stake_data[tip])} deposits fetched.")
-        logger.debug(stake_data)
-
-        send_message(tip, action_data[tip], stake_data[tip])
-
-        # Clear finished
-        del thread_dict[tip]
-        del action_data[tip]
-        del stake_data[tip]
+def get_block_tip() -> int:
+    try:
+        # Use 9cscan
+        resp = requests.get(os.environ.get("SCAN_URL"))
+        if resp.status_code == 200:
+            return resp.json()["blocks"][0]["index"]
+        else:
+            # Use GQL for fail over
+            resp = requests.post(os.environ.get("GQL_URL"), json={"query": "{ nodeStatus { tip { index } } }"})
+            return resp.json()["data"]["nodeStatus"]["tip"]["index"]
+    except:
+        # Use GQL for fail over
+        resp = requests.post(os.environ.get("GQL_URL"), json={"query": "{ nodeStatus { tip { index } } }"})
+        return resp.json()["data"]["nodeStatus"]["tip"]["index"]
 
 
-def subscribe_action(url: str, thread_dict: defaultdict, stake_data: defaultdict, action_data: defaultdict):
-    transport = WebsocketsTransport(url=url.replace("https", "wss"))
-    client = Client(transport=transport, fetch_schema_from_transport=True)
-    coef = StakeAPCoef(url)
+def process_block(coef: StakeAPCoef, block_index: int):
+    # Fetch Tx. and actions
+    nct_query = f"""{{ transaction {{ ncTransactions (
+        startingBlockIndex: {block_index},
+        limit: 1,
+        actionType: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)"
+    ) {{ id signer actions {{ json }} }}
+    }} }}"""
+    resp = requests.post(GQL_URL, json={"query": nct_query})
+    tx_data = resp.json()["data"]["transaction"]["ncTransactions"]
 
-    # FIXME: Change actionType to regex: (hack_and_slash.*)|(battle_arena.*)|(raid.*)
-    reg = r"(hack_and_slash.*)|(battle_arena.*)|(raid.*)"
-    query = gql(f"""
-    subscription {{
-        tx (actionType: "{reg}") {{
-            txResult {{txStatus, blockIndex}}
-            transaction {{
-                id
-                signer 
-                actions {{json}}
-            }}
-        }}
-    }}
-    """)
-    regex = re.compile(reg)
+    tx_id_list = [x["id"] for x in tx_data]
 
-    for result in client.subscribe(query):
-        block_index = result["tx"]["txResult"]["blockIndex"]
-        # Save action data and get NCG stake amount for later
-        if result["tx"]["txResult"]["txStatus"] == "SUCCESS":
-            signer = result["tx"]["transaction"]["signer"]
-            logger.debug(f"Action from {signer}")
-            # FIXME: Call thread only when `"sweep" in action_json.type_id`
-            t = Thread(target=get_deposit, args=(coef, url, stake_data, signer))
-            thread_dict[block_index].append(t)
-            t.start()
-            for action in result["tx"]["transaction"]["actions"]:
-                action_raw = json.loads(action["json"].replace(r"\uFEFF", ""))
-                type_id = action_raw["type_id"]
-                action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
-                if regex.match(action_json.type_id):
-                    action_data[block_index][action_json.type_id].append({
-                        "tx_id": result["tx"]["transaction"]["id"],
-                        "agent_addr": signer.lower(),
-                        "avatar_addr": action_json.avatar_addr.lower(),
-                        "count_base": action_json.count_base,
-                    })
+    # Fetch Tx. results
+    tx_result_query = f"""{{ transaction {{ transactionResults (txIds: {json.dumps(tx_id_list)}) {{ txStatus }} }} }}"""
+    resp = requests.post(GQL_URL, json={"query": tx_result_query})
+    tx_result_list = [x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]]
+
+    action_data = defaultdict(list)
+    agent_list = set()
+    for i, tx in enumerate(tx_data):
+        if tx_result_list[i] != "SUCCESS":
+            continue
+
+        for action in tx["actions"]:
+            action_raw = json.loads(action["json"].replace(r"\uFEFF", ""))
+            type_id = action_raw["type_id"]
+            if "random_buff" in type_id:
+                continue
+
+            agent_list.add(tx["signer"].lower())
+            action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
+            action_data[action_json.type_id].append({
+                "tx_id": tx["id"],
+                "agent_addr": tx["signer"].lower(),
+                "avatar_addr": action_json.avatar_addr.lower(),
+                "count_base": action_json.count_base,
+            })
+
+    # Fetch stake states
+    stake_data = {}
+    stake_dict = {}
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        for agent in agent_list:
+            stake_dict[executor.submit(get_deposit, coef, agent)] = agent
+
+        for future in concurrent.futures.as_completed(stake_dict):
+            stake_data[agent] = future.result()
+
+    send_message(block_index, action_data, stake_data)
 
 
-def handle(event, context):
-    # Init
-    thread_dict = defaultdict(list)
-    stake_data = defaultdict(lambda: defaultdict(float))
-    action_data = defaultdict(lambda: defaultdict(list))
+def main():
+    coef = StakeAPCoef(GQL_URL)
 
-    # Subscribe Tx. Forever
-    tip_thread = Thread(target=subscribe_tip, args=(GQL_URL, thread_dict, stake_data, action_data))
-    action_thread = Thread(target=subscribe_action, args=(GQL_URL, thread_dict, stake_data, action_data))
-    tip_thread.start()
-    action_thread.start()
-    tip_thread.join(timeout=EXEC_LIMIT)
-    action_thread.join(timeout=EXEC_LIMIT)
+    sess = scoped_session(sessionmaker(bind=engine))
+    # Get missing blocks
+    expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
+    all_blocks = set(sess.scalars(select(Block.index).where(Block.planet_id == CURRENT_PLANET)).fetchall())
+    missing_blocks = expected_all - all_blocks
 
-    for block in action_data.keys():
-        for t in thread_dict[block]:
-            t.join()
-        send_message(block, action_data[block], stake_data[block])
+    block_dict = {}
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        for index in missing_blocks:
+            block_dict[executor.submit(process_block, coef, index)] = index
+
+        for future in concurrent.futures.as_completed(block_dict):
+            index = block_dict[future]
+            exc = future.exception()
+
+            if exc:
+                logger.error(f"Error occurred processing block {index} :: {exc}")
+            else:
+                result = future.result()
+                logger.info(f"Block {index} collected :: {result}")
 
 
 if __name__ == "__main__":
-    handle(None, None)
+    main()

@@ -22,10 +22,17 @@ STAGE = os.environ.get("STAGE", "development")
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
-GQL_DICT = {
-    PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
-    PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
-}
+
+if STAGE == "mainnet":
+    GQL_DICT = {
+        PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
+        PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+    }
+else:
+    GQL_DICT = {
+        PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
+        PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
+    }
 
 engine = create_engine(DB_URI)
 ap_coef = StakeAPCoef()
@@ -180,11 +187,14 @@ def handle(event, context):
                     handle_sweep(sess, planet_id, user_season_dict, current_season.exp_dict[ActionType.SWEEP],
                                  level_dict, block_index, action_data, body["stake"])
                     logger.info(f"{len(action_data)} Sweep applied.")
+                elif "event_dungeon" in type_id:
+                    apply_exp(sess, planet_id, user_season_dict, ActionType.EVENT,
+                              current_season.exp_dict[ActionType.EVENT], level_dict, block_index, action_data)
+                    logger.info(f"{len(action_data)} Event Dungeon applied.")
                 else:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.HAS,
                               current_season.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} HackAndSlash applied.")
-
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index))
             sess.commit()

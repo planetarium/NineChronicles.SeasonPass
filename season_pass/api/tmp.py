@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, desc
+from sqlalchemy.orm import Session
 
-from common.models.season_pass import Level
+from common.models.season_pass import Level, SeasonPass
 from common.models.user import UserSeasonPass
-from season_pass.schemas.tmp import PremiumRequestSchema, LevelRequestSchema, RegisterRequestSchema
-from season_pass.schemas.user import UserSeasonPassSchema
-from season_pass.dependencies import session
-from season_pass.exceptions import UserNotFoundError
 from common.utils.season_pass import get_current_season
+from season_pass.dependencies import session
+from season_pass.exceptions import UserNotFoundError, SeasonNotFoundError
+from season_pass.schemas.season_pass import SeasonPassSchema
+from season_pass.schemas.tmp import (PremiumRequestSchema, LevelRequestSchema, RegisterRequestSchema,
+                                     SeasonChangeRequestSchema, )
+from season_pass.schemas.user import UserSeasonPassSchema
 
 router = APIRouter(
     prefix="/tmp",
@@ -77,3 +80,66 @@ def set_level(request: LevelRequestSchema, sess=Depends(session)):
     sess.commit()
     sess.refresh(target_user)
     return target_user
+
+
+@router.post("/change-season", response_model=SeasonPassSchema)
+def change_season(request: SeasonChangeRequestSchema, sess: Session = Depends(session)):
+    print(request)
+    target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
+    if not target_season:
+        raise SeasonNotFoundError(f"Season {request.season_id} not found")
+    next_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id + 1))
+    if not next_season:
+        raise SeasonNotFoundError(f"Next season (Season ID {request.season_id + 1}) not found")
+
+    target_season.end_timestamp = request.timestamp
+    next_season.start_timestamp = request.timestamp
+    sess.add(target_season)
+    sess.add(next_season)
+    sess.commit()
+    sess.refresh(target_season)
+    return SeasonPassSchema(
+        id=target_season.id,
+        start_date=target_season.start_date,
+        end_date=target_season.end_date,
+        start_timestamp=target_season.start_timestamp,
+        end_timestamp=target_season.end_timestamp,
+        reward_list=[
+            {
+                "level": reward["level"],
+                "normal": {
+                    "item": [
+                        {
+                            "id": x["ticker"].split("_")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["normal"] if x["ticker"].startswith("Item_")
+                    ],
+                    "currency": [
+                        {
+                            "ticker": x["ticker"].split("__")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["normal"] if x["ticker"].startswith("FAV__")
+                    ]
+                },
+                "premium": {
+                    "item": [
+                        {
+                            "id": x["ticker"].split("_")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["premium"] if x["ticker"].startswith("Item_")
+                    ],
+                    "currency": [
+                        {
+                            "ticker": x["ticker"].split("__")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["premium"] if x["ticker"].startswith("FAV__")
+                    ]
+                }
+            }
+            for reward in target_season.reward_list
+        ]
+    )

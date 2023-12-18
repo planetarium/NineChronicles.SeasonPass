@@ -38,15 +38,25 @@ class WorkerStack(Stack):
             assumed_by=_iam.ServicePrincipal("ec2.amazonaws.com"),
         )
         self.shared_stack.brave_q.grant_send_messages(tracker_role)
+        self.__add_policy(tracker_role, db_password=True)
+
+        if self.config.stage == "internal":
+            instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.M6G, _ec2.InstanceSize.LARGE)
+            ami = _ec2.MachineImage.lookup(
+                name="internal-9c-season_pass-block_tracker-20231209",
+            )
+        else:
+            instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
+            ami = _ec2.MachineImage.from_ssm_parameter(
+                "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
+            )
 
         block_tracker = _ec2.Instance(
             self, f"{self.config.stage}-9c-season_pass-block_tracker",
             vpc=self.shared_stack.vpc,
             instance_name=f"{self.config.stage}-9c-season_pass-block_tracker",
-            instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL),
-            machine_image=_ec2.MachineImage.from_ssm_parameter(
-                "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
-            ),
+            instance_type=instance_type,
+            machine_image=ami,
             key_name=self.shared_stack.resource_data.key_name,
             security_group=self.shared_stack.ec2_sg,
             user_data=_ec2.UserData.for_linux().add_execute_file_command(file_path=init_file),
@@ -75,7 +85,6 @@ class WorkerStack(Stack):
                       f"/season_pass",
             "SQS_URL": self.shared_stack.brave_q.queue_url,
             # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
-            "PLANET_URL": self.config.planet_url,
             "ODIN_GQL_URL": self.config.odin_gql_url,
             "HEIMDALL_GQL_URL": self.config.heimdall_gql_url,
         }
@@ -113,7 +122,7 @@ class WorkerStack(Stack):
             layers=[layer],
             role=unloader_role,
             vpc=self.shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(15),
+            timeout=cdk_core.Duration.seconds(50),
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.unload_q)
@@ -180,56 +189,6 @@ class WorkerStack(Stack):
             schedule=_events.Schedule.cron(minute="*")  # Every minute
         )
         minute_event_rule.add_target(_event_targets.LambdaFunction(tracker))
-
-        # Block scraper
-        PLANET_DATA = {
-            "ODIN": {
-                "PLANET_ID": "0x000000000000" if self.config.stage == "mainnet" else "0x100000000000",
-                "SCAN_URL": self.config.odin_scan_url,
-                "GQL_URL": self.config.odin_gql_url,
-            },
-            "HEIMDALL": {
-                "PLANET_ID": "0x000000000001" if self.config.stage == "mainnet" else "0x100000000001",
-                "SCAN_URL": self.config.heimdall_scan_url,
-                "GQL_URL": self.config.heimdall_gql_url,
-            }
-        }
-
-        # Block scraper by planet. This is currently run as services on EC2 machine.
-        # for planet, data in PLANET_DATA.items():
-        #     scraper_role = _iam.Role(
-        #         self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-role",
-        #         assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
-        #         managed_policies=[
-        #             _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
-        #         ],
-        #     )
-        #     scraper_role.add_to_policy(
-        #         _iam.PolicyStatement(
-        #             actions=["sqs:sendmessage"],
-        #             resources=[
-        #                 self.shared_stack.brave_q.queue_arn,
-        #             ]
-        #         )
-        #     )
-        #     self.__add_policy(scraper_role, db_password=True)
-        #
-        #     env.update(data)
-        #
-        #     scraper = _lambda.Function(
-        #         self, f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper-function",
-        #         function_name=f"{self.config.stage}-{planet.lower()}-9c-season_pass-block_scraper",
-        #         runtime=_lambda.Runtime.PYTHON_3_11,
-        #         code=_lambda.AssetCode("worker/", exclude=exclude_list),
-        #         handler="block_scraper.scrap_block",
-        #         layers=[layer],
-        #         role=scraper_role,
-        #         vpc=self.shared_stack.vpc,
-        #         timeout=cdk_core.Duration.seconds(40),
-        #         memory_size=1024,
-        #         environment=env,
-        #     )
-        #     minute_event_rule.add_target(_event_targets.LambdaFunction(scraper))
 
         # Manual signer
         manual_signer_role = _iam.Role(
