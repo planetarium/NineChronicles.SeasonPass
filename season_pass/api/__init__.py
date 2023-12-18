@@ -53,12 +53,12 @@ def block_status(sess=Depends(session)):
         latest[0][0].decode(): {
             "headless_tip": odin_tip,
             "db_tip": latest[0][1],
-            "diverge": abs(odin_tip - latest[0][1]),
+            "diverge": odin_tip - latest[0][1],
         },
         latest[1][0].decode(): {
             "headless_tip": heimdall_tip,
             "db_tip": latest[1][1],
-            "diverge": abs(heimdall_tip - latest[1][1]),
+            "diverge": heimdall_tip - latest[1][1],
         },
     }
     return JSONResponse(status_code=503 if err else 200, content=msg, )
