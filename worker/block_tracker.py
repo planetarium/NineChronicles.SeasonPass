@@ -53,11 +53,16 @@ def send_message(index: int, action_data: defaultdict, stake_data: Dict[str, int
 
 
 def get_block_tip() -> int:
-    # Use 9cscan
-    resp = requests.get(os.environ.get("SCAN_URL"))
-    if resp.status_code == 200:
-        return resp.json()["blocks"][0]["index"]
-    else:
+    try:
+        # Use 9cscan
+        resp = requests.get(os.environ.get("SCAN_URL"))
+        if resp.status_code == 200:
+            return resp.json()["blocks"][0]["index"]
+        else:
+            # Use GQL for fail over
+            resp = requests.post(os.environ.get("GQL_URL"), json={"query": "{ nodeStatus { tip { index } } }"})
+            return resp.json()["data"]["nodeStatus"]["tip"]["index"]
+    except:
         # Use GQL for fail over
         resp = requests.post(os.environ.get("GQL_URL"), json={"query": "{ nodeStatus { tip { index } } }"})
         return resp.json()["data"]["nodeStatus"]["tip"]["index"]
@@ -68,7 +73,7 @@ def process_block(coef: StakeAPCoef, block_index: int):
     nct_query = f"""{{ transaction {{ ncTransactions (
         startingBlockIndex: {block_index},
         limit: 1,
-        actionType: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)"
+        actionType: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)"
     ) {{ id signer actions {{ json }} }}
     }} }}"""
     resp = requests.post(GQL_URL, json={"query": nct_query})

@@ -187,11 +187,14 @@ def handle(event, context):
                     handle_sweep(sess, planet_id, user_season_dict, current_season.exp_dict[ActionType.SWEEP],
                                  level_dict, block_index, action_data, body["stake"])
                     logger.info(f"{len(action_data)} Sweep applied.")
+                elif "event_dungeon" in type_id:
+                    apply_exp(sess, planet_id, user_season_dict, ActionType.EVENT,
+                              current_season.exp_dict[ActionType.EVENT], level_dict, block_index, action_data)
+                    logger.info(f"{len(action_data)} Event Dungeon applied.")
                 else:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.HAS,
                               current_season.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} HackAndSlash applied.")
-
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index))
             sess.commit()

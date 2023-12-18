@@ -8,8 +8,8 @@ from common.models.season_pass import SeasonPass, Level
 
 
 def get_current_season(sess, include_exp: bool = False) -> Optional[SeasonPass]:
-    today = datetime.now(tz=timezone.utc).date()
-    stmt = select(SeasonPass).where(SeasonPass.start_date <= today, SeasonPass.end_date >= today)
+    now = datetime.now(tz=timezone.utc)
+    stmt = select(SeasonPass).where(SeasonPass.start_timestamp <= now, SeasonPass.end_timestamp >= now)
     if include_exp:
         stmt = stmt.options(joinedload(SeasonPass.exp_list))
     return sess.scalar(stmt)
