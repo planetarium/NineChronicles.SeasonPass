@@ -68,7 +68,7 @@ def process_block(coef: StakeAPCoef, block_index: int):
     nct_query = f"""{{ transaction {{ ncTransactions (
         startingBlockIndex: {block_index},
         limit: 1,
-        actionType: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)"
+        actionType: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)"
     ) {{ id signer actions {{ json }} }}
     }} }}"""
     resp = requests.post(GQL_URL, json={"query": nct_query})
