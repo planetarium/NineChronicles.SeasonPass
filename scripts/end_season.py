@@ -19,7 +19,8 @@ def push_claim(season_id: int):
     target_list = [x for x in all_season_pass if x.available_rewards]
     for target in target_list:
         resp = requests.post(CLAIM_URL, json={"planet_id": target.planet_id, "agent_addr": target.agent_addr,
-                                              "avatar_addr": target.avatar_addr, "season_id": target.season_pass_id})
+                                              "avatar_addr": target.avatar_addr, "season_id": target.season_pass_id,
+                                              "force": True})
         if resp.status_code != 200:
             logger.error(
                 f"{target.planet_id} :: {target.season_id} :: {target.avatar_addr} Failed\n{resp.status_code} :: {resp.text}")
