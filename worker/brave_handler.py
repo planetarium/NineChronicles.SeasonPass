@@ -189,7 +189,7 @@ def handle(event, context):
                     logger.info(f"{len(action_data)} Sweep applied.")
                 elif "event_dungeon" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.EVENT,
-                              current_season.exp_dict[ActionType.EVENT], level_dict, block_index, action_data)
+                              current_season.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} Event Dungeon applied.")
                 else:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.HAS,
