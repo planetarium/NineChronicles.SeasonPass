@@ -9,8 +9,8 @@ from common.models.base import Base, TimeStampMixin, AutoIdMixin
 class SeasonPass(TimeStampMixin, Base):
     __tablename__ = "season_pass"
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    start_timestamp = Column(DateTime, nullable=False, doc="Start datetime of this season. Inclusive.")
-    end_timestamp = Column(DateTime, nullable=False, doc="End datetime of this season. Inclusive.")
+    start_timestamp = Column(DateTime(timezone=True), nullable=False, doc="Start datetime of this season. Inclusive.")
+    end_timestamp = Column(DateTime(timezone=True), nullable=False, doc="End datetime of this season. Inclusive.")
     reward_list = Column(JSON, nullable=False, default=[])
     instant_exp = Column(Integer, nullable=False, doc="Instant reward exp for premium plus user")
 
