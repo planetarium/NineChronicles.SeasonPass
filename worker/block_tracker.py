@@ -97,6 +97,8 @@ def process_block(coef: StakeAPCoef, block_index: int):
             type_id = action_raw["type_id"]
             if "random_buff" in type_id:
                 continue
+            if "claim_raid" in type_id:
+                continue
 
             agent_list.add(tx["signer"].lower())
             action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
