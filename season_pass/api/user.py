@@ -156,7 +156,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
 def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     now = datetime.now(tz=timezone.utc)
     target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
-    if not (target_season.start_timestamp <= now <= target_season.end_timestamp):
+    if not request.force and not (target_season.start_timestamp <= now <= target_season.end_timestamp):
         # Return 404
         raise SeasonNotFoundError(f"Requested season {request.season_id} does not exist or not active.")
 
