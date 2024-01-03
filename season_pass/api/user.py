@@ -164,7 +164,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         UserSeasonPass.planet_id == request.planet_id,
         UserSeasonPass.avatar_addr == request.avatar_addr,
         UserSeasonPass.season_pass_id == target_season.id
-    ))
+    ).with_for_update())
     if not user_season:
         # No action executed about season pass.
         raise SeasonNotFoundError(
