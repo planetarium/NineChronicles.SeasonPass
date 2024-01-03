@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Date, JSON, ForeignKey
+from sqlalchemy import Column, Integer, JSON, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import relationship
 
@@ -9,8 +9,8 @@ from common.models.base import Base, TimeStampMixin, AutoIdMixin
 class SeasonPass(TimeStampMixin, Base):
     __tablename__ = "season_pass"
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    start_date = Column(Date, nullable=False, doc="Start date of pass. Inclusive.")
-    end_date = Column(Date, nullable=False, doc="End date of pass. Inclusive.")
+    start_timestamp = Column(DateTime, nullable=False, doc="Start datetime of this season. Inclusive.")
+    end_timestamp = Column(DateTime, nullable=False, doc="End datetime of this season. Inclusive.")
     reward_list = Column(JSON, nullable=False, default=[])
     instant_exp = Column(Integer, nullable=False, doc="Instant reward exp for premium plus user")
 
@@ -19,6 +19,14 @@ class SeasonPass(TimeStampMixin, Base):
     @property
     def exp_dict(self):
         return {x.action_type: x.exp for x in self.exp_list}
+
+    @property
+    def start_date(self):
+        return self.start_timestamp.date()
+
+    @property
+    def end_date(self):
+        return self.end_timestamp.date()
 
 
 class Level(AutoIdMixin, TimeStampMixin, Base):

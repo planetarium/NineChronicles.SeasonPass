@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator
@@ -38,4 +39,15 @@ class LevelRequestSchema(BaseSchema):
     @model_validator(mode="after")
     def lowercase(self):
         self.avatar_addr = self.avatar_addr.lower()
+        return self
+
+
+class SeasonChangeRequestSchema(BaseSchema):
+    season_id: int
+    timestamp: str | datetime
+
+    @model_validator(mode="after")
+    def to_datetime(self):
+        if isinstance(self.timestamp, str):
+            self.timestamp = datetime.strptime(self.timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
         return self

@@ -63,11 +63,13 @@ class ActionType(Enum):
     - **`hack_and_slash_sweep`**: Sweep stage. Matches with type_id `hack_and_slash_sweep##`
     - **`battle_arena`**: Arena battle. Matches with type_id `battle_arena##`
     - **`raid`**: World boss battle. Matches with type_id `raid##`
+    - **`event_dungeon`**: Event dungeon stage. Matches with type_id `event_dungeon_battle##`
     """
     HAS = "hack_and_slash"
     SWEEP = "hack_and_slash_sweep"
     ARENA = "battle_arena"
     RAID = "raid"
+    EVENT = "event_dungeon"
 
 
 class PlanetID(bytes, Enum):
