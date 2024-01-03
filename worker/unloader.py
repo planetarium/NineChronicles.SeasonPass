@@ -23,6 +23,14 @@ engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
 
 
 def handle(event, context):
+    """
+    # SeasonPass claim handler
+
+    Receive claim request messages from SQS and send rewards.
+    The original claim data (in RDB) is already created and this function only reads data and create Tx. to the chain.
+    In the case of re-treat(nonce has been assigned), handler will reuse assigned nonce.
+    To create brand-new Tx, you should erase former nonce before send new message.
+    """
     message = SQSMessage(Records=event.get("Records", []))
     sess = None
     account = Account(fetch_kms_key_id(stage, region_name))
