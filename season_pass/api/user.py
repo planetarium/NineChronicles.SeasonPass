@@ -16,8 +16,7 @@ from common.models.user import UserSeasonPass, Claim
 from common.utils.season_pass import get_current_season, get_max_level
 from season_pass import settings
 from season_pass.dependencies import session
-from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, UserNotFoundError,
-                                    InvalidUpgradeRequestError, )
+from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError, )
 from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
@@ -154,11 +153,17 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
 
 @router.post("/claim", response_model=ClaimResultSchema)
 def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
-    now = datetime.now(tz=timezone.utc)
-    target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
-    if not (target_season.start_timestamp <= now <= target_season.end_timestamp):
-        # Return 404
-        raise SeasonNotFoundError(f"Requested season {request.season_id} does not exist or not active.")
+    if request.force:
+        target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
+        if not target_season:
+            # Return 404
+            raise SeasonNotFoundError(f"Requested season {request.season_id} does not exist.")
+    else:
+        today = datetime.now(tz=timezone.utc).date()
+        target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
+        if not (target_season.start_date <= today <= target_season.end_date):
+            # Return 404
+            raise SeasonNotFoundError(f"Requested season {request.season_id} does not exist or not active.")
 
     user_season = sess.scalar(select(UserSeasonPass).where(
         UserSeasonPass.planet_id == request.planet_id,
