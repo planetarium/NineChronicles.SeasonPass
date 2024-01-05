@@ -23,6 +23,14 @@ engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
 
 
 def handle(event, context):
+    """
+    # SeasonPass claim handler
+
+    Receive claim request messages from SQS and send rewards.
+    The original claim data (in RDB) is already created and this function only reads data and create Tx. to the chain.
+    In the case of re-treat(nonce has been assigned), handler will reuse assigned nonce.
+    To create brand-new Tx, you should erase former nonce before send new message.
+    """
     message = SQSMessage(Records=event.get("Records", []))
     sess = None
     account = Account(fetch_kms_key_id(stage, region_name))
@@ -37,6 +45,7 @@ def handle(event, context):
         nonce_dict = {}
 
         for i, record in enumerate(message.Records):
+            use_nonce = False
             claim = claim_dict.get(record.body.get("uuid"))
             if not claim:
                 logger.error(f"Cannot find claim {record.body.get('uuid')}")
@@ -53,11 +62,13 @@ def handle(event, context):
             else:
                 nonce = nonce_dict[claim.planet_id]
 
-            claim.nonce = nonce
+            if not claim.nonce:
+                claim.nonce = nonce
+                use_nonce = True
             claim.tx_status = TxStatus.CREATED
             unsigned_tx = gql.create_action(
                 claim.planet_id,
-                "claim_items", pubkey=account.pubkey, nonce=nonce,
+                "claim_items", pubkey=account.pubkey, nonce=claim.nonce,
                 avatar_addr=claim.avatar_addr, claim_data=claim.reward_list,
                 memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels, "t": "claim"}}),
             )
@@ -66,8 +77,8 @@ def handle(event, context):
             claim.tx = signed_tx.hex()
             sess.add(claim)
             target_claim_list.append(claim)
-
-            nonce_dict[claim.planet_id] += 1
+            if use_nonce:
+                nonce_dict[claim.planet_id] += 1
         sess.commit()
 
         for claim in target_claim_list:
