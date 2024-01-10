@@ -19,7 +19,6 @@ app = FastAPI(
     title="Nine Chronicles Season Pass Service",
     description="",
     version=__VERSION__,
-    root_path=f"/{stage}" if stage != "local" else "",
     debug=settings.DEBUG
 )
 
