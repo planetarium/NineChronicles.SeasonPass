@@ -106,7 +106,7 @@ class APIStack(Stack):
                 certificate_arn="arn:aws:acm:us-east-1:319679068466:certificate/8e3f8d11-ead8-4a90-bda0-94a35db71678",
             )
             custom_domain = _apig.DomainNameOptions(
-                domain_name=f"season-pass{'-internal' if config.stage == 'internal' else ''}.9c.gg",
+                domain_name=f"season-pass{f'-{config.stage}' if config.stage != 'mainnet' else ''}.9c.gg",
                 certificate=certificate,
                 security_policy=_apig.SecurityPolicy.TLS_1_2,
                 endpoint_type=_apig.EndpointType.EDGE,
