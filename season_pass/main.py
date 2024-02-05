@@ -11,7 +11,7 @@ from common import logger
 from season_pass import settings, api
 from season_pass.exceptions import SeasonNotFoundError, UserNotFoundError
 
-__VERSION__ = "0.2.0"
+__VERSION__ = "0.3.1"
 
 stage = os.environ.get("STAGE", "local")
 
@@ -19,7 +19,6 @@ app = FastAPI(
     title="Nine Chronicles Season Pass Service",
     description="",
     version=__VERSION__,
-    root_path=f"/{stage}" if stage != "local" else "",
     debug=settings.DEBUG
 )
 
