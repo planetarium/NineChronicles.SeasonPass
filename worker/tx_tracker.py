@@ -32,10 +32,10 @@ def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], O
                 client.ds.TransactionHeadlessQuery.transactionResult.args(
                     txId=tx_id
                 ).select(
-                    client.ds.TxResult.txStatus,
-                    client.ds.TxResult.blockIndex,
-                    client.ds.TxResult.blockHash,
-                    client.ds.TxResult.exceptionNames,
+                    client.ds.TxResultType.txStatus,
+                    client.ds.TxResultType.blockIndex,
+                    client.ds.TxResultType.blockHash,
+                    client.ds.TxResultType.exceptionNames,
                 )
             )
         )
