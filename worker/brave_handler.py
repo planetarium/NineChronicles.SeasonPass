@@ -175,6 +175,9 @@ def handle(event, context):
 
             user_season_dict = verify_season_pass(sess, planet_id, current_season, body["action_data"])
             for type_id, action_data in body["action_data"].items():
+                if "random_buff" in type_id or "raid_reward" in type_id:
+                    continue
+
                 if "raid" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.RAID,
                               current_season.exp_dict[ActionType.RAID], level_dict, block_index, action_data)
