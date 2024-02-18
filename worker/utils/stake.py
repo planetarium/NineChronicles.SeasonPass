@@ -15,7 +15,10 @@ class StakeAPCoef:
 
         # StakeActionPointCoefficientSheet Address: 0x4ce2d0Bc945c0E38Ae6c31B0dEe7030951eF1cD1
         resp = requests.post(self.gql_url,
-                             json={"query": '{state(address: "0x4ce2d0Bc945c0E38Ae6c31B0dEe7030951eF1cD1")}'})
+                             json={"query": '''{state(
+                             accountAddress: "0x1000000000000000000000000000000000000000",
+                             address: "0x4ce2d0Bc945c0E38Ae6c31B0dEe7030951eF1cD1"
+                             )}'''})
         state = resp.json()["data"]["state"]
         raw = bytes.fromhex(state)
         self.data = raw.decode().split(":")[1]
