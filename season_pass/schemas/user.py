@@ -61,6 +61,7 @@ class ClaimRequestSchema(BaseSchema):
     avatar_addr: str
     season_id: int
     force: bool = False
+    prev: bool = False
 
     @model_validator(mode="after")
     def sanitize(self):
