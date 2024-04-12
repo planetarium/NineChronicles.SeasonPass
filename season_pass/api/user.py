@@ -1,7 +1,7 @@
 import json
 import logging
 from collections import defaultdict
-from datetime import timezone, datetime
+from datetime import timezone, datetime, timedelta
 from uuid import uuid4
 
 import boto3
@@ -16,7 +16,8 @@ from common.models.user import UserSeasonPass, Claim
 from common.utils.season_pass import get_current_season, get_max_level
 from season_pass import settings
 from season_pass.dependencies import session
-from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError, )
+from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError,
+                                    NotPremiumError, )
 from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
@@ -151,6 +152,44 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     return target_user
 
 
+def create_claim(sess, target_season: SeasonPass, user_season: UserSeasonPass) -> Claim:
+    available_rewards = user_season.available_rewards(sess)
+    max_level, repeat_exp = get_max_level(sess)
+
+    reward_dict = {x["level"]: x for x in target_season.reward_list}
+    target_reward_dict = defaultdict(int)
+    for reward_level in available_rewards["normal"]:
+        reward = reward_dict[reward_level]
+        for item in reward["normal"]:
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
+    for reward_level in available_rewards["premium"]:
+        reward = reward_dict[reward_level]
+        for item in reward["premium"]:
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
+
+    claim = Claim(
+        uuid=str(uuid4()),
+        planet_id=user_season.planet_id,
+        agent_addr=user_season.agent_addr.lower(),
+        avatar_addr=user_season.avatar_addr.lower(),
+        reward_list=[{"ticker": k[0], "decimal_places": k[1], "amount": v} for k, v in target_reward_dict.items()],
+        normal_levels=available_rewards["normal"],
+        premium_levels=available_rewards["premium"],
+    )
+    user_season.last_normal_claim = min(user_season.level, max_level.level)
+    if user_season.is_premium:
+        user_season.last_premium_claim = min(user_season.level, max_level.level)
+
+    # Get repeating reward when user is above max level
+    if user_season.level > max_level.level:
+        user_season.exp -= repeat_exp * available_rewards["normal"].count(max_level.level + 1)
+        user_season.level = max_level.level
+
+    sess.add(claim)
+    sess.add(user_season)
+    return claim
+
+
 @router.post("/claim", response_model=ClaimResultSchema)
 def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     if request.force:
@@ -175,53 +214,62 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         raise SeasonNotFoundError(
             f"No activity recorded for season {target_season.id} for avatar {request.avatar_addr}")
 
-    available_rewards = user_season.available_rewards(sess)
-    max_level, repeat_exp = get_max_level(sess)
-
-    # calculate rewards to get
-    reward_dict = {x["level"]: x for x in target_season.reward_list}
-    target_reward_dict = defaultdict(int)
-    for reward_level in available_rewards["normal"]:
-        reward = reward_dict[reward_level]
-        for item in reward["normal"]:
-            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
-    for reward_level in available_rewards["premium"]:
-        reward = reward_dict[reward_level]
-        for item in reward["premium"]:
-            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
-
-    claim = Claim(
-        uuid=str(uuid4()),
-        planet_id=user_season.planet_id,
-        agent_addr=user_season.agent_addr.lower(),
-        avatar_addr=user_season.avatar_addr.lower(),
-        reward_list=[{"ticker": k[0], "decimal_places": k[1], "amount": v} for k, v in target_reward_dict.items()],
-        normal_levels=available_rewards["normal"],
-        premium_levels=available_rewards["premium"],
-    )
-    sess.add(claim)
-
-    user_season.last_normal_claim = min(user_season.level, max_level.level)
-    if user_season.is_premium:
-        user_season.last_premium_claim = min(user_season.level, max_level.level)
-
-    # Get repeating reward when user is above max level
-    if user_season.level > max_level.level:
-        user_season.exp -= repeat_exp * available_rewards["normal"].count(max_level.level + 1)
-        user_season.level = max_level.level
-
-    sess.add(user_season)
+    claim = create_claim(sess, target_season, user_season)
     sess.commit()
     sess.refresh(user_season)
 
     # Send message to SQS
-    if (available_rewards["normal"] or available_rewards["premium"]) and settings.SQS_URL:
+    if claim.reward_list and settings.SQS_URL:
         resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
         logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
 
     # Return result
     return ClaimResultSchema(
-        reward_list=[{"ticker": k[0], "decimal_places": k[1], "amount": v} for k, v in target_reward_dict.items()],
+        reward_list=claim.reward_list,
+        user=user_season,
+        # Deprecated: For backward compatibility
+        items=[], currencies=[],
+    )
+
+
+@router.post("/claim-prev", response_model=ClaimResultSchema)
+def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
+    # Validation
+    if not request.prev:
+        raise InvalidSeasonError("This API is only for prev. season. Please use `/api/claim` for current season.")
+    target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
+    now = datetime.now(tz=timezone.utc)
+
+    if target_season.end_timestamp >= now:
+        raise InvalidSeasonError(f"Target season {target_season.id} is not finished.")
+
+    if target_season.end_timestamp + timedelta(days=7) < now:
+        raise InvalidSeasonError(f"Season {target_season.id} finished over one week ago. Cannot claim.")
+
+    user_season = sess.scalar(select(UserSeasonPass).where(
+        UserSeasonPass.planet_id == request.planet_id,
+        UserSeasonPass.season_pass_id == target_season.id,
+        UserSeasonPass.avatar_addr == request.avatar_addr)
+    )
+    if not user_season:
+        raise SeasonNotFoundError(
+            f"Season {target_season.id} for avatar {request.avatar_addr} in planet {request.planet_id} not found")
+    if not user_season.is_premium:
+        raise NotPremiumError(f"Prev. season claim is only allowed for premium users.")
+
+    # Claim
+    claim = create_claim(sess, target_season, user_season)
+    sess.commit()
+    sess.refresh(user_season)
+
+    # Send message to SQS
+    if claim.reward_list and settings.SQS_URL:
+        resp = sqs.send_message(QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid}))
+        logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
+
+    # Return result
+    return ClaimResultSchema(
+        reward_list=claim.reward_list,
         user=user_season,
         # Deprecated: For backward compatibility
         items=[], currencies=[],
