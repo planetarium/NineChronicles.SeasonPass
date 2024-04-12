@@ -12,3 +12,7 @@ class UserNotFoundError(Exception):
 
 class InvalidUpgradeRequestError(Exception):
     pass
+
+
+class NotPremiumError(Exception):
+    pass
