@@ -54,6 +54,7 @@ class SeasonPassSchema(BaseSchema):
     start_timestamp: datetime
     end_timestamp: datetime
     reward_list: List[RewardSchema]
+    claim_limit_timestamp: datetime
 
 
 class NewSeasonPassSchema(BaseSchema):
