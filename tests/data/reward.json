@@ -1,932 +1,628 @@
 [
   {
     "level": 1,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 1
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 1
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 1
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 10
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 1,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 30,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "FAV__RUNE_GOLDENLEAF",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 2,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 2
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 2
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 2
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 20
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "FAV__CRYSTAL",
+        "amount": 30000,
+        "decimal_places": 18
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 3,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 3
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 3
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 3
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 30
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 200,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 1000,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 4,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 4
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 4
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 4
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 40
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 5,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 5
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 5
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 5
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 50
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 1000,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 6,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 6
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 6
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 6
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 60
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 7,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 7
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 7
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 7
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 70
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 1000,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 8,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 8
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 8
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 8
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 80
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "FAV__CRYSTAL",
+        "amount": 30000,
+        "decimal_places": 18
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 9,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 9
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 9
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 9
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 90
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 200,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 1000,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 10,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 10
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 10
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 10
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 100
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 1,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 30,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "FAV__RUNE_GOLDENLEAF",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 11,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 11
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 11
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 11
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 110
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 12,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 12
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 12
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 12
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 120
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "FAV__CRYSTAL",
+        "amount": 30000,
+        "decimal_places": 18
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 13,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 13
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 13
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 13
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 130
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 200,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 14,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 14
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 14
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 14
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 140
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 15,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 15
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 15
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 15
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 150
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 16,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 16
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 16
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 16
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 160
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 17,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 17
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 17
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 17
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 170
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_800201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 18,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 18
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 18
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 18
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 180
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "FAV__CRYSTAL",
+        "amount": 30000,
+        "decimal_places": 18
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 19,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 19
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 19
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 19
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 190
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 200,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 20,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 20
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 20
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 20
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 200
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 2,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 60,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "FAV__RUNE_GOLDENLEAF",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 21,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 21
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 21
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 21
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 210
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 10,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 22,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 22
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 22
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 22
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 220
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "FAV__CRYSTAL",
+        "amount": 100000,
+        "decimal_places": 18
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 2000,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 23,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 23
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 23
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 23
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 230
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 500,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 24,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 24
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 24
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 24
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 240
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 2000,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 25,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 25
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 25
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 25
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 250
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 26,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 26
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 26
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 26
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 260
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 2000,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 27,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 27
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 27
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 27
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 270
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 28,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 28
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 28
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 28
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 280
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "FAV__CRYSTAL",
+        "amount": 100000,
+        "decimal_places": 18
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 29,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 29
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 29
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 29
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 290
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_400000",
+        "amount": 500,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 20,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ]
   },
   {
     "level": 30,
-    "normal": {
-      "item": [
-        {
-          "id": 400000,
-          "amount": 30
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 30
-        }
-      ]
-    },
-    "premium": {
-      "item": [
-        {
-          "id": 500000,
-          "amount": 30
-        }
-      ],
-      "currency": [
-        {
-          "ticker": "CRYSTAL",
-          "amount": 300
-        }
-      ]
-    }
+    "normal": [
+      {
+        "ticker": "Item_NT_500000",
+        "amount": 5,
+        "decimal_places": 0
+      }
+    ],
+    "premium": [
+      {
+        "ticker": "Item_NT_600201",
+        "amount": 130,
+        "decimal_places": 0
+      },
+      {
+        "ticker": "Item_NT_600202",
+        "amount": 20,
+        "decimal_places": 0
+      }
+    ]
+  },
+  {
+    "level": 31,
+    "normal": [
+      {
+        "ticker": "FAV__CRYSTAL",
+        "amount": 100000,
+        "decimal_places": 18
+      }
+    ],
+    "premium": []
   }
 ]
