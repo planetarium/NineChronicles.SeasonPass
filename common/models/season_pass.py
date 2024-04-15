@@ -1,5 +1,3 @@
-import datetime
-
 from sqlalchemy import Column, Integer, JSON, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import relationship
@@ -29,10 +27,6 @@ class SeasonPass(TimeStampMixin, Base):
     @property
     def end_date(self):
         return self.end_timestamp.date()
-
-    @property
-    def claim_limit_timestamp(self):
-        return self.end_timestamp + datetime.timedelta(days=7)
 
 
 class Level(AutoIdMixin, TimeStampMixin, Base):

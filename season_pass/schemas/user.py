@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 from pydantic import BaseModel as BaseSchema, model_validator, Field
@@ -18,6 +19,7 @@ class UserSeasonPassSchema(BaseSchema):
     is_premium_plus: bool = False
     last_normal_claim: int = 0
     last_premium_claim: int = 0
+    claim_limit_timestamp: datetime
 
     @model_validator(mode="after")
     def lowercase(self):
