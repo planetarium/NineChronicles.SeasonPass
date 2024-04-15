@@ -1,4 +1,3 @@
-import json
 from datetime import timezone, datetime, timedelta
 
 import pytest
@@ -14,15 +13,10 @@ tc = TestClient(app)
 
 @pytest.mark.usefixtures("sess")
 def test_current_season(sess):
-    with open("tests/data/reward.json", "r") as f:
-        reward_list = json.loads(f.read())
-    print(reward_list)
     season_data = SeasonPass(
         id=1,
         start_timestamp=datetime.now(tz=timezone.utc) - timedelta(days=1),
         end_timestamp=datetime.now(tz=timezone.utc) + timedelta(days=1),
-        reward_list=reward_list,
-        instant_exp=100,
     )
     with add_test_data(sess, *[season_data]) as test_data:
         season_data = test_data[0]

@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import contextmanager
 from typing import List
@@ -8,8 +9,8 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-TEST_AGENT_ADDR = "0x49D5FcEB955800B2c532D6319E803c7D80f817Af"
-TEST_AVATAR_ADDR = "0xC8cA85aE399de5c4dcAd39e8A13cfA7cBcEff066"
+TEST_AGENT_ADDR = "0x49d5fceb955800b2c532d6319e803c7d80f817af"
+TEST_AVATAR_ADDR = "0xc8ca85ae399de5c4dcad39e8a13cfa7cbceff066"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -87,9 +88,17 @@ def sess(engine):
 
 @contextmanager
 def add_test_data(sess, *test_data: List) -> List:
+    with open("tests/data/reward.json") as f:
+        reward_list = json.loads(f.read())
+
     updated_data = []
     try:
         for data in test_data:
+            if type(data).__name__ == "SeasonPass":
+                if not data.reward_list:
+                    data.reward_list = reward_list
+                if not data.instant_exp:
+                    data.instant_exp = 100
             sess.add(data)
         sess.commit()
         for data in test_data:
