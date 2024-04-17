@@ -9,6 +9,8 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from common.models.season_pass import Level
+
 TEST_AGENT_ADDR = "0x49d5fceb955800b2c532d6319e803c7d80f817af"
 TEST_AVATAR_ADDR = "0xc8ca85ae399de5c4dcad39e8a13cfa7cbceff066"
 
@@ -44,24 +46,24 @@ def session(engine):
         sess.close()
 
 
-# @pytest.fixture(scope="session", autouse=True)
-# @pytest.mark.usefixtures("session")
-# def set_test_data(session):
-#     with open("tests/data/level.json", "r") as f:
-#         level_data = json.loads(f.read())
-#     for lvl in level_data:
-#         session.add(Level(level=lvl["level"], exp=lvl["exp"]))
-#
-#     with open("tests/data/reward.json", "r") as f:
-#         reward = json.loads(f.read())
-#
-#     start_timestamp = datetime.datetime.now(tz=datetime.timezone.utc).replace(day=1)
-#     session.add(
-#         SeasonPass(id=1, start_timestamp=start_timestamp, end_timestamp=start_timestamp + datetime.timedelta(days=28),
-#                    reward_list=reward, instant_exp=10000)
-#     )
-#
-#     session.commit()
+@pytest.fixture(scope="session", autouse=True)
+@pytest.mark.usefixtures("session")
+def set_common_test_data(session):
+    with open("tests/data/level.json", "r") as f:
+        level_data = json.loads(f.read())
+    for lvl in level_data:
+        session.add(Level(level=lvl["level"], exp=lvl["exp"]))
+
+    # with open("tests/data/reward.json", "r") as f:
+    #     reward = json.loads(f.read())
+    #
+    # start_timestamp = datetime.datetime.now(tz=datetime.timezone.utc).replace(day=1)
+    # session.add(
+    #     SeasonPass(id=1, start_timestamp=start_timestamp, end_timestamp=start_timestamp + datetime.timedelta(days=28),
+    #                reward_list=reward, instant_exp=10000)
+    # )
+
+    session.commit()
 #
 #
 # @pytest.fixture(scope="session")
