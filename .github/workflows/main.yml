@@ -32,6 +32,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   deploy_without_approval:
@@ -47,6 +48,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   approval_notice:
@@ -84,4 +86,5 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
