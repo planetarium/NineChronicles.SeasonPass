@@ -94,9 +94,9 @@ class APIStack(Stack):
             role=role,
             vpc=shared_stack.vpc,
             security_groups=[shared_stack.rds_security_group],
-            timeout=cdk_core.Duration.seconds(10),
+            timeout=cdk_core.Duration.seconds(30),
             environment=env,
-            memory_size=256,
+            memory_size=512,
         )
 
         # ACM & Custom Domain
