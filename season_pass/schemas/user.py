@@ -1,4 +1,5 @@
-from typing import List
+from datetime import datetime
+from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator, Field
 
@@ -18,6 +19,7 @@ class UserSeasonPassSchema(BaseSchema):
     is_premium_plus: bool = False
     last_normal_claim: int = 0
     last_premium_claim: int = 0
+    claim_limit_timestamp: Optional[datetime] = None
 
     @model_validator(mode="after")
     def lowercase(self):
@@ -61,6 +63,7 @@ class ClaimRequestSchema(BaseSchema):
     avatar_addr: str
     season_id: int
     force: bool = False
+    prev: bool = False
 
     @model_validator(mode="after")
     def sanitize(self):

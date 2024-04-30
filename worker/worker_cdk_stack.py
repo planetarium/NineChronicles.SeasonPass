@@ -127,7 +127,7 @@ class WorkerStack(Stack):
             layers=[layer],
             role=unloader_role,
             vpc=self.shared_stack.vpc,
-            timeout=cdk_core.Duration.seconds(50),
+            timeout=cdk_core.Duration.seconds(15),
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.unload_q)
