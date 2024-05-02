@@ -21,8 +21,9 @@ def to_ticker(item_id: str | int) -> Tuple[str, int]:
     """
     DECIMAL_DICT = {
         "CRYSTAL": 18,
+        "RUNE_GOLDENLEAF": 0,
     }
-    if item_id.upper() in ("CRYSTAL",):
+    if item_id.upper() in ("CRYSTAL", "RUNE_GOLDENLEAF"):
         return f"FAV__{item_id.upper()}", DECIMAL_DICT.get(item_id.upper(), 0)
     else:
         return f"Item_NT_{item_id}", 0
