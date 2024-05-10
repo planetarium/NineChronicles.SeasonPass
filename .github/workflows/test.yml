@@ -7,6 +7,8 @@ on:
     secrets:
       SLACK_WEBHOOK_URL:
         required: true
+      HEADLESS_GQL_JWT_SECRET:
+        required: true
 
 jobs:
   test:
@@ -70,6 +72,7 @@ jobs:
           ODIN_GQL_URL: https://9c-main-jwt.nine-chronicles.com/graphql
           HEIMDALL_GQL_URL: https://heimdall-jwt.nine-chronicles.com/graphql
           DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
+          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
         run: |
           source $VENV
           python -m pytest tests

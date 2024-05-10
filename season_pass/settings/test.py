@@ -12,4 +12,4 @@ REGION_NAME = "ap-northeast-2"
 SQS_URL = None
 
 # Headless
-HEADLESS_JWT_GQL_SECRET = os.environ.get("HEADLESS_JWT_GQL_SECRET")
+HEADLESS_GQL_JWT_SECRET = os.environ.get("HEADLESS_GQL_JWT_SECRET")
