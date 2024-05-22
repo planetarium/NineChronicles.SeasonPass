@@ -35,6 +35,11 @@ RESOURCE_DICT: Dict[str, ResourceDict] = {
         key_name="9c_internal_tunnel",
         sg_id="",
     ),
+    "sloth": ResourceDict(
+        vpc_id="vpc-08ee9f2dbd1c97ac6",  # Internal VPC
+        key_name="9c_internal_tunnel",
+        sg_id="",
+    ),
     "mainnet": ResourceDict(
         vpc_id="vpc-01a0ef2aa2c41bb26",  # Main VPC
         key_name="9c_main_bastion",
