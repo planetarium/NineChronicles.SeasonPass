@@ -13,6 +13,7 @@ from common.enums import PlanetID, TxStatus
 from common.models.user import Claim
 from common.utils._graphql import GQL
 from common.utils.aws import fetch_secrets
+from season_pass import settings
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -24,7 +25,7 @@ engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
 
 
 def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], Optional[str]]:
-    client = GQL()
+    client = GQL(settings.HEADLESS_GQL_JWT_SECRET)
     client.reset(planet_id)
     query = dsl_gql(
         DSLQuery(
