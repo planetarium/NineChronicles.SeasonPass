@@ -18,12 +18,12 @@ pyasn1 = "^0.5.0"
 pycryptodome = "^3.19.0"
 hexbytes = "^0.3.1"
 bencodex = "^1.0.1"
+pyjwt = "^2.8.0"
 
 [tool.poetry.group.api.dependencies]
 fastapi = "^0.103.2"
 mangum = "^0.17.0"
 uvicorn = "^0.23.2"
-pyjwt = "^2.8.0"
 
 [tool.poetry.group.worker.dependencies]
 
