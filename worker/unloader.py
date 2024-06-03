@@ -12,7 +12,6 @@ from common.utils._crypto import Account
 from common.utils._graphql import GQL
 from common.utils.aws import fetch_secrets, fetch_kms_key_id
 from schemas.sqs import SQSMessage
-from season_pass import settings
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -35,7 +34,7 @@ def handle(event, context):
     message = SQSMessage(Records=event.get("Records", []))
     sess = None
     account = Account(fetch_kms_key_id(stage, region_name))
-    gql = GQL(settings.HEADLESS_GQL_JWT_SECRET)
+    gql = GQL(os.environ.get("HEADLESS_GQL_JWT_SECRET"))
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
