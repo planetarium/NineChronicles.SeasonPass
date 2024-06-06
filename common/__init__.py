@@ -42,3 +42,5 @@ class Config:
     kms_key_id: str
     jwt_token_secret: str
 
+    # JWT Headless
+    headless_gql_jwt_secret: Optional[str] = None

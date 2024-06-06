@@ -92,6 +92,7 @@ class WorkerStack(Stack):
             # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
             "ODIN_GQL_URL": self.config.odin_gql_url,
             "HEIMDALL_GQL_URL": self.config.heimdall_gql_url,
+            "HEADLESS_GQL_JWT_SECRET": self.config.headless_gql_jwt_secret,
         }
 
         # Exclude list

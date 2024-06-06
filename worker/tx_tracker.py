@@ -24,7 +24,7 @@ engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
 
 
 def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], Optional[str]]:
-    client = GQL()
+    client = GQL(os.environ.get("HEADLESS_GQL_JWT_SECRET"))
     client.reset(planet_id)
     query = dsl_gql(
         DSLQuery(

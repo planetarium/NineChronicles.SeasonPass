@@ -133,7 +133,8 @@ class SharedStack(Stack):
         # SecureStrings in Parameter Store
         PARAMETER_LIST = (
             ("KMS_KEY_ID", True),
-            ("JWT_TOKEN_SECRET", True)
+            ("JWT_TOKEN_SECRET", True),
+            ("HEADLESS_GQL_JWT_SECRET", True)
         )
         ssm = boto3.client("ssm", region_name=config.region_name,
                            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
