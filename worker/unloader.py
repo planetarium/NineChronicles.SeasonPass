@@ -34,7 +34,7 @@ def handle(event, context):
     message = SQSMessage(Records=event.get("Records", []))
     sess = None
     account = Account(fetch_kms_key_id(stage, region_name))
-    gql = GQL()
+    gql = GQL(os.environ.get("HEADLESS_GQL_JWT_SECRET"))
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
