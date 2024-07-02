@@ -13,6 +13,7 @@ from common import logger
 from common.enums import PlanetID
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
+from common.utils.season_pass import create_jwt_token
 from schemas.action import ActionJson
 from utils.stake import StakeAPCoef
 
@@ -27,7 +28,11 @@ engine = create_engine(DB_URI)
 
 def get_deposit(coef: StakeAPCoef, addr: str) -> float:
     query = f'{{ stateQuery {{ stakeState(address: "{addr}") {{ deposit }} }} }}'
-    resp = requests.post(GQL_URL, json={"query": query})
+    resp = requests.post(
+        GQL_URL,
+        json={"query": query},
+        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+    )
     data = resp.json()["data"]["stateQuery"]["stakeState"]
     if data is None:
         stake_amount = 0.
@@ -60,11 +65,19 @@ def get_block_tip() -> int:
             return resp.json()["blocks"][0]["index"]
         else:
             # Use GQL for fail over
-            resp = requests.post(os.environ.get("GQL_URL"), json={"query": "{ nodeStatus { tip { index } } }"})
+            resp = requests.post(
+                os.environ.get("GQL_URL"),
+                json={"query": "{ nodeStatus { tip { index } } }"},
+                headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+            )
             return resp.json()["data"]["nodeStatus"]["tip"]["index"]
     except:
         # Use GQL for fail over
-        resp = requests.post(os.environ.get("GQL_URL"), json={"query": "{ nodeStatus { tip { index } } }"})
+        resp = requests.post(
+            os.environ.get("GQL_URL"),
+            json={"query": "{ nodeStatus { tip { index } } }"},
+            headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+        )
         return resp.json()["data"]["nodeStatus"]["tip"]["index"]
 
 
@@ -76,14 +89,22 @@ def process_block(coef: StakeAPCoef, block_index: int):
         actionType: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)"
     ) {{ id signer actions {{ json }} }}
     }} }}"""
-    resp = requests.post(GQL_URL, json={"query": nct_query})
+    resp = requests.post(
+        GQL_URL,
+        json={"query": nct_query},
+        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+    )
     tx_data = resp.json()["data"]["transaction"]["ncTransactions"]
 
     tx_id_list = [x["id"] for x in tx_data]
 
     # Fetch Tx. results
     tx_result_query = f"""{{ transaction {{ transactionResults (txIds: {json.dumps(tx_id_list)}) {{ txStatus }} }} }}"""
-    resp = requests.post(GQL_URL, json={"query": tx_result_query})
+    resp = requests.post(
+        GQL_URL,
+        json={"query": tx_result_query},
+        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+    )
     tx_result_list = [x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]]
 
     action_data = defaultdict(list)
