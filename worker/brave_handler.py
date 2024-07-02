@@ -12,7 +12,7 @@ from common.models.action import Block, ActionHistory
 from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
-from common.utils.season_pass import get_current_season
+from common.utils.season_pass import get_current_season, create_jwt_token
 from schemas.sqs import SQSMessage
 from utils.stake import StakeAPCoef
 
@@ -97,8 +97,13 @@ def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeas
     for d in action_data:
         coef = coef_dict.get(d["agent_addr"])
         if not coef:
-            resp = requests.post(GQL_URL, json={
-                "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""})
+            resp = requests.post(
+                GQL_URL,
+                json={
+                    "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""},
+                headers={
+                    "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+            )
             data = resp.json()["data"]["stateQuery"]["stakeState"]
             if data is None:
                 coef = 100

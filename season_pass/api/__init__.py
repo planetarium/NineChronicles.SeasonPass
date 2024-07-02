@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from common.enums import TxStatus
 from common.models.action import Block
 from common.models.user import Claim
+from common.utils.season_pass import create_jwt_token
 from season_pass import settings
 from season_pass.api import season_pass, user, tmp
 from season_pass.dependencies import session
@@ -34,13 +35,15 @@ for view in __all__:
 @router.get("/block-status")
 def block_status(sess=Depends(session)):
     resp = requests.post(
-        os.environ["ODIN_VALIDATOR_URL"],
-        json={"query": "{ nodeStatus { tip { index } } }"}
+        os.environ["ODIN_GQL_URL"],
+        json={"query": "{ nodeStatus { tip { index } } }"},
+        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
     )
     odin_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
     resp = requests.post(
-        os.environ["HEIMDALL_VALIDATOR_URL"],
-        json={"query": "{ nodeStatus { tip { index } } }"}
+        os.environ["HEIMDALL_GQL_URL"],
+        json={"query": "{ nodeStatus { tip { index } } }"},
+        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
     )
     heimdall_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
 
