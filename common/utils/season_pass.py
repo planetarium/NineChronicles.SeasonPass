@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 
+import jwt
 from sqlalchemy import select, desc
 from sqlalchemy.orm import joinedload
 
@@ -23,3 +24,12 @@ def get_max_level(sess) -> Tuple[Level, int]:
     # m1 for repeating level, m2 for real max level
     m1, m2 = sess.scalars(select(Level).order_by(desc(Level.level)).limit(2)).fetchall()
     return m2, abs(m1.exp - m2.exp)
+
+
+def create_jwt_token(jwt_secret: str):
+    iat = datetime.now(tz=timezone.utc)
+    return jwt.encode({
+        "iat": iat,
+        "exp": iat + timedelta(minutes=1),
+        "iss": "planetariumhq.com"
+    }, jwt_secret)

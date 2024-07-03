@@ -2,10 +2,13 @@ from collections import defaultdict
 
 import requests
 
+from common.utils.season_pass import create_jwt_token
+
 
 class StakeAPCoef:
-    def __init__(self, gql_url: str = ""):
+    def __init__(self, gql_url: str = "", jwt_secret: str = ""):
         self.gql_url = gql_url
+        self.jwt_secret = jwt_secret
         self.crit = []
 
     def __fetch(self):
@@ -14,11 +17,14 @@ class StakeAPCoef:
             return
 
         # StakeActionPointCoefficientSheet Address: 0x4ce2d0Bc945c0E38Ae6c31B0dEe7030951eF1cD1
-        resp = requests.post(self.gql_url,
-                             json={"query": '''{state(
+        resp = requests.post(
+            self.gql_url,
+            json={"query": '''{state(
                              accountAddress: "0x1000000000000000000000000000000000000000",
                              address: "0x4ce2d0Bc945c0E38Ae6c31B0dEe7030951eF1cD1"
-                             )}'''})
+                             )}'''},
+            headers={"Authorization": f"Bearer {create_jwt_token(self.jwt_secret)}"}
+        )
         state = resp.json()["data"]["state"]
         raw = bytes.fromhex(state)
         self.data = raw.decode().split(":")[1]
