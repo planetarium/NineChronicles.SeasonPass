@@ -7,6 +7,7 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
+from common import SEASONPASS_ADDRESS
 from common.enums import TxStatus
 from common.models.action import Block
 from common.models.user import Claim
@@ -78,3 +79,35 @@ def invalid_claim(sess: Session = Depends(session)):
     if invalid_claim_list:
         return JSONResponse(status_code=503, content=f"{len(invalid_claim_list)} of invalid claims found.")
     return JSONResponse(status_code=200, content="No invalid claims found.")
+
+
+@router.get("/balance/{planet}")
+def balance(planet: str):
+    if planet.lower() == "odin":
+        url = os.environ.get("ODIN_GQL_URL")
+    elif planet.lower() == "heimdall":
+        url = os.environ.get("HEIMDALL_GQL_URL")
+    else:
+        return JSONResponse(status_code=400, content=f"{planet} is not valid planet."
+                            )
+    resp = requests.post(
+        url,
+        json={"query": f"""query balanceQuery($address: Address! = \"{SEASONPASS_ADDRESS}\") {{
+          stateQuery {{
+              hourglass: balance(address: $address, currency: {{ticker: \"Item_NT_400000\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              APPotion: balance(address: $address, currency: {{ticker: \"Item_NT_500000\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              GoldenDust: balance(address: $address, currency: {{ticker: \"Item_NT_600201\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              RubyDust: balance(address: $address, currency: {{ticker: \"Item_NT_600202\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
+              SilverDust: balance(address: $address, currency: {{ticker: \"Item_NT_800201\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
+              Crystal: balance(address: $address, currency: {{ticker: \"FAV__CRYSTAL\", decimalPlaces: 18, minters: []}}) {{ currency {{   ticker }} quantity }}
+              GoldenLeaf: balance(address: $address, currency: {{ticker: \"FAV__RUNE_GOLDENLEAF\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+          }}
+        }}"""},
+        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
+    )
+    data = resp.json()["data"]["stateQuery"]
+    resp = {}
+    for k, v in data.items():
+        resp[k.lower()] = {"ticker": v["currency"]["ticker"], "amount": float(v["quantity"])}
+
+    return JSONResponse(status_code=200, content=resp)

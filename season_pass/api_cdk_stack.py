@@ -74,6 +74,8 @@ class APIStack(Stack):
             "LOGGING_LEVEL": "INFO",
             "DB_ECHO": "False",
             "SQS_URL": shared_stack.unload_q.queue_url,
+            "ODIN_GQL_URL": config.odin_gql_url,
+            "HEIMDALL_GQL_URL": config.heimdall_gql_url,
             "ODIN_VALIDATOR_URL": config.odin_validator_url,
             "HEIMDALL_VALIDATOR_URL": config.heimdall_validator_url,
             "HEADLESS_GQL_JWT_SECRET": config.headless_gql_jwt_secret,

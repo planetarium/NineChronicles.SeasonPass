@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic.dataclasses import dataclass
 
+SEASONPASS_ADDRESS = "0x0E19A992ad976B4986098813DfCd24B0775AC0AA"
+
 COMMON_LAMBDA_EXCLUDE = [
     "!common",
     "!common/**",
