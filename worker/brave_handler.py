@@ -35,7 +35,7 @@ else:
     }
 
 engine = create_engine(DB_URI)
-ap_coef = StakeAPCoef()
+ap_coef = StakeAPCoef(jwt_secret=os.environ.get("HEADLESS_GQL_JWT_SECRET"))
 
 
 def verify_season_pass(sess, planet_id: PlanetID, current_season: SeasonPass, action_data: Dict[str, List]) \
