@@ -111,6 +111,11 @@ def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeas
                 coef = ap_coef.get_ap_coef(float(data["deposit"]))
 
         real_count = d["count_base"] // (AP_PER_ADVENTURE * coef / 100)
+
+        if exp * real_count < 0:
+            logger.warning(f"[Report] Account {d['agent_addr']} may abuse sweep with count: {real_count}")
+            continue
+
         target = user_season_dict[d["avatar_addr"]]
         target.exp += exp * real_count
 
