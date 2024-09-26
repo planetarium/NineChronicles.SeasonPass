@@ -36,8 +36,8 @@ class StakeAPCoef:
 
         _min = 0
         _coef = 100
-        for val, coef in d.items():
-            if coef != _coef:
+        for val, coef in sorted(list(d.items())):
+            if coef < _coef:
                 self.crit.append([range(_min, val), _coef])
                 _min = val
                 _coef = coef
