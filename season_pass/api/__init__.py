@@ -35,7 +35,7 @@ for view in __all__:
 
 @router.get("/block-status")
 def block_status(sess=Depends(session)):
-    stage = os.environ.get("STAGE" "development")
+    stage = os.environ.get("STAGE", "development")
     resp = requests.post(
         os.environ["ODIN_GQL_URL"],
         json={"query": "{ nodeStatus { tip { index } } }"},
