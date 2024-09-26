@@ -28,8 +28,9 @@ class StakeAPCoef:
         state = resp.json()["data"]["state"]
         raw = bytes.fromhex(state)
         self.data = raw.decode().split(":")[1]
+        # See `StakeActionPointCoefficientSheet.csv` sheet in lib9c
         head, *body = [x.split(",") for x in self.data.split("\n")]
-        d = defaultdict(int)
+        d = defaultdict(int)  # Pair of (stake amount : AP coefficient)
         for b in body:
             d[int(b[1])] = int(b[-1])
 
