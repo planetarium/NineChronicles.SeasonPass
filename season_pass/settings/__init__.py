@@ -38,3 +38,6 @@ except:
 # AWS
 REGION_NAME = config("REGION_NAME")
 SQS_URL = config("SQS_URL")
+
+# JWT Headless
+HEADLESS_GQL_JWT_SECRET = config("HEADLESS_GQL_JWT_SECRET")

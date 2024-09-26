@@ -12,7 +12,7 @@ from common.models.action import Block, ActionHistory
 from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
-from common.utils.season_pass import get_current_season
+from common.utils.season_pass import get_current_season, create_jwt_token
 from schemas.sqs import SQSMessage
 from utils.stake import StakeAPCoef
 
@@ -35,7 +35,7 @@ else:
     }
 
 engine = create_engine(DB_URI)
-ap_coef = StakeAPCoef()
+ap_coef = StakeAPCoef(jwt_secret=os.environ.get("HEADLESS_GQL_JWT_SECRET"))
 
 
 def verify_season_pass(sess, planet_id: PlanetID, current_season: SeasonPass, action_data: Dict[str, List]) \
@@ -97,8 +97,13 @@ def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeas
     for d in action_data:
         coef = coef_dict.get(d["agent_addr"])
         if not coef:
-            resp = requests.post(GQL_URL, json={
-                "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""})
+            resp = requests.post(
+                GQL_URL,
+                json={
+                    "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""},
+                headers={
+                    "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+            )
             data = resp.json()["data"]["stateQuery"]["stakeState"]
             if data is None:
                 coef = 100
@@ -106,6 +111,11 @@ def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeas
                 coef = ap_coef.get_ap_coef(float(data["deposit"]))
 
         real_count = d["count_base"] // (AP_PER_ADVENTURE * coef / 100)
+
+        if exp * real_count < 0:
+            logger.warning(f"[Report] Account {d['agent_addr']} may abuse sweep with count: {real_count}")
+            continue
+
         target = user_season_dict[d["avatar_addr"]]
         target.exp += exp * real_count
 
@@ -175,6 +185,9 @@ def handle(event, context):
 
             user_season_dict = verify_season_pass(sess, planet_id, current_season, body["action_data"])
             for type_id, action_data in body["action_data"].items():
+                if "random_buff" in type_id or "raid_reward" in type_id:
+                    continue
+
                 if "raid" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.RAID,
                               current_season.exp_dict[ActionType.RAID], level_dict, block_index, action_data)

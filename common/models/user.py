@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from sqlalchemy import Text, Column, Integer, ForeignKey, Boolean, Index, LargeBinary, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, ENUM, ARRAY
 from sqlalchemy.orm import relationship, backref, Mapped
@@ -37,6 +39,10 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
             rewards["normal"].extend([max_level.level + 1] * ((self.exp - max_level.exp) // repeat_exp))
 
         return rewards
+
+    @property
+    def claim_limit_timestamp(self):
+        return self.season_pass.end_timestamp + timedelta(days=7)
 
     __table_args__ = (
         Index("avatar_season", "avatar_addr", "season_pass_id"),

@@ -7,6 +7,8 @@ on:
     secrets:
       SLACK_WEBHOOK_URL:
         required: true
+      HEADLESS_GQL_JWT_SECRET:
+        required: true
 
 jobs:
   test:
@@ -18,7 +20,7 @@ jobs:
         env:
           POSTGRES_USER: github_actions
           POSTGRES_PASSWORD: f8bf4c09239
-          POSTGRES_DB: iap
+          POSTGRES_DB: season_pass_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -55,7 +57,7 @@ jobs:
         env:
           POSTGRES_USER: github_actions
           POSTGRES_PASSWORD: f8bf4c09239
-          POSTGRES_DB: iap
+          POSTGRES_DB: season_pass_test
         run: |
           source $VENV
           pushd common
@@ -63,6 +65,17 @@ jobs:
           sed -i "s/sqlalchemy.url = postgresql:\/\/\[ID\]:\[PW\]@\[HOST\]\/\[DATABASE\]/sqlalchemy.url = postgresql:\/\/${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost\/${POSTGRES_DB}/" alembic.ini
           alembic upgrade head
           popd
+
+      - name: Unit test
+        env:
+          STAGE: test
+          ODIN_GQL_URL: https://9c-main-jwt.nine-chronicles.com/graphql
+          HEIMDALL_GQL_URL: https://heimdall-jwt.nine-chronicles.com/graphql
+          DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
+          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
+        run: |
+          source $VENV
+          python -m pytest tests
 
       - name: Slack Notification on Failure
         id: slack_notification

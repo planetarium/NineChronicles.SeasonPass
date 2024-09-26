@@ -99,7 +99,7 @@ class SharedStack(Stack):
         )
         self.credentials = _rds.Credentials.from_username("season_pass")
         if config.stage == "mainnet":
-            self.rds = _rds.ServerlessCluster(
+            self.rds = _rds.DatabaseCluster(
                 self, f"{config.stage}-9c-season_pass-aurora-cluster",
                 cluster_identifier=f"{config.stage}-9c-season-pass-aurora-cluster",
                 engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_2),
@@ -107,6 +107,13 @@ class SharedStack(Stack):
                 credentials=self.credentials,
                 vpc=self.vpc, vpc_subnets=_ec2.SubnetSelection(),
                 security_groups=[self.rds_security_group],
+                instance_update_behaviour=_rds.InstanceUpdateBehaviour.ROLLING,
+                deletion_protection=True,
+                storage_type=_rds.DBClusterStorageType.AURORA,
+                writer=_rds.ClusterInstance.provisioned(
+                    "writer",
+                    instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.R6G, _ec2.InstanceSize.LARGE)
+                )
             )
             self.rds_endpoint = self.rds.cluster_endpoint.socket_address
         else:
@@ -126,7 +133,8 @@ class SharedStack(Stack):
         # SecureStrings in Parameter Store
         PARAMETER_LIST = (
             ("KMS_KEY_ID", True),
-            ("JWT_TOKEN_SECRET", True)
+            ("JWT_TOKEN_SECRET", True),
+            ("HEADLESS_GQL_JWT_SECRET", True)
         )
         ssm = boto3.client("ssm", region_name=config.region_name,
                            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),

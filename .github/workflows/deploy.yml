@@ -26,6 +26,8 @@ on:
         required: true
       SLACK_WEBHOOK_URL:
         required: true
+      HEADLESS_GQL_JWT_SECRET:
+        required: true
 
 jobs:
   deployment:
@@ -97,6 +99,7 @@ jobs:
           HEIMDALL_SCAN_URL: ${{ vars.HEIMDALL_SCAN_URL }}
           ODIN_INTERNAL_GQL_URL: ${{ vars.ODIN_INTERNAL_GQL_URL }}
           HEIMDALL_INTERNAL_GQL_URL: ${{ vars.HEIMDALL_INTERNAL_GQL_URL }}
+          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
         run: |
           source $VENV
           yarn cdk synth
@@ -119,6 +122,7 @@ jobs:
           HEIMDALL_SCAN_URL: ${{ vars.HEIMDALL_SCAN_URL }}
           ODIN_INTERNAL_GQL_URL: ${{ vars.ODIN_INTERNAL_GQL_URL }}
           HEIMDALL_INTERNAL_GQL_URL: ${{ vars.HEIMDALL_INTERNAL_GQL_URL }}
+          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
         run: |
           source $VENV
           yarn cdk deploy --all --require-approval never -O output.txt
