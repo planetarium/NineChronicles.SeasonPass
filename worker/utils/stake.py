@@ -28,16 +28,20 @@ class StakeAPCoef:
         state = resp.json()["data"]["state"]
         raw = bytes.fromhex(state)
         self.data = raw.decode().split(":")[1]
+        # See `StakeActionPointCoefficientSheet.csv` sheet in lib9c
         head, *body = [x.split(",") for x in self.data.split("\n")]
-        d = defaultdict(int)
+        d = defaultdict(int)  # Pair of (stake amount : AP coefficient)
         for b in body:
-            d[int(b[-1])] = int(b[1])
+            d[int(b[1])] = int(b[-1])
 
         _min = 0
-        for coef, val in d.items():
-            self.crit.append([range(_min, val), coef])
-            _min = val
-        self.crit.append([range(_min, 2 ** 64), coef])
+        _coef = 100
+        for val, coef in sorted(list(d.items())):
+            if coef < _coef:
+                self.crit.append([range(_min, val), _coef])
+                _min = val
+                _coef = coef
+        self.crit.append([range(_min, 2 ** 64), _coef])
 
     def set_url(self, *, gql_url: str):
         self.gql_url = gql_url

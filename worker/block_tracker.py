@@ -116,7 +116,9 @@ def process_block(coef: StakeAPCoef, block_index: int):
         for action in tx["actions"]:
             action_raw = json.loads(action["json"].replace(r"\uFEFF", ""))
             type_id = action_raw["type_id"]
-            if "random_buff" in type_id:
+            if "random_buff" in type_id:  # hack_and_slash_random_buff
+                continue
+            if "claim" in type_id:  # claim_raid_reward
                 continue
             if "raid_reward" in type_id:
                 continue
