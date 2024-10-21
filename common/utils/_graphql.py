@@ -36,6 +36,9 @@ class GQL:
             "iss": "planetariumhq.com"
         }, self.__jwt_secret)
 
+    def __get_ttl(self) -> str:
+        return (datetime.datetime.utcnow() + datetime.timedelta(days=3)).isoformat()
+
     def __create_header(self):
         return {"Authorization": f"Bearer {self.__create_token()}"}
 
@@ -79,7 +82,7 @@ class GQL:
         return resp["transaction"]["nextTxNonce"]
 
     def _unload_from_garage(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
-        ts = kwargs.get("timestamp", (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat())
+        ts = kwargs.get("timestamp", self.__get_ttl())
         fav_data = kwargs.get("fav_data")
         avatar_addr = kwargs.get("avatar_addr")
         item_data = kwargs.get("item_data")
@@ -108,7 +111,7 @@ class GQL:
         return bytes.fromhex(result["actionTxQuery"]["unloadFromMyGarages"])
 
     def _claim_items(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
-        ts = kwargs.get("timestamp", (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat())
+        ts = kwargs.get("timestamp", self.__get_ttl())
         avatar_addr: str = kwargs.get("avatar_addr")
         claim_data: List[Dict[str, Any]] = kwargs.get("claim_data")
         memo = kwargs.get("memo")
