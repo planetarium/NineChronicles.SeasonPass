@@ -1,6 +1,23 @@
 from enum import Enum
 
 
+class PassType(Enum):
+    """
+    # Type of pass
+    ---
+
+    - **`CouragePass`** : [Seasonal] Former season pass. Explore stage and get brave exp.
+
+    - **`AdventureBossPass`** : [Seasonal] Adventure boss pass. Explore adventure boss and get exp.
+
+    - **`WorldClearPass`** : [One time] Clear world
+    """
+
+    COURAGE_PASS = "CouragePass"
+    ADVENTURE_BOSS_PASS = "AdventureBossPass"
+    WORLD_CLEAR_PASS = "WorldClearPass"
+
+
 class TxStatus(Enum):
     """
     # Transaction Status
