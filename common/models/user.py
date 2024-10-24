@@ -20,8 +20,8 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
                                                      backref=backref("user_list"))
     is_premium = Column(Boolean, nullable=False, default=False)
     is_premium_plus = Column(Boolean, nullable=False, default=False)
-    exp = Column(Integer, nullable=False, default=0)
-    level = Column(Integer, nullable=False, default=0)
+    exp = Column(Integer, nullable=False, default=0)  # This is used as last cleared stage ID for world clear pass
+    level = Column(Integer, nullable=False, default=0)  # This is used as current world ID for world clear pass
     last_normal_claim = Column(Integer, nullable=False, default=0, doc="Last claim order of normal reward")
     last_premium_claim = Column(Integer, nullable=False, default=0,
                                 doc="Last claim order of premium reward. This only activated when is_premium == True")
@@ -55,6 +55,11 @@ class Claim(AutoIdMixin, TimeStampMixin, Base):
     uuid = Column(Text, nullable=False, index=True)
     agent_addr = Column(Text, nullable=False)
     avatar_addr = Column(Text, nullable=False)
+    # FIXME: season_pass_id of claim should be to exist.
+    #  But we cannot automatically find prev. claims' season_pass_id in migration code.
+    #  TODO: Set all prev. claims' season_pass_id and set it to not-null column.
+    season_pass_id = Column(Integer, ForeignKey("season_pass.id"), nullable=True)
+    season_pass: Mapped["SeasonPass"] = relationship("SeasonPass", foreign_keys=[season_pass_id])
     normal_levels = Column(ARRAY(Integer), nullable=False, default=[])
     premium_levels = Column(ARRAY(Integer), nullable=False, default=[])
     reward_list = Column(JSONB, nullable=False)
