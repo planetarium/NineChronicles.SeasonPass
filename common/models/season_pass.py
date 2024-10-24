@@ -9,7 +9,8 @@ from common.models.base import Base, TimeStampMixin, AutoIdMixin
 class SeasonPass(TimeStampMixin, Base):
     __tablename__ = "season_pass"
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    pass_type = Column(Enum(PassType), nullable=False, server_default=PassType.COURAGE_PASS.value, doc="Type of this pass")
+    pass_type = Column(Enum(PassType), nullable=False, server_default=PassType.COURAGE_PASS.name,
+                       doc="Type of this pass")
     start_timestamp = Column(DateTime(timezone=True), nullable=True, doc="Start datetime of this season. Inclusive.")
     end_timestamp = Column(DateTime(timezone=True), nullable=True, doc="End datetime of this season. Inclusive.")
     reward_list = Column(JSON, nullable=False, default=[])
