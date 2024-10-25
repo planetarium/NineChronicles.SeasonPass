@@ -62,6 +62,10 @@ def handle(event, context):
             else:
                 nonce = nonce_dict[claim.planet_id]
 
+            if claim.tx:
+                target_claim_list.append(claim)
+                continue
+
             if not claim.nonce:
                 claim.nonce = nonce
                 use_nonce = True
