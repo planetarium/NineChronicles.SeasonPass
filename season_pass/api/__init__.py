@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
 from common import SEASONPASS_ADDRESS
-from common.enums import TxStatus
+from common.enums import TxStatus, PlanetID
 from common.models.action import Block
 from common.models.user import Claim
 from common.utils.season_pass import create_jwt_token
@@ -35,34 +35,51 @@ for view in __all__:
 
 @router.get("/block-status")
 def block_status(sess=Depends(session)):
+    stage = os.environ.get("STAGE", "development")
     resp = requests.post(
         os.environ["ODIN_GQL_URL"],
         json={"query": "{ nodeStatus { tip { index } } }"},
         headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
     )
     odin_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
+    odin_blocks = sess.scalars(
+        select(Block.index)
+        .where(Block.planet_id == (PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL))
+    ).fetchall()
+    all_odin_blocks = set(range(min(odin_blocks), max(odin_blocks)))
+    missing_odin_blocks = len(all_odin_blocks - set(odin_blocks))
+
     resp = requests.post(
         os.environ["HEIMDALL_GQL_URL"],
         json={"query": "{ nodeStatus { tip { index } } }"},
         headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
     )
     heimdall_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
+    heimdall_blocks = sess.scalars(
+        select(Block.index)
+        .where(Block.planet_id == (PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL))
+    ).fetchall()
+    all_heimdall_blocks = set(range(min(heimdall_blocks), max(heimdall_blocks)))
+    missing_heimdall_blocks = len(all_heimdall_blocks - set(heimdall_blocks))
 
     latest = (sess.query(Block.planet_id, func.max(Block.index))
               .group_by(Block.planet_id).order_by(Block.planet_id)
               ).all()
 
-    err = abs(latest[0][1] - odin_tip) > 10 or abs(latest[1][1] - heimdall_tip) > 10
+    err = (abs(latest[0][1] - odin_tip) > 10 or abs(latest[1][1] - heimdall_tip) > 10
+           or missing_odin_blocks > 0 or missing_heimdall_blocks > 0)
     msg = {
         latest[0][0].decode(): {
             "headless_tip": odin_tip,
             "db_tip": latest[0][1],
             "diverge": odin_tip - latest[0][1],
+            "missing": missing_odin_blocks,
         },
         latest[1][0].decode(): {
             "headless_tip": heimdall_tip,
             "db_tip": latest[1][1],
             "diverge": heimdall_tip - latest[1][1],
+            "missing": missing_heimdall_blocks,
         },
     }
     return JSONResponse(status_code=503 if err else 200, content=msg, )
