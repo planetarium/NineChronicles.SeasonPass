@@ -17,7 +17,7 @@ class SeasonPass(TimeStampMixin, Base):
     reward_list = Column(JSON, nullable=False, default=[])
     instant_exp = Column(Integer, nullable=False, doc="Instant reward exp for premium plus user")
 
-    exp_list = relationship("Exp")
+    # exp_list = relationship("Exp")
 
     __table_args__ = (
         Index("ix_pass_type_index_unique", "pass_type", "season_index", unique=True),
@@ -38,13 +38,15 @@ class SeasonPass(TimeStampMixin, Base):
 
 class Level(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "level"
+    pass_type = Column(Enum(PassType), nullable=False)
     level = Column(Integer, nullable=False)
     exp = Column(Integer, nullable=False)
 
 
 class Exp(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "exp"
-    season_pass_id = Column(Integer, ForeignKey("season_pass.id"), nullable=False)
-    season_pass = relationship("SeasonPass", foreign_keys=[season_pass_id], back_populates="exp_list")
+    # TODO: 시즌 별로 Exp 가 달라질 가능성이 있나? 그리고 그 경우 기록이 필요한가? 질문하기
+    #  필요하다면 이거 season_pass_id 를 살려야 한다.
+    pass_type = Column(Enum(PassType), nullable=False)
     action_type = Column(ENUM(ActionType), nullable=False)
     exp = Column(Integer, nullable=False)
