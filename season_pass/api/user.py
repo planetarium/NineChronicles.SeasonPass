@@ -65,8 +65,10 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
 
     target_pass = get_pass(sess, request.pass_type, season_index=request.season_index, validate_current=True)
     if not target_pass:
-        raise SeasonNotFoundError(f"[{request.planet_id}::{request.avatar_addr}]\n"
-                                  f"Requested season {request.season_pass_id} not found or not current season.")
+        raise SeasonNotFoundError(
+            f"[{request.planet_id}::{request.avatar_addr}]\n"
+            f"Requested season {request.pass_type}:{request.season_index} not found or not current season."
+        )
     target_usp = sess.scalar(
         select(UserSeasonPass)
         .where(
@@ -88,7 +90,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             sess.commit()
             sess.refresh(target_usp)
         except IntegrityError:
-            logging.warning(f"{request.planet_id.value}::{request.avatar_addr}::{request.season_id} already exists.")
+            logging.warning(f"{request.planet_id.value}::{request.avatar_addr}::{target_pass.id} already exists.")
             sess.rollback()
             target_usp = sess.scalar(
                 select(UserSeasonPass)
@@ -201,7 +203,9 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
                 and not (target_pass.start_date <= today <= target_pass.end_date)
         ):
             # Return 404
-            raise SeasonNotFoundError(f"Requested season {request.season_pass_id} does not exist or not active.")
+            raise SeasonNotFoundError(
+                f"Requested season {request.pass_type}:{request.season_index} does not exist or not active."
+            )
 
     user_season = sess.scalar(select(UserSeasonPass).where(
         UserSeasonPass.planet_id == request.planet_id,
@@ -244,10 +248,12 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
     now = datetime.now(tz=timezone.utc)
     if target_pass.end_timestamp >= now:
-        raise InvalidSeasonError(f"Target season {target_pass.id} is not finished.")
+        raise InvalidSeasonError(f"Target season {target_pass.pass_type}:{target_pass.season_index} is not finished.")
 
     if target_pass.end_timestamp + timedelta(days=7) < now:
-        raise InvalidSeasonError(f"Season {target_pass.id} finished over one week ago. Cannot claim.")
+        raise InvalidSeasonError(
+            f"Season {target_pass.pass_type}:{target_pass.season_index} finished over one week ago. Cannot claim."
+        )
 
     user_season = sess.scalar(select(UserSeasonPass).where(
         UserSeasonPass.planet_id == request.planet_id,
@@ -256,7 +262,9 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
     ))
     if not user_season:
         raise SeasonNotFoundError(
-            f"Season {target_pass.id} for avatar {request.avatar_addr} in planet {request.planet_id} not found")
+            f"Season {target_pass.pass_type}:{target_pass.season_index} for avatar {request.avatar_addr} "
+            f"in planet {request.planet_id} not found"
+        )
     if not user_season.is_premium:
         raise NotPremiumError(f"Prev. season claim is only allowed for premium users.")
 
