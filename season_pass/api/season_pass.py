@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from common.enums import PassType
 from common.models.season_pass import Level, Exp
-from common.utils.season_pass import get_current_season
+from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import SeasonNotFoundError
 from season_pass.schemas.season_pass import LevelInfoSchema, SeasonPassSchema, ExpInfoSchema
@@ -18,7 +18,7 @@ router = APIRouter(
 
 @router.get("/current", response_model=SeasonPassSchema)
 def current_season(pass_type: PassType, sess=Depends(session)):
-    curr_season = get_current_season(sess, pass_type)
+    curr_season = get_pass(sess, pass_type, validate_current=True)
     if not curr_season:
         raise SeasonNotFoundError("No active season pass for today")
 

@@ -16,16 +16,15 @@ from season_pass import settings
 from season_pass.api import season_pass, user
 from season_pass.dependencies import session
 
-router = APIRouter(
-    prefix="/api",
-    tags=["API"],
-)
-
 __all__ = [
     season_pass,
     user,
 ]
 
+router = APIRouter(
+    prefix="/api",
+    tags=["API"],
+)
 
 for view in __all__:
     router.include_router(view.router)
