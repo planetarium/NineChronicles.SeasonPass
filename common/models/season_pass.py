@@ -1,16 +1,18 @@
-from sqlalchemy import Column, Integer, JSON, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, JSON, ForeignKey, DateTime, Enum
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import relationship
 
-from common.enums import ActionType
+from common.enums import ActionType, PassType
 from common.models.base import Base, TimeStampMixin, AutoIdMixin
 
 
 class SeasonPass(TimeStampMixin, Base):
     __tablename__ = "season_pass"
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    start_timestamp = Column(DateTime(timezone=True), nullable=False, doc="Start datetime of this season. Inclusive.")
-    end_timestamp = Column(DateTime(timezone=True), nullable=False, doc="End datetime of this season. Inclusive.")
+    pass_type = Column(Enum(PassType), nullable=False, server_default=PassType.COURAGE_PASS.name,
+                       doc="Type of this pass")
+    start_timestamp = Column(DateTime(timezone=True), nullable=True, doc="Start datetime of this season. Inclusive.")
+    end_timestamp = Column(DateTime(timezone=True), nullable=True, doc="End datetime of this season. Inclusive.")
     reward_list = Column(JSON, nullable=False, default=[])
     instant_exp = Column(Integer, nullable=False, doc="Instant reward exp for premium plus user")
 
