@@ -3,8 +3,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator, Field
 
-from common.enums import PlanetID
-from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema, ClaimSchema
+from common.enums import PlanetID, PassType
+from season_pass.schemas.season_pass import ClaimSchema
 from season_pass.settings import stage
 
 
@@ -35,7 +35,8 @@ class UpgradeRequestSchema(BaseSchema):
     planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
     avatar_addr: str
-    season_id: int
+    pass_type: PassType
+    season_index: int
     is_premium: bool = False
     is_premium_plus: bool = False
     g_sku: str
@@ -61,7 +62,8 @@ class ClaimRequestSchema(BaseSchema):
     planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
     avatar_addr: str
-    season_id: int
+    pass_type: PassType
+    season_index: int
     force: bool = False
     prev: bool = False
 
@@ -75,8 +77,5 @@ class ClaimRequestSchema(BaseSchema):
 
 
 class ClaimResultSchema(BaseSchema):
-    reward_list: List[ClaimSchema] = []
     user: UserSeasonPassSchema
-    # Deprecated: For backward compatibility
-    items: List[ItemInfoSchema]
-    currencies: List[CurrencyInfoSchema]
+    reward_list: List[ClaimSchema] = []
