@@ -146,13 +146,13 @@ class WorkerStack(Stack):
         )
         self.__add_policy(handler_role, db_password=True)
 
-        brave_handler = _lambda.Function(
+        courage_handler = _lambda.Function(
             self, f"{self.config.stage}-9c-season_pass-brave_handler-function",
             function_name=f"{self.config.stage}-9c-season_pass-brave_handler",
             runtime=_lambda.Runtime.PYTHON_3_11,
             description="Brave exp handler of NineChronicles.SeasonPass",
             code=_lambda.AssetCode("worker/", exclude=exclude_list),
-            handler="brave_handler.handle",
+            handler="courage_handler.handle",
             layers=[layer],
             role=handler_role,
             vpc=self.shared_stack.vpc,

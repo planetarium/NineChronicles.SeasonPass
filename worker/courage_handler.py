@@ -7,12 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from common import logger
-from common.enums import ActionType, PlanetID
+from common.enums import ActionType, PlanetID, PassType
 from common.models.action import Block, ActionHistory
 from common.models.season_pass import SeasonPass, Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
-from common.utils.season_pass import get_current_season, create_jwt_token
+from common.utils.season_pass import get_pass, create_jwt_token
 from schemas.sqs import SQSMessage
 from utils.stake import StakeAPCoef
 
@@ -139,6 +139,7 @@ def handle(event, context):
 
     {
         "block": int,
+        "pass_type": PassType,
         "action_data": {
             "hack_and_slash##": [
                 {
@@ -168,11 +169,15 @@ def handle(event, context):
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
-        current_season = get_current_season(sess, include_exp=True)
+        current_pass_dict = {
+            pass_type: get_pass(sess, pass_type=pass_type, validate_current=True, include_exp=True)
+            for pass_type in PassType
+        }
         level_dict = {x.level: x.exp for x in sess.scalars(select(Level)).fetchall()}
 
         for i, record in enumerate(message.Records):
             body = record.body
+            current_pass = current_pass_dict[PassType(body["pass_type"])]
             block_index = body["block"]
             planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
 
@@ -183,30 +188,30 @@ def handle(event, context):
                 logger.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
                 continue
 
-            user_season_dict = verify_season_pass(sess, planet_id, current_season, body["action_data"])
+            user_season_dict = verify_season_pass(sess, planet_id, current_pass, body["action_data"])
             for type_id, action_data in body["action_data"].items():
                 if "random_buff" in type_id or "raid_reward" in type_id:
                     continue
 
                 if "raid" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.RAID,
-                              current_season.exp_dict[ActionType.RAID], level_dict, block_index, action_data)
+                              current_pass.exp_dict[ActionType.RAID], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} Raid applied.")
                 elif "battle_arena" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.ARENA,
-                              current_season.exp_dict[ActionType.ARENA], level_dict, block_index, action_data)
+                              current_pass.exp_dict[ActionType.ARENA], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} Arena applied.")
                 elif "sweep" in type_id:
-                    handle_sweep(sess, planet_id, user_season_dict, current_season.exp_dict[ActionType.SWEEP],
+                    handle_sweep(sess, planet_id, user_season_dict, current_pass.exp_dict[ActionType.SWEEP],
                                  level_dict, block_index, action_data, body["stake"])
                     logger.info(f"{len(action_data)} Sweep applied.")
                 elif "event_dungeon" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.EVENT,
-                              current_season.exp_dict[ActionType.EVENT], level_dict, block_index, action_data)
+                              current_pass.exp_dict[ActionType.EVENT], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} Event Dungeon applied.")
                 else:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.HAS,
-                              current_season.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
+                              current_pass.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} HackAndSlash applied.")
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index))
