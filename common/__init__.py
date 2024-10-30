@@ -40,6 +40,7 @@ class Config:
     odin_scan_url: str
     heimdall_gql_url: str
     heimdall_scan_url: str
+    thor_gql_url: str
 
     kms_key_id: str
     jwt_token_secret: str
