@@ -17,7 +17,7 @@ class SeasonPass(TimeStampMixin, Base):
     reward_list = Column(JSON, nullable=False, default=[])
     instant_exp = Column(Integer, nullable=False, doc="Instant reward exp for premium plus user")
 
-    # exp_list = relationship("Exp")
+    exp_list = relationship("Exp")
 
     __table_args__ = (
         Index("ix_pass_type_index_unique", "pass_type", "season_index", unique=True),
