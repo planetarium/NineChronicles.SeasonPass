@@ -56,6 +56,7 @@ class SeasonPassSchema(BaseSchema):
     start_timestamp: datetime
     end_timestamp: datetime
     reward_list: List[RewardSchema]
+    repeat_last_reward: bool
 
 
 class NewSeasonPassSchema(BaseSchema):
