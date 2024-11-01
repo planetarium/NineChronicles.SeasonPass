@@ -91,24 +91,22 @@ def apply_exp(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonP
 
 
 def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonPass], exp: int,
-                 level_dict: Dict[int, int], block_index: int, action_data: List[Dict], coef_dict: Dict[str, int]):
+                 level_dict: Dict[int, int], block_index: int, action_data: List[Dict]):
     GQL_URL = GQL_DICT[planet_id]
     ap_coef.set_url(gql_url=GQL_URL)
     for d in action_data:
-        coef = coef_dict.get(d["agent_addr"])
-        if not coef:
-            resp = requests.post(
-                GQL_URL,
-                json={
-                    "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""},
-                headers={
-                    "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
-            )
-            data = resp.json()["data"]["stateQuery"]["stakeState"]
-            if data is None:
-                coef = 100
-            else:
-                coef = ap_coef.get_ap_coef(float(data["deposit"]))
+        resp = requests.post(
+            GQL_URL,
+            json={
+                "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""},
+            headers={
+                "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+        )
+        data = resp.json()["data"]["stateQuery"]["stakeState"]
+        if data is None:
+            coef = 100
+        else:
+            coef = ap_coef.get_ap_coef(float(data["deposit"]))
 
         real_count = d["count_base"] // (AP_PER_ADVENTURE * coef / 100)
 
@@ -158,9 +156,6 @@ def handle(event, context):
             "raid##: [
                 ...
             ],
-        },
-        "stake": {
-            str: int  # Address : Ap Coefficient by Staking pair.
         }
     }
     """
@@ -183,7 +178,8 @@ def handle(event, context):
 
             if sess.scalar(select(Block).where(
                     Block.planet_id == planet_id,
-                    Block.index == block_index
+                    Block.index == block_index,
+                    Block.pass_type == PassType.COURAGE_PASS,
             )):
                 logger.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
                 continue
@@ -203,7 +199,7 @@ def handle(event, context):
                     logger.info(f"{len(action_data)} Arena applied.")
                 elif "sweep" in type_id:
                     handle_sweep(sess, planet_id, user_season_dict, current_pass.exp_dict[ActionType.SWEEP],
-                                 level_dict, block_index, action_data, body["stake"])
+                                 level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} Sweep applied.")
                 elif "event_dungeon" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.EVENT,
@@ -214,7 +210,7 @@ def handle(event, context):
                               current_pass.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} HackAndSlash applied.")
             sess.add_all(list(user_season_dict.values()))
-            sess.add(Block(planet_id=planet_id, index=block_index))
+            sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.COURAGE_PASS))
             sess.commit()
             logger.info(f"All {len(user_season_dict.values())} brave exp for block {body['block']} applied.")
     except IntegrityError as e:
