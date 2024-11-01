@@ -3,7 +3,6 @@ import json
 import os
 from collections import defaultdict
 
-import requests
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, scoped_session
 
@@ -11,9 +10,7 @@ from common import logger
 from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
-from common.utils.season_pass import create_jwt_token
 from schemas.action import ActionJson
-from utils.stake import StakeAPCoef
 from worker.utils.aws import send_sqs_message
 from worker.utils.gql import get_block_tip, fetch_block_data
 
@@ -25,22 +22,6 @@ DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 SQS_URL = os.environ.get("SQS_URL")
 
 engine = create_engine(DB_URI)
-
-
-def get_deposit(coef: StakeAPCoef, addr: str) -> float:
-    query = f'{{ stateQuery {{ stakeState(address: "{addr}") {{ deposit }} }} }}'
-    resp = requests.post(
-        GQL_URL,
-        json={"query": query},
-        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
-    )
-    data = resp.json()["data"]["stateQuery"]["stakeState"]
-    if data is None:
-        stake_amount = 0.
-    else:
-        stake_amount = float(data["deposit"])
-
-    return coef.get_ap_coef(stake_amount)
 
 
 def process_block(block_index: int, pass_type: PassType):
