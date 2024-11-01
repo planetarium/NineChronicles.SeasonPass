@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from common import logger
-from common.enums import PlanetID
+from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import create_jwt_token
@@ -22,6 +22,12 @@ CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
+
+TARGET_ACTION_DICT = {
+    PassType.COURAGE_PASS: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)",
+    PassType.ADVENTURE_BOSS_PASS: "(wanted.*)|(explore_adventure_boss.*)|(sweep_adventure_boss.*)",
+    PassType.WORLD_CLEAR_PASS: "(hack_and_slask.*)"
+}
 
 engine = create_engine(DB_URI)
 
@@ -42,13 +48,12 @@ def get_deposit(coef: StakeAPCoef, addr: str) -> float:
     return coef.get_ap_coef(stake_amount)
 
 
-def send_message(index: int, action_data: defaultdict, stake_data: Dict[str, int]):
+def send_message(index: int, action_data: defaultdict):
     sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
     message = {
         "planet_id": CURRENT_PLANET.value.decode(),
         "block": index,
         "action_data": dict(action_data),
-        "stake": dict(stake_data),
     }
     resp = sqs.send_message(
         QueueUrl=os.environ.get("SQS_URL"),
@@ -81,12 +86,12 @@ def get_block_tip() -> int:
         return resp.json()["data"]["nodeStatus"]["tip"]["index"]
 
 
-def process_block(coef: StakeAPCoef, block_index: int):
+def process_block(block_index: int, pass_type: PassType):
     # Fetch Tx. and actions
     nct_query = f"""{{ transaction {{ ncTransactions (
         startingBlockIndex: {block_index},
         limit: 1,
-        actionType: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)"
+        actionType: "{TARGET_ACTION_DICT[pass_type]}"
     ) {{ id signer actions {{ json }} }}
     }} }}"""
     resp = requests.post(
@@ -132,22 +137,10 @@ def process_block(coef: StakeAPCoef, block_index: int):
                 "count_base": action_json.count_base,
             })
 
-    # Fetch stake states
-    stake_data = {}
-    stake_dict = {}
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for agent in agent_list:
-            stake_dict[executor.submit(get_deposit, coef, agent)] = agent
-
-        for future in concurrent.futures.as_completed(stake_dict):
-            stake_data[agent] = future.result()
-
-    send_message(block_index, action_data, stake_data)
+    send_message(block_index, action_data)
 
 
 def main():
-    coef = StakeAPCoef(GQL_URL)
-
     sess = scoped_session(sessionmaker(bind=engine))
     # Get missing blocks
     expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
@@ -157,7 +150,9 @@ def main():
     block_dict = {}
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for index in missing_blocks:
-            block_dict[executor.submit(process_block, coef, index)] = index
+            block_dict[executor.submit(process_block, index, PassType.COURAGE_PASS)] = (index, PassType.COURAGE_PASS)
+            block_dict[executor.submit(process_block, index, PassType.ADVENTURE_BOSS_PASS)] = (index, PassType.ADVENTURE_BOSS_PASS)
+            block_dict[executor.submit(process_block, index, PassType.WORLD_CLEAR_PASS)] = (index, PassType.WORLD_CLEAR_PASS)
 
         for future in concurrent.futures.as_completed(block_dict):
             index = block_dict[future]
