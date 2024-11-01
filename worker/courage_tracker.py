@@ -2,7 +2,6 @@ import concurrent.futures
 import json
 import os
 from collections import defaultdict
-from typing import Dict
 
 import boto3
 import requests
@@ -16,12 +15,15 @@ from common.utils.aws import fetch_secrets
 from common.utils.season_pass import create_jwt_token
 from schemas.action import ActionJson
 from utils.stake import StakeAPCoef
+from worker.utils.aws import send_sqs_message
+from worker.utils.gql import get_block_tip
 
 GQL_URL = os.environ.get("GQL_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
+SQS_URL = os.environ.get("SQS_URL")
 
 TARGET_ACTION_DICT = {
     PassType.COURAGE_PASS: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)",
@@ -46,44 +48,6 @@ def get_deposit(coef: StakeAPCoef, addr: str) -> float:
         stake_amount = float(data["deposit"])
 
     return coef.get_ap_coef(stake_amount)
-
-
-def send_message(index: int, action_data: defaultdict):
-    sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
-    message = {
-        "planet_id": CURRENT_PLANET.value.decode(),
-        "block": index,
-        "action_data": dict(action_data),
-    }
-    resp = sqs.send_message(
-        QueueUrl=os.environ.get("SQS_URL"),
-        MessageBody=json.dumps(message),
-    )
-    logger.info(f"Message {resp['MessageId']} sent to SQS for block {index}.")
-
-
-def get_block_tip() -> int:
-    try:
-        # Use 9cscan
-        resp = requests.get(os.environ.get("SCAN_URL"))
-        if resp.status_code == 200:
-            return resp.json()["blocks"][0]["index"]
-        else:
-            # Use GQL for fail over
-            resp = requests.post(
-                os.environ.get("GQL_URL"),
-                json={"query": "{ nodeStatus { tip { index } } }"},
-                headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
-            )
-            return resp.json()["data"]["nodeStatus"]["tip"]["index"]
-    except:
-        # Use GQL for fail over
-        resp = requests.post(
-            os.environ.get("GQL_URL"),
-            json={"query": "{ nodeStatus { tip { index } } }"},
-            headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
-        )
-        return resp.json()["data"]["nodeStatus"]["tip"]["index"]
 
 
 def process_block(block_index: int, pass_type: PassType):
@@ -137,13 +101,13 @@ def process_block(block_index: int, pass_type: PassType):
                 "count_base": action_json.count_base,
             })
 
-    send_message(block_index, action_data)
+    send_sqs_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
 
 
 def main():
     sess = scoped_session(sessionmaker(bind=engine))
     # Get missing blocks
-    expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
+    expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip(GQL_URL) + 1))
     all_blocks = set(sess.scalars(select(Block.index).where(Block.planet_id == CURRENT_PLANET)).fetchall())
     missing_blocks = expected_all - all_blocks
 
