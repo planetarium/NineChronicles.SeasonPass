@@ -36,6 +36,7 @@ else:
 
 engine = create_engine(DB_URI)
 ap_coef = StakeAPCoef(jwt_secret=os.environ.get("HEADLESS_GQL_JWT_SECRET"))
+coef_dict = {}
 
 
 def verify_season_pass(sess, planet_id: PlanetID, current_season: SeasonPass, action_data: Dict[str, List]) \
@@ -95,18 +96,21 @@ def handle_sweep(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeas
     GQL_URL = GQL_DICT[planet_id]
     ap_coef.set_url(gql_url=GQL_URL)
     for d in action_data:
-        resp = requests.post(
-            GQL_URL,
-            json={
-                "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""},
-            headers={
-                "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
-        )
-        data = resp.json()["data"]["stateQuery"]["stakeState"]
-        if data is None:
-            coef = 100
-        else:
-            coef = ap_coef.get_ap_coef(float(data["deposit"]))
+        coef = coef_dict.get(d["agent_addr"])
+        if not coef:
+            resp = requests.post(
+                GQL_URL,
+                json={
+                    "query": f"""{{ stateQuery {{ stakeState(address: "{d['agent_addr']}") {{ deposit }} }} }}"""},
+                headers={
+                    "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+            )
+            data = resp.json()["data"]["stateQuery"]["stakeState"]
+            if data is None:
+                coef = 100
+            else:
+                coef = ap_coef.get_ap_coef(float(data["deposit"]))
+            coef_dict[d["agent_addr"]] = coef
 
         real_count = d["count_base"] // (AP_PER_ADVENTURE * coef / 100)
 
