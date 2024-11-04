@@ -3,6 +3,7 @@ from datetime import timezone, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from common.enums import PassType
 from common.models.season_pass import SeasonPass
 from conftest import add_test_data
 from season_pass.main import app
@@ -14,7 +15,7 @@ tc = TestClient(app)
 @pytest.mark.usefixtures("sess")
 def test_current_season(sess):
     season_data = SeasonPass(
-        id=1,
+        id=1, pass_type=PassType.COURAGE_PASS, season_index=1,
         start_timestamp=datetime.now(tz=timezone.utc) - timedelta(days=1),
         end_timestamp=datetime.now(tz=timezone.utc) + timedelta(days=1),
     )

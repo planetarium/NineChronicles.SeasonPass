@@ -4,7 +4,7 @@ from datetime import timezone, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from common.enums import PlanetID
+from common.enums import PlanetID, PassType
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass
 from conftest import TEST_AGENT_ADDR, TEST_AVATAR_ADDR, add_test_data
@@ -19,12 +19,12 @@ tc = TestClient(app)
 def test_prev_season_status_success(sess):
     now = datetime.now(tz=timezone.utc)
     prev_season_data = SeasonPass(
-        id=1,
+        id=1, pass_type=PassType.COURAGE_PASS, season_index=1,
         start_timestamp=now - timedelta(days=3),
         end_timestamp=now - timedelta(days=1),
     )
     current_season_data = SeasonPass(
-        id=2,
+        id=2, pass_type=PassType.COURAGE_PASS, season_index=1,
         start_timestamp=now - timedelta(days=1),
         end_timestamp=now + timedelta(days=1)
     )
@@ -60,12 +60,12 @@ def test_prev_season_status_success(sess):
 def test_prev_season_claim_success(sess, season_delta, is_premium, level, exc):
     now = datetime.now(tz=timezone.utc)
     prev_season_data = SeasonPass(
-        id=1,
+        id=1, pass_type=PassType.COURAGE_PASS, season_index=1,
         start_timestamp=now - timedelta(days=season_delta - 2),
         end_timestamp=now - timedelta(days=season_delta),
     )
     current_season_data = SeasonPass(
-        id=2,
+        id=2, pass_type=PassType.COURAGE_PASS, season_index=1,
         start_timestamp=now - timedelta(days=season_delta),
         end_timestamp=now + timedelta(days=1)
     )
