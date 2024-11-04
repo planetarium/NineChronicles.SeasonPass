@@ -6,7 +6,6 @@ from uuid import uuid4
 
 import boto3
 from fastapi import APIRouter, Depends
-from fastapi import HTTPException
 from sqlalchemy import select, desc
 from sqlalchemy.exc import IntegrityError
 
@@ -32,7 +31,8 @@ sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 
 @router.get("/status", response_model=UserSeasonPassSchema)
-def user_status(planet_id: PlanetID, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
+def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
+    planet_id = PlanetID(bytes(planet_id, "utf-8"))
     avatar_addr = avatar_addr.lower()
     target_pass = get_pass(sess, pass_type, season_index)
     if not target_pass:
