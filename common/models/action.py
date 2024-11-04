@@ -35,3 +35,16 @@ class ActionHistory(AutoIdMixin, TimeStampMixin, Base):
     __table_args__ = (
         Index("idx_season_avatar", "season_id", "avatar_addr"),
     )
+
+
+class AdventureBossHistory(AutoIdMixin, TimeStampMixin, Base):
+    __tablename__ = "adventure_boss_history"
+    planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
+    agent_addr = Column(Text, nullable=False)
+    avatar_addr = Column(Text, nullable=False)
+    season = Column(Integer, nullable=False)
+    floor = Column(Integer, nullable=False)
+
+    __table_args__ = (
+        Index("idx_adventure_boss_floor_history", "season", "planet_id", "avatar_addr"),
+    )
