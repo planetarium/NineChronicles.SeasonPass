@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator
 
-from common.enums import ActionType
+from common.enums import ActionType, PassType
 
 
 class ItemInfoSchema(BaseSchema):
@@ -49,11 +49,14 @@ class RewardSchema(BaseSchema):
 class SeasonPassSchema(BaseSchema):
     # Deprecated
     id: int
+    pass_type: PassType
+    season_index: int
     start_date: date
     end_date: date
     start_timestamp: datetime
     end_timestamp: datetime
     reward_list: List[RewardSchema]
+    repeat_last_reward: bool
 
 
 class NewSeasonPassSchema(BaseSchema):

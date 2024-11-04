@@ -13,21 +13,18 @@ from common.models.action import Block
 from common.models.user import Claim
 from common.utils.season_pass import create_jwt_token
 from season_pass import settings
-from season_pass.api import season_pass, user, tmp
+from season_pass.api import season_pass, user
 from season_pass.dependencies import session
-
-router = APIRouter(
-    prefix="/api",
-    tags=["API"],
-)
 
 __all__ = [
     season_pass,
     user,
 ]
 
-if settings.stage != "mainnet":
-    __all__.append(tmp)
+router = APIRouter(
+    prefix="/api",
+    tags=["API"],
+)
 
 for view in __all__:
     router.include_router(view.router)

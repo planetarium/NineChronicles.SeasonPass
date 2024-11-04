@@ -5,12 +5,24 @@ import jwt
 from sqlalchemy import select, desc
 from sqlalchemy.orm import joinedload
 
+from common.enums import PassType
 from common.models.season_pass import SeasonPass, Level
 
 
-def get_current_season(sess, include_exp: bool = False) -> Optional[SeasonPass]:
-    now = datetime.now(tz=timezone.utc)
-    stmt = select(SeasonPass).where(SeasonPass.start_timestamp <= now, SeasonPass.end_timestamp >= now)
+def get_pass(sess, pass_type: PassType, season_index: int = None,
+             validate_current: bool = False, include_exp: bool = False) -> Optional[SeasonPass]:
+    # DISCUSS: 월드 클리어 패스의 경우 여러개로 나뉘어서 순서대로 나와야 한다. 그래서 current pass 를 위 query 로 부르면 여러개가 나와야 한다.
+    #  내 최신 월드 클리어 패스를 가져온 다음에 완료했으면 다음거로 넘어가도록 해야 되나?
+    #  일단 1개만 있다고 가정하고 걍 들고오기로.
+    stmt = select(SeasonPass).where(SeasonPass.pass_type == pass_type)
+
+    if season_index:
+        stmt = stmt.where(SeasonPass.season_index == season_index)
+
+    if pass_type != PassType.WORLD_CLEAR_PASS and validate_current:
+        now = datetime.now(tz=timezone.utc)
+        stmt = stmt.where(SeasonPass.start_timestamp <= now, SeasonPass.end_timestamp >= now)
+
     if include_exp:
         stmt = stmt.options(joinedload(SeasonPass.exp_list))
     return sess.scalar(stmt)
