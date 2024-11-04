@@ -164,15 +164,11 @@ def handle(event, context):
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
-        current_pass_dict = {
-            pass_type: get_pass(sess, pass_type=pass_type, validate_current=True, include_exp=True)
-            for pass_type in PassType
-        }
+        current_pass = get_pass(sess, pass_type=PassType.COURAGE_PASS, validate_current=True, include_exp=True)
         level_dict = {x.level: x.exp for x in sess.scalars(select(Level)).fetchall()}
 
         for i, record in enumerate(message.Records):
             body = record.body
-            current_pass = current_pass_dict[PassType(body["pass_type"])]
             block_index = body["block"]
             planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
 
@@ -209,6 +205,7 @@ def handle(event, context):
                     apply_exp(sess, planet_id, user_season_dict, ActionType.HAS,
                               current_pass.exp_dict[ActionType.HAS], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} HackAndSlash applied.")
+
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.COURAGE_PASS))
             sess.commit()
@@ -216,7 +213,7 @@ def handle(event, context):
     except IntegrityError as e:
         err_msg = str(e).split("\n")[0]
         detail = str(e).split("\n")[1]
-        if err_msg == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_unique"':
+        if err_msg == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_pass_type_unique"':
             logger.warning(f"{err_msg} :: {detail}")
         else:
             raise e
