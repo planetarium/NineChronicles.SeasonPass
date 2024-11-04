@@ -3,10 +3,11 @@ from datetime import timezone, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from common.enums import PlanetID, PassType
 from common.models.season_pass import SeasonPass
-from common.models.user import UserSeasonPass
+from common.models.user import UserSeasonPass, Claim
 from conftest import TEST_AGENT_ADDR, TEST_AVATAR_ADDR, add_test_data
 from season_pass.exceptions import NotPremiumError, InvalidSeasonError
 from season_pass.main import app
@@ -24,7 +25,7 @@ def test_prev_season_status_success(sess):
         end_timestamp=now - timedelta(days=1),
     )
     current_season_data = SeasonPass(
-        id=2, pass_type=PassType.COURAGE_PASS, season_index=1,
+        id=2, pass_type=PassType.COURAGE_PASS, season_index=2,
         start_timestamp=now - timedelta(days=1),
         end_timestamp=now + timedelta(days=1)
     )
@@ -37,7 +38,8 @@ def test_prev_season_status_success(sess):
         prev_season, current_season, test_user = test_data
         resp = tc.get("/api/user/status",
                       params={
-                          "season_id": 1,
+                          "pass_type": PassType.COURAGE_PASS.value,
+                          "season_index": 1,
                           "avatar_addr": test_user.avatar_addr,
                           "planet_id": test_user.planet_id.decode(),
                       })
@@ -65,7 +67,7 @@ def test_prev_season_claim_success(sess, season_delta, is_premium, level, exc):
         end_timestamp=now - timedelta(days=season_delta),
     )
     current_season_data = SeasonPass(
-        id=2, pass_type=PassType.COURAGE_PASS, season_index=1,
+        id=2, pass_type=PassType.COURAGE_PASS, season_index=2,
         start_timestamp=now - timedelta(days=season_delta),
         end_timestamp=now + timedelta(days=1)
     )
@@ -84,7 +86,8 @@ def test_prev_season_claim_success(sess, season_delta, is_premium, level, exc):
                             "planet_id": test_user.planet_id.decode(),
                             "agent_addr": test_user.agent_addr,
                             "avatar_addr": test_user.avatar_addr,
-                            "season_id": 1,
+                            "pass_type": PassType.COURAGE_PASS.value,
+                            "season_index": 1,
                             "prev": True
                         }))
         else:
@@ -93,7 +96,8 @@ def test_prev_season_claim_success(sess, season_delta, is_premium, level, exc):
                                "planet_id": test_user.planet_id.decode(),
                                "agent_addr": test_user.agent_addr,
                                "avatar_addr": test_user.avatar_addr,
-                               "season_id": 1,
+                               "pass_type": PassType.COURAGE_PASS.value,
+                               "season_index": 1,
                                "prev": True
                            }))
             assert resp.status_code == 200
@@ -101,3 +105,7 @@ def test_prev_season_claim_success(sess, season_delta, is_premium, level, exc):
             data["user"]["planet_id"] = data["user"]["planet_id"].encode()
             result = ClaimResultSchema(**data)
             assert len(result.reward_list) > 0
+
+        for claim in sess.scalars(select(Claim)).fetchall():
+            sess.delete(claim)
+        sess.commit()

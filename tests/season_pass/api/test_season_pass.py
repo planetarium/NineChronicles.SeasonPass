@@ -21,7 +21,7 @@ def test_current_season(sess):
     )
     with add_test_data(sess, *[season_data]) as test_data:
         season_data = test_data[0]
-        resp = tc.get("/api/season-pass/current")
+        resp = tc.get("/api/season-pass/current", params={"pass_type": PassType.COURAGE_PASS.value})
         assert resp.status_code == 200
         data = SeasonPassSchema(**resp.json())
         assert data.id == season_data.id
