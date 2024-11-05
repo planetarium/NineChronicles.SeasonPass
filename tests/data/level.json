@@ -1,121 +1,451 @@
 [
   {
+    "pass_type": "COURAGE_PASS",
     "level": 1,
     "exp": 10
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 2,
     "exp": 20
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 3,
     "exp": 30
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 4,
     "exp": 40
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 5,
     "exp": 50
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 6,
     "exp": 60
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 7,
     "exp": 70
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 8,
     "exp": 80
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 9,
     "exp": 90
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 10,
     "exp": 100
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 11,
     "exp": 110
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 12,
     "exp": 120
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 13,
     "exp": 130
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 14,
     "exp": 140
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 15,
     "exp": 150
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 16,
     "exp": 160
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 17,
     "exp": 170
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 18,
     "exp": 180
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 19,
     "exp": 190
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 20,
     "exp": 200
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 21,
     "exp": 210
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 22,
     "exp": 220
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 23,
     "exp": 230
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 24,
     "exp": 240
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 25,
     "exp": 250
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 26,
     "exp": 260
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 27,
     "exp": 270
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 28,
     "exp": 280
   },
   {
+    "pass_type": "COURAGE_PASS",
     "level": 29,
     "exp": 290
   },
   {
+    "pass_type": "COURAGE_PASS",
+    "level": 30,
+    "exp": 300
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 1,
+    "exp": 10
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 2,
+    "exp": 20
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 3,
+    "exp": 30
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 4,
+    "exp": 40
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 5,
+    "exp": 50
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 6,
+    "exp": 60
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 7,
+    "exp": 70
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 8,
+    "exp": 80
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 9,
+    "exp": 90
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 10,
+    "exp": 100
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 11,
+    "exp": 110
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 12,
+    "exp": 120
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 13,
+    "exp": 130
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 14,
+    "exp": 140
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 15,
+    "exp": 150
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 16,
+    "exp": 160
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 17,
+    "exp": 170
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 18,
+    "exp": 180
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 19,
+    "exp": 190
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 20,
+    "exp": 200
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 21,
+    "exp": 210
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 22,
+    "exp": 220
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 23,
+    "exp": 230
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 24,
+    "exp": 240
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 25,
+    "exp": 250
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 26,
+    "exp": 260
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 27,
+    "exp": 270
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 28,
+    "exp": 280
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 29,
+    "exp": 290
+  },
+  {
+    "pass_type": "ADVENTURE_BOSS_PASS",
+    "level": 30,
+    "exp": 300
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 1,
+    "exp": 10
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 2,
+    "exp": 20
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 3,
+    "exp": 30
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 4,
+    "exp": 40
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 5,
+    "exp": 50
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 6,
+    "exp": 60
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 7,
+    "exp": 70
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 8,
+    "exp": 80
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 9,
+    "exp": 90
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 10,
+    "exp": 100
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 11,
+    "exp": 110
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 12,
+    "exp": 120
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 13,
+    "exp": 130
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 14,
+    "exp": 140
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 15,
+    "exp": 150
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 16,
+    "exp": 160
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 17,
+    "exp": 170
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 18,
+    "exp": 180
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 19,
+    "exp": 190
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 20,
+    "exp": 200
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 21,
+    "exp": 210
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 22,
+    "exp": 220
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 23,
+    "exp": 230
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 24,
+    "exp": 240
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 25,
+    "exp": 250
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 26,
+    "exp": 260
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 27,
+    "exp": 270
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 28,
+    "exp": 280
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
+    "level": 29,
+    "exp": 290
+  },
+  {
+    "pass_type": "WORLD_CLEAR_PASS",
     "level": 30,
     "exp": 300
   }
