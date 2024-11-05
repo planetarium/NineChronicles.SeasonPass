@@ -1,19 +1,20 @@
-from sqlalchemy import Column, BigInteger, Text, Integer, ForeignKey, Index, LargeBinary, UniqueConstraint
+from sqlalchemy import Column, BigInteger, Text, Integer, ForeignKey, Index, LargeBinary, UniqueConstraint, Enum
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, relationship
 
-from common.enums import ActionType
+from common.enums import ActionType, PassType
 from common.models.base import Base, TimeStampMixin, AutoIdMixin
 from common.models.season_pass import SeasonPass
 
 
 class Block(AutoIdMixin, TimeStampMixin, Base):
     __tablename__ = "block"
+    pass_type = Column(Enum(PassType), nullable=False)
     planet_id = Column(LargeBinary(length=12), nullable=False, doc="An identifier to distinguish network & planet")
     index = Column(BigInteger, nullable=False)
 
     __table_args__ = (
-        Index("idx_block_planet_index", "planet_id", "index"),
+        Index("idx_block_planet_pass_type_index", "planet_id", "pass_type", "index"),
         UniqueConstraint("planet_id", "index", name="block_by_planet_unique"),
     )
 
