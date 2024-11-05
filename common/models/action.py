@@ -15,7 +15,7 @@ class Block(AutoIdMixin, TimeStampMixin, Base):
 
     __table_args__ = (
         Index("idx_block_planet_pass_type_index", "planet_id", "pass_type", "index"),
-        UniqueConstraint("planet_id", "index", name="block_by_planet_unique"),
+        UniqueConstraint("planet_id", "pass_type", "index", name="block_by_pass_planet_unique"),
     )
 
 
