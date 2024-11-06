@@ -68,10 +68,10 @@ def handle(event, context):
 
             user_season_dict = verify_season_pass(sess, planet_id, current_pass, body["action_data"])
             for type_id, action_data in body["action_data"].items():
-                if "wanted" in type_id:  # wanted
+                if type_id == "wanted":
                     apply_exp(sess, planet_id, user_season_dict, ActionType.WANTED,
                               current_pass.exp_dict[ActionType.WANTED], level_dict, block_index, action_data)
-                elif "sweep" in type_id:  # sweep_adventure_boss
+                elif type_id == "explore_adventure_boss":
                     # Use existing explore data: sweep only can reach to explored floor
                     explore_data = sess.scalar(select(AdventureBossHistory).where(
                         AdventureBossHistory.season == action_data["season_index"],
@@ -89,7 +89,7 @@ def handle(event, context):
                         action_data["count_base"] = current_floor
                     apply_exp(sess, planet_id, user_season_dict, ActionType.RUSH,
                               current_pass.exp_dict[ActionType.RUSH], level_dict, block_index, action_data)
-                elif "explore" in type_id:  # explore_adventure_boss
+                elif type_id == "sweep_adventure_boss":
                     # Get floor data before explore
                     explore_data = sess.scalar(select(AdventureBossHistory).where(
                         AdventureBossHistory.season == action_data["season_index"],
