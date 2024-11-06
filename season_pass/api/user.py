@@ -34,7 +34,7 @@ sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
     avatar_addr = avatar_addr.lower()
-    target_pass = get_pass(sess, pass_type, season_index)
+    target_pass = get_pass(sess, pass_type, season_index, validate_current=True)
     if not target_pass:
         raise SeasonNotFoundError(f"Requested Season {pass_type}:{season_index} not exists.")
 
