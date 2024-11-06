@@ -121,7 +121,7 @@ def reset(request: RegisterRequestSchema, sess=Depends(session)):
 
 @router.post("/change-pass-time", response_model=SeasonPassSchema)
 def change_pass_time(request: SeasonChangeRequestSchema, sess=Depends(session)):
-    target_season = get_pass(sess, request.pass_type, request.season_index, include_exp=True)
+    target_season = get_pass(sess, request.pass_type, request.season_index)
     if not target_season:
         raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
 
