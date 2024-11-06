@@ -62,8 +62,10 @@ class SeasonChangeRequestSchema(BaseSchema):
 
     @model_validator(mode="after")
     def sanitize(self):
-        if isinstance(self.timestamp, str):
-            self.timestamp = datetime.strptime(self.timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
         if isinstance(self.planet_id, str):
             self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
+        if isinstance(self.start_timestamp, str):
+            self.start_timestamp = datetime.strptime(self.timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
+        if isinstance(self.end_timestamp, str):
+            self.end_timestamp = datetime.strptime(self.timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
         return self
