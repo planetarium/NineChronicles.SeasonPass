@@ -5,7 +5,9 @@ from common.models.user import UserSeasonPass
 from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import UserNotFoundError, SeasonNotFoundError
+from season_pass.schemas.season_pass import SeasonPassSchema
 from season_pass.schemas.tmp import (PremiumRequestSchema, RegisterRequestSchema, ExpRequestSchema,
+                                     SeasonChangeRequestSchema,
                                      )
 from season_pass.schemas.user import UserSeasonPassSchema
 
@@ -97,3 +99,17 @@ def reset(request: RegisterRequestSchema, sess=Depends(session)):
     sess.commit()
     sess.refresh(target_user)
     return target_user
+
+
+@router.post("/change-pass-time", response_model=SeasonPassSchema)
+def change_pass_time(request: SeasonChangeRequestSchema, sess=Depends(session)):
+    target_season = get_pass(sess, request.pass_type, request.season_index, include_exp=True)
+    if not target_season:
+        raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
+
+    target_season.start_timestamp = request.start_timestamp
+    target_season.end_timestamp = request.end_timestamp
+    sess.add(target_season)
+    sess.commit()
+    sess.refresh(target_season)
+    return target_season
