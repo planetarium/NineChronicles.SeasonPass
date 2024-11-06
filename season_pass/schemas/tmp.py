@@ -48,8 +48,10 @@ class ExpRequestSchema(BaseSchema):
 
 
 class SeasonChangeRequestSchema(BaseSchema):
-    season_id: int
-    timestamp: str | datetime
+    pass_type: PassType
+    season_index: int
+    start_timestamp: Optional[str | datetime] = None
+    end_timestamp: Optional[str | datetime] = None
 
     @model_validator(mode="after")
     def to_datetime(self):
