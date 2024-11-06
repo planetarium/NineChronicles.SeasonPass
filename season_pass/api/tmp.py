@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
+from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
@@ -70,9 +71,11 @@ def add_exp(request: ExpRequestSchema, sess=Depends(session)):
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
     target_user.exp += request.exp
-    for exp_info in sorted(target_season.exp_list, key=lambda x: x.level, reverse=True):
-        if exp_info.exp <= target_user.exp:
-            target_user.level = exp_info.level
+    for lvl in sess.scalars(
+            select(Level).where(Level.pass_type == request.pass_type).order_by(desc(Level.level))
+    ).fetchall():
+        if lvl.exp <= target_user.exp:
+            target_user.level = lvl.level
             break
     sess.add(target_user)
     sess.commit()
