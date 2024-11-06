@@ -42,7 +42,7 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
 
     @property
     def claim_limit_timestamp(self):
-        return self.season_pass.end_timestamp + timedelta(days=7)
+        return (self.season_pass.end_timestamp + timedelta(days=7)) if self.season_pass.end_timestamp else None
 
     __table_args__ = (
         Index("avatar_season", "avatar_addr", "season_pass_id"),
