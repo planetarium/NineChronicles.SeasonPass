@@ -23,6 +23,7 @@ class RegisterRequestSchema(BaseSchema):
 
 
 class PremiumRequestSchema(BaseSchema):
+    planet_id: PlanetID | str = PlanetID.ODIN
     avatar_addr: str
     pass_type: PassType
     season_index: int
@@ -30,31 +31,39 @@ class PremiumRequestSchema(BaseSchema):
     is_premium_plus: bool
 
     @model_validator(mode="after")
-    def lowercase(self):
+    def sanitize(self):
         self.avatar_addr = self.avatar_addr.lower()
+        if isinstance(self.planet_id, str):
+            self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
         return self
 
 
 class ExpRequestSchema(BaseSchema):
+    planet_id: PlanetID | str = PlanetID.ODIN
     avatar_addr: str
     pass_type: PassType
     season_index: int
     exp: int = 0
 
     @model_validator(mode="after")
-    def lowercase(self):
+    def sanitize(self):
         self.avatar_addr = self.avatar_addr.lower()
+        if isinstance(self.planet_id, str):
+            self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
         return self
 
 
 class SeasonChangeRequestSchema(BaseSchema):
+    planet_id: PlanetID | str = PlanetID.ODIN
     pass_type: PassType
     season_index: int
     start_timestamp: Optional[str | datetime] = None
     end_timestamp: Optional[str | datetime] = None
 
     @model_validator(mode="after")
-    def to_datetime(self):
+    def sanitize(self):
         if isinstance(self.timestamp, str):
             self.timestamp = datetime.strptime(self.timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
+        if isinstance(self.planet_id, str):
+            self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
         return self

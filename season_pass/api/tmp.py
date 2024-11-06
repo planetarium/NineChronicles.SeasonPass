@@ -52,7 +52,9 @@ def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == target_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
@@ -75,7 +77,9 @@ def add_exp(request: ExpRequestSchema, sess=Depends(session)):
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == target_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
@@ -100,7 +104,9 @@ def reset(request: RegisterRequestSchema, sess=Depends(session)):
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == target_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
