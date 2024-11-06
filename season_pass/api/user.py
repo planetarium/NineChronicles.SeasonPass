@@ -39,10 +39,8 @@ def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_in
         raise SeasonNotFoundError(f"Requested Season {pass_type}:{season_index} not exists.")
 
     now = datetime.now(tz=timezone.utc)
-    if (target_pass.start_timestamp and target_pass.start_timestamp > now
-            or target_pass.end_timestamp and target_pass.end_timestamp < now
-    ):
-        raise InvalidSeasonError(f"{pass_type}:{season_index} it not active now.")
+    if target_pass.start_timestamp and target_pass.start_timestamp > now:
+        raise InvalidSeasonError(f"{pass_type}:{season_index} it not opened yet.")
 
     target = sess.scalar(select(UserSeasonPass).where(
         UserSeasonPass.planet_id == planet_id,
