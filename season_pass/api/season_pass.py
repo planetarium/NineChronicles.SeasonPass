@@ -79,5 +79,6 @@ def level_info(pass_type: PassType, sess=Depends(session)):
 
 
 @router.get("/exp", response_model=List[ExpInfoSchema])
-def exp_info(pass_type: PassType, sess=Depends(session)):
-    return sess.scalars(select(Exp).where(Exp.pass_type == pass_type)).fetchall()
+def exp_info(pass_type: PassType, season_index: int, sess=Depends(session)):
+    current_pass = get_pass(sess, pass_type=pass_type, season_index=season_index, include_exp=True)
+    return current_pass.exp_list

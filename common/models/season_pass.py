@@ -29,11 +29,11 @@ class SeasonPass(TimeStampMixin, Base):
 
     @property
     def start_date(self):
-        return self.start_timestamp.date()
+        return self.start_timestamp.date() if self.start_timestamp else None
 
     @property
     def end_date(self):
-        return self.end_timestamp.date()
+        return self.end_timestamp.date() if self.end_timestamp else None
 
 
 class Level(AutoIdMixin, TimeStampMixin, Base):

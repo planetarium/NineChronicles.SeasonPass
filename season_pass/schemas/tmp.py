@@ -3,13 +3,15 @@ from typing import Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator
 
-from common.enums import PlanetID
+from common.enums import PlanetID, PassType
 
 
 class RegisterRequestSchema(BaseSchema):
     planet_id: PlanetID | str = PlanetID.ODIN
     agent_addr: str
     avatar_addr: str
+    pass_type: PassType
+    season_index: int
 
     @model_validator(mode="after")
     def sanitize(self):
@@ -22,6 +24,8 @@ class RegisterRequestSchema(BaseSchema):
 
 class PremiumRequestSchema(BaseSchema):
     avatar_addr: str
+    pass_type: PassType
+    season_index: int
     is_premium: bool
     is_premium_plus: bool
 
@@ -31,10 +35,11 @@ class PremiumRequestSchema(BaseSchema):
         return self
 
 
-class LevelRequestSchema(BaseSchema):
+class ExpRequestSchema(BaseSchema):
     avatar_addr: str
-    level: Optional[int] = None
-    exp: Optional[int] = None
+    pass_type: PassType
+    season_index: int
+    exp: int = 0
 
     @model_validator(mode="after")
     def lowercase(self):
