@@ -130,4 +130,52 @@ def change_pass_time(request: SeasonChangeRequestSchema, sess=Depends(session)):
     sess.add(target_season)
     sess.commit()
     sess.refresh(target_season)
-    return target_season
+    return SeasonPassSchema(
+        id=target_season.id,
+        pass_type=target_season.pass_type,
+        season_index=target_season.season_index,
+        start_date=target_season.start_date,
+        end_date=target_season.end_date,
+        start_timestamp=target_season.start_timestamp,
+        end_timestamp=target_season.end_timestamp,
+        reward_list=[
+            {
+                "level": reward["level"],
+                "normal": {
+                    "item": [
+                        {
+                            "id": x["ticker"].split("_")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["normal"] if x["ticker"].startswith("Item_")
+                    ],
+                    "currency": [
+                        {
+                            "ticker": x["ticker"].split("__")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["normal"] if x["ticker"].startswith("FAV__")
+                    ]
+                },
+                "premium": {
+                    "item": [
+                        {
+                            "id": x["ticker"].split("_")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["premium"] if x["ticker"].startswith("Item_")
+                    ],
+                    "currency": [
+                        {
+                            "ticker": x["ticker"].split("__")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["premium"] if x["ticker"].startswith("FAV__")
+                    ]
+                }
+            }
+            for reward in target_season.reward_list
+        ],
+        # Repeat last level reward for seasonal repeat type pass
+        repeat_last_reward=target_season.start_timestamp is not None,
+    )
