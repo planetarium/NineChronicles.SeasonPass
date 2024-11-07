@@ -38,6 +38,7 @@ class WorkerStack(Stack):
             assumed_by=_iam.ServicePrincipal("ec2.amazonaws.com"),
         )
         self.shared_stack.brave_q.grant_send_messages(tracker_role)
+        self.shared_stack.adventure_boss_q.grant_send_messages(tracker_role)
         self.__add_policy(tracker_role, db_password=True)
 
         if self.config.stage == "mainnet":
