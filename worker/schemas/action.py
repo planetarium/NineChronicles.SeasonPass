@@ -42,7 +42,7 @@ class AdventureBossActionJson:
     @property
     def count_base(self):
         if self.type_id.startswith("wanted"):
-            return int(self.b[-1])
+            return int(int(self.b[-1])/100)
         else:
             # AP potion usage is defined inside action. Handler should get this.
             return 0
