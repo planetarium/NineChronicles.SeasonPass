@@ -10,9 +10,9 @@ from common import logger
 from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
-from worker.schemas.action import AdventureBossActionJson
-from worker.utils.aws import send_sqs_message
-from worker.utils.gql import get_block_tip, fetch_block_data
+from schemas.action import AdventureBossActionJson
+from utils.aws import send_sqs_message
+from utils.gql import get_block_tip, fetch_block_data
 
 # envs of tracker comes from .env.*** in EC2 instance
 REGION_NAME = os.environ.get("REGION_NAME")

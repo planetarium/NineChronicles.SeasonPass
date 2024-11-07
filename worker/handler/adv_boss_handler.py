@@ -9,10 +9,10 @@ from common.models.action import Block, AdventureBossHistory
 from common.models.season_pass import Level
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
-from worker.courage_handler import verify_season_pass
-from worker.schemas.sqs import SQSMessage
-from worker.utils.exp import apply_exp
-from worker.utils.gql import get_explore_floor
+from courage_handler import verify_season_pass
+from schemas.sqs import SQSMessage
+from utils.exp import apply_exp
+from utils.gql import get_explore_floor
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
