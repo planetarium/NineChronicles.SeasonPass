@@ -6,6 +6,49 @@ AP_PER_STONE = 120
 
 
 @dataclass
+class AdventureBossActionJson:
+    id: str
+    type_id: str
+
+    # wanted
+    a: str  # AvatarAddress
+    b: list  # Bounty
+    s: str  # Season
+
+    # challenge
+    avatarAddress: str
+    costumes: list
+    equipments: list
+    foods: list
+    r: list  # Rune
+    season: str
+
+    # rush
+    # a: str  # AvatarAddress
+    c: list  # Costume
+    e: list  # Equipments
+
+    # r: list  # Rune
+    # s: str
+
+    @property
+    def avatar_addr(self):
+        return self.a or self.avatarAddress
+
+    @property
+    def season_index(self):
+        return self.s or self.season
+
+    @property
+    def count_base(self):
+        if self.type_id.startswith("wanted"):
+            return int(self.b[-1])
+        else:
+            # AP potion usage is defined inside action. Handler should get this.
+            return 0
+
+
+@dataclass
 class ActionJson:
     id: str
     type_id: str

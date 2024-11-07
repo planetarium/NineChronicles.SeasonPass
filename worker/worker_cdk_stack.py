@@ -88,7 +88,8 @@ class WorkerStack(Stack):
                       f"{self.shared_stack.credentials.username}:[DB_PASSWORD]"
                       f"@{self.shared_stack.rds_endpoint}"
                       f"/season_pass",
-            "SQS_URL": self.shared_stack.brave_q.queue_url,
+            "COURAGE_Q_URL": self.shared_stack.brave_q.queue_url,
+            "ADV_BOSS_Q_URL": self.shared_stack.adventure_boss_q.queue_url,
             # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
             "ODIN_GQL_URL": self.config.odin_gql_url,
             "HEIMDALL_GQL_URL": self.config.heimdall_gql_url,
@@ -152,7 +153,7 @@ class WorkerStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_11,
             description="Brave exp handler of NineChronicles.SeasonPass",
             code=_lambda.AssetCode("worker/", exclude=exclude_list),
-            handler="courage_handler.handle",
+            handler="handler.courage_handler.handle",
             layers=[layer],
             role=handler_role,
             vpc=self.shared_stack.vpc,
@@ -160,6 +161,24 @@ class WorkerStack(Stack):
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.brave_q)
+            ],
+            memory_size=256,
+        )
+
+        adv_boss_handler = _lambda.Function(
+            self, f"{self.config.stage}-9c-season_pass-adv_boss_handler-function",
+            function_name=f"{self.config.stage}-9c-season_pass-adv_boss_handler",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            description="Adventure boss handler of NineChronicles.SeasonPass",
+            code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            handler="handler.adventure_boss_handler.handle",
+            layers=[layer],
+            role=handler_role,
+            vpc=self.shared_stack.vpc,
+            timeout=cdk_core.Duration.seconds(15),
+            environment=env,
+            events=[
+                _evt_src.SqsEventSource(self.shared_stack.adventure_boss_q)
             ],
             memory_size=256,
         )
