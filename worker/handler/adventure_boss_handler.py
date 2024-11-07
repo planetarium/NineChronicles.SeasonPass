@@ -50,7 +50,7 @@ def handle(event, context):
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
-        current_pass = get_pass(sess, pass_type=PassType.COURAGE_PASS, validate_current=True, include_exp=True)
+        current_pass = get_pass(sess, pass_type=PassType.ADVENTURE_BOSS_PASS, validate_current=True, include_exp=True)
         level_dict = {x.level: x.exp for x in
                       sess.scalars(select(Level).where(Level.pass_type == PassType.ADVENTURE_BOSS_PASS)).fetchall()}
 
