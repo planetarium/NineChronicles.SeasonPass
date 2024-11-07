@@ -170,7 +170,8 @@ def handle(event, context):
     try:
         sess = scoped_session(sessionmaker(bind=engine))
         current_pass = get_pass(sess, pass_type=PassType.COURAGE_PASS, validate_current=True, include_exp=True)
-        level_dict = {x.level: x.exp for x in sess.scalars(select(Level)).fetchall()}
+        level_dict = {x.level: x.exp for x in
+                      sess.scalars(select(Level).where(Level.pass_type == PassType.COURAGE_PASS)).fetchall()}
 
         for i, record in enumerate(message.Records):
             body = record.body
