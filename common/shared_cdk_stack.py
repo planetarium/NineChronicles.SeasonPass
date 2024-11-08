@@ -67,9 +67,23 @@ class SharedStack(Stack):
             dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.brave_dlq),
             visibility_timeout=cdk_core.Duration.seconds(20),
         )
-        self.adventure_boss_dlq = _sqs.Queue(self, f"{config.stage}-9c-season_pass-adventure-boss-dlq")
+        self.adventure_boss_dlq = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-adventure_boss-dlq",
+            queue_name=f"{config.stage}-9c-season_pass-adventure_boss-dlq",
+        )
         self.adventure_boss_q = _sqs.Queue(
-            self, f"{config.stage}-9c-season_pass-adventure-boss-queue",
+            self, f"{config.stage}-9c-season_pass-adventure_boss-queue",
+            queue_name=f"{config.stage}-9c-season_pass-adventure_boss-queue",
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.adventure_boss_dlq),
+            visibility_timeout=cdk_core.Duration.seconds(20),
+        )
+        self.world_clear_dlq = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-world_clear-dlq",
+            queue_name=f"{config.stage}-9c-season_pass-world_clear-dlq",
+        )
+        self.world_clear_q = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-world_clear-queue",
+            queue_name=f"{config.stage}-9c-season_pass-world_clear-queue",
             dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.adventure_boss_dlq),
             visibility_timeout=cdk_core.Duration.seconds(20),
         )
