@@ -69,7 +69,8 @@ def process_block(block_index: int):
                 "tx_id": tx["id"],
                 "agent_addr": tx["signer"].lower(),
                 "avatar_addr": action_json.avatar_addr.lower(),
-                "count_base": action_json.count_base,
+                "world_id": action_json.worldId,
+                "stage_id": action_json.stageId,
             })
 
     send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
