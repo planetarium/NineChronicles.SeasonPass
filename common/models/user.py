@@ -27,7 +27,7 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
                                 doc="Last claim order of premium reward. This only activated when is_premium == True")
 
     def available_rewards(self, sess):
-        max_level, repeat_exp = get_max_level(sess, self.saeson_pass.pass_type)
+        max_level, repeat_exp = get_max_level(sess, self.season_pass.pass_type)
         rewards = {
             "normal": [] if self.level == self.last_normal_claim else list(
                 range(self.last_normal_claim + 1, min(self.level + 1, max_level.level + 1))),
