@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -9,14 +10,15 @@ from common.models.action import Block, AdventureBossHistory
 from common.models.season_pass import Level
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
-from courage_handler import verify_season_pass
 from schemas.sqs import SQSMessage
-from utils.exp import apply_exp
 from utils.gql import get_explore_floor
+from utils.season_pass import apply_exp, verify_season_pass, fetch_adv_boss_history
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
+
+AP_PER_ACTION = 2
 
 engine = create_engine(DB_URI)
 
@@ -26,11 +28,13 @@ def handle(event, context):
     Receive action data from adv_boss_tracker and give adv.boss exp. to avatar.
 
     {
+        "planet_id": str,
         "block": int,
         "pass_type": PassType.ADVENTURE_BOSS_PASS,
         "action_data": {
             "wanted##": [
                 {
+                    "season_index": int,
                     "agent_addr": str,
                     "avatar_addr": str,
                     "count_base": int
@@ -67,56 +71,66 @@ def handle(event, context):
                 continue
 
             user_season_dict = verify_season_pass(sess, planet_id, current_pass, body["action_data"])
+            all_avatar_dict = defaultdict(set)
+            for type_id, action_dta in body["action_data"].items():
+                if type_id in ("explore_adventure_boss", "sweep_adventure_boss"):
+                    for action in action_data:
+                        all_avatar_dict[action["season_index"]].add(action["avatar_addr"])
+
+            explore_dict = {}
+            for season_index, avatars in all_avatar_dict.items():
+                explore_dict[season_index] = fetch_adv_boss_history(sess, planet_id, season_index, list(avatars))
+
             for type_id, action_data in body["action_data"].items():
                 if type_id == "wanted":
                     apply_exp(sess, planet_id, user_season_dict, ActionType.WANTED,
                               current_pass.exp_dict[ActionType.WANTED], level_dict, block_index, action_data)
-                elif type_id == "explore_adventure_boss":
+                elif type_id == "sweep_adventure_boss":
                     # Use existing explore data: sweep only can reach to explored floor
-                    explore_data = sess.scalar(select(AdventureBossHistory).where(
-                        AdventureBossHistory.season == action_data["season_index"],
-                        AdventureBossHistory.avatar_addr == action_data["avatar_addr"],
-                        AdventureBossHistory.planet_id == planet_id
-                    ))
-                    if explore_data:
-                        action_data["count_base"] = explore_data.floor
-                    else:
-                        # Get current floor data from chain
-                        # NOTE: Do not save this to DB because this can make confusion to explore action
+                    for action in action_data:
+                        explore_data = explore_dict.get(action["season_index"], {}).get(action["avatar_addr"], None)
+                        if explore_data:
+                            action["count_base"] = explore_data.floor
+                        else:
+                            # Get current floor data from chain
+                            # NOTE: Do not save this to DB because this can make confusion to explore action
+                            current_floor = get_explore_floor(
+                                planet_id, block_index, action_data["season_index"], action_data["avatar_addr"]
+                            )
+                            action["count_base"] = current_floor
+                    apply_exp(sess, planet_id, user_season_dict, ActionType.RUSH,
+                              current_pass.exp_dict[ActionType.RUSH], level_dict, block_index, action_data)
+                elif type_id == "explore_adventure_boss":
+                    # Get floor data before explore
+                    for action in action_data:
                         current_floor = get_explore_floor(
                             planet_id, block_index, action_data["season_index"], action_data["avatar_addr"]
                         )
-                        action_data["count_base"] = current_floor
-                    apply_exp(sess, planet_id, user_season_dict, ActionType.RUSH,
-                              current_pass.exp_dict[ActionType.RUSH], level_dict, block_index, action_data)
-                elif type_id == "sweep_adventure_boss":
-                    # Get floor data before explore
-                    explore_data = sess.scalar(select(AdventureBossHistory).where(
-                        AdventureBossHistory.season == action_data["season_index"],
-                        AdventureBossHistory.avatar_addr == action_data["avatar_addr"],
-                        AdventureBossHistory.planet_id == planet_id
-                    ))
-                    prev_floor = explore_data.floor if explore_data else 0
-
-                    # Get current floor data after explore from chain
-                    current_floor = get_explore_floor(
-                        planet_id, block_index, action_data["season_index"], action_data["avatar_addr"]
-                    )
-
-                    # Apply exp
-                    used_ap_potion = 2 * min(abs(current_floor - prev_floor) + 1, 5)
-                    action_data["action_base"] = used_ap_potion
+                        explore_data = explore_dict.get(action["season_index"], {}).get(action["avatar_addr"], None)
+                        if explore_data:
+                            action["count_base"] = AP_PER_ACTION * min(abs(current_floor-explore_data.floor)+1, 5)
+                            explore_data.floor = current_floor
+                        else:
+                            # FIXME: 이렇게 하면 상태를 엄청 많이 가져와야 하는데 지금 이거 말고는 어떻게 할 수 있는 방법이 없다...
+                            current_floor = get_explore_floor(
+                                planet_id, block_index, action_data["season_index"], action_data["avatar_addr"]
+                            )
+                            explore_data = AdventureBossHistory(
+                                planet_id=planet_id, season=action["season_index"],
+                                agent_addr=action["agent_addr"], avatar_addr=action["avatar_addr"],
+                                floor=current_floor
+                            )
+                            action["count_base"] = AP_PER_ACTION * min(current_floor+1, 5)
+                        sess.add(explore_data)
                     apply_exp(sess, planet_id, user_season_dict, ActionType.CHALLENGE,
                               current_pass.exp_dict[ActionType.CHALLENGE], level_dict, block_index, action_data)
 
-                    # Update to new floor
-                    explore_data.floor = current_floor
-                    sess.add(explore_data)
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.ADVENTURE_BOSS_PASS))
             sess.commit()
             logger.info(
-                f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{body['block']} applied.")
+                f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{body['block']} applied."
+            )
     except InterruptedError as e:
         err_msg = str(e).split("\n")[0]
         detail = str(e).split("\n")[1]
