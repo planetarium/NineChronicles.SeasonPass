@@ -118,3 +118,14 @@ def get_explore_floor(planet_id: PlanetID, block_index: int, season: int, avatar
     status = bencodex.loads(bytes.fromhex(resp.json()["data"]["state"]))
     return status[3]
 
+
+def get_last_cleared_stage(planet_id: PlanetID, avatar_addr: str) -> int:
+    query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{ 
+    worldInformation {{ lastClearedStage {{ worldId stageId }} }} 
+    }} }} }}"""
+    resp = requests.post(
+        GQL_DICT[planet_id], json={"query": query},
+        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+    )
+    result = resp.json(["data"]["stateQuery"]["avatar"]["worldInformation"]["lastClearedStage"])
+    return result["worldId"], result["stageId"]

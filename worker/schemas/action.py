@@ -53,7 +53,7 @@ class ActionJson:
     id: str
     type_id: str
 
-    # hack_and_slash21
+    # hack_and_slash22
     avatarAddress: Optional[str] = None
     apStoneCount: Optional[int] = None
     costumes: Optional[List[str]] = None
