@@ -89,6 +89,7 @@ def handle(event, context):
     Receive action data from block_tracker and give brave exp. to avatar.
 
     {
+        "planet_id": str,
         "block": int,
         "pass_type": PassType,
         "action_data": {
