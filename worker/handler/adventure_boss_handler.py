@@ -73,7 +73,7 @@ def handle(event, context):
 
             user_season_dict = verify_season_pass(sess, planet_id, current_pass, body["action_data"])
             all_avatar_dict = defaultdict(set)
-            for type_id, action_dta in body["action_data"].items():
+            for type_id, action_data in body["action_data"].items():
                 if type_id in ("explore_adventure_boss", "sweep_adventure_boss"):
                     for action in action_data:
                         all_avatar_dict[action["season_index"]].add(action["avatar_addr"])
