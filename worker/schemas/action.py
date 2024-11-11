@@ -11,22 +11,22 @@ class AdventureBossActionJson:
     type_id: str
 
     # wanted
-    a: str  # AvatarAddress
-    b: list  # Bounty
-    s: str  # Season
+    a: Optional[str] = None  # AvatarAddress
+    b: Optional[list] = None  # Bounty
+    s: Optional[str] = None  # Season
 
     # challenge
-    avatarAddress: str
-    costumes: list
-    equipments: list
-    foods: list
-    r: list  # Rune
-    season: str
+    avatarAddress: Optional[str] = None
+    costumes: Optional[list] = None
+    equipments: Optional[list] = None
+    foods: Optional[list] = None
+    r: Optional[list] = None  # Rune
+    season: Optional[str] = None
 
     # rush
     # a: str  # AvatarAddress
-    c: list  # Costume
-    e: list  # Equipments
+    c: Optional[list] = None  # Costume
+    e: Optional[list] = None  # Equipments
 
     # r: list  # Rune
     # s: str
