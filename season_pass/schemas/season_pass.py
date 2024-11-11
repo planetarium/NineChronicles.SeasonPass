@@ -46,11 +46,13 @@ class RewardSchema(BaseSchema):
     premium: RewardDetailSchema
 
 
-class SeasonPassSchema(BaseSchema):
-    # Deprecated
+class SimpleSeasonPassSchema(BaseSchema):
     id: int
     pass_type: PassType
     season_index: int
+
+
+class SeasonPassSchema(SimpleSeasonPassSchema):
     start_date: Optional[date]
     end_date: Optional[date]
     start_timestamp: Optional[datetime]

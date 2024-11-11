@@ -2,6 +2,7 @@ import json
 import logging
 from collections import defaultdict
 from datetime import timezone, datetime, timedelta
+from typing import Dict
 from uuid import uuid4
 
 import boto3
@@ -17,6 +18,7 @@ from season_pass import settings
 from season_pass.dependencies import session
 from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError,
                                     NotPremiumError, )
+from season_pass.schemas.season_pass import SimpleSeasonPassSchema
 from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
@@ -44,8 +46,33 @@ def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_in
         UserSeasonPass.avatar_addr == avatar_addr
     ))
     if not target:
-        return UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr, season_pass_id=target_pass.id)
+        return UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
+                                    season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
     return target
+
+
+@router.get("/status/all", response_model=Dict[PassType, UserSeasonPassSchema])
+def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
+    planet_id = PlanetID(bytes(planet_id, "utf-8"))
+    avatar_addr = avatar_addr.lower()
+    resp = {}
+    for pass_type in PassType:
+        target_pass = get_pass(sess, pass_type, validate_current=True)
+        if not target_pass:
+            resp[pass_type] = None
+            continue
+
+        target = sess.scalar(select(UserSeasonPass).where(
+            UserSeasonPass.planet_id == planet_id,
+            UserSeasonPass.season_pass_id == target_pass.id,
+            UserSeasonPass.avatar_addr == avatar_addr
+        ))
+        if not target:
+            target = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
+                                          season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
+
+        resp[pass_type] = target
+    return resp
 
 
 @router.post("/upgrade", response_model=UserSeasonPassSchema, dependencies=[Depends(verify_token)])
