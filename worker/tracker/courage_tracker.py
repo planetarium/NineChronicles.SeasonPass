@@ -59,8 +59,13 @@ def process_block(block_index: int, pass_type: PassType):
 def main():
     sess = scoped_session(sessionmaker(bind=engine))
     # Get missing blocks
+    start_block = int(os.environ.get("START_BLOCK_INDEX"))
     expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
-    all_blocks = set(sess.scalars(select(Block.index).where(Block.planet_id == CURRENT_PLANET)).fetchall())
+    all_blocks = set(sess.scalars(select(Block.index).where(
+        Block.planet_id == CURRENT_PLANET,
+        Block.pass_type == PassType.COURAGE_PASS,
+        Block.index >= start_block,
+    )).fetchall())
     missing_blocks = expected_all - all_blocks
 
     block_dict = {}
