@@ -4,11 +4,11 @@ import os
 from collections import defaultdict
 
 import requests
-from common import logger
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from common.enums import PlanetID
+from common import logger
+from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import create_jwt_token
@@ -16,7 +16,7 @@ from schemas.action import ActionJson
 from utils.aws import send_sqs_message
 from utils.gql import get_block_tip
 
-REGION = os.envion.get("REGION_NAME")
+REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
 SQS_URL = os.environ.get("WORLD_CLEAR_SQS_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
@@ -83,7 +83,11 @@ def main():
     expected_all = set(range(start_block, get_block_tip() + 1))
     all_blocks = set(sess.scalars(
         select(Block.index)
-        .where(Block.planet_id == CURRENT_PLANET, Block.index >= start_block)
+        .where(
+            Block.planet_id == CURRENT_PLANET,
+            Block.pass_type == PassType.WORLD_CLEAR_PASS,
+            Block.index >= start_block,
+        )
     ).fetchall())
     missing_blocks = expected_all - all_blocks
 
