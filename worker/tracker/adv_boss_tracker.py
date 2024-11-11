@@ -42,6 +42,7 @@ def process_block(block_index: int):
             action_json = AdventureBossActionJson(type_id=type_id, **(action_raw["values"]))
             action_data[action_json.type_id].append({
                 "tx_id": tx["id"],
+                "season_index": action_json.season_index,
                 "agent_addr": tx["signer"].lower(),
                 "avatar_addr": action_json.avatar_addr.lower(),
                 "count_base": action_json.count_base,
