@@ -107,7 +107,7 @@ def fetch_block_data(block_index: int, pass_type: PassType):
 def get_explore_floor(planet_id: PlanetID, block_index: int, season: int, avatar_addr: str) -> int:
     season_string = f"{season:040}"
     query = f"""{{ state(
-        index: {block_index},
+        index: {block_index + 1},  # Sloth needs 1 block to render actions
         accountAddress: "0000000000000000000000000000000000000102",  # Fixed address for exploreBoard
         address: "{derive_address(avatar_addr, season_string)}"
     ) }}
