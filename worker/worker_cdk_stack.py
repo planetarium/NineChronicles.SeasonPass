@@ -186,6 +186,24 @@ class WorkerStack(Stack):
             memory_size=256,
         )
 
+        world_clear_handler = _lambda.Function(
+            self, f"{self.config.stage}-9c-season_pass-world_clear_handler-function",
+            function_name=f"{self.config.stage}-9c-season_pass-world_clear_handler",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            description="Adventure boss handler of NineChronicles.SeasonPass",
+            code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            handler="handler.world_clear_handler.handle",
+            layers=[layer],
+            role=handler_role,
+            vpc=self.shared_stack.vpc,
+            timeout=cdk_core.Duration.seconds(15),
+            environment=env,
+            events=[
+                _evt_src.SqsEventSource(self.shared_stack.adventure_boss_q)
+            ],
+            memory_size=256,
+        )
+
         # Tracker Lambda Function
         tx_tracker_role = _iam.Role(
             self, f"{self.config.stage}-9c-season_pass-tx_tracker-role",
