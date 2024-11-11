@@ -10,8 +10,8 @@ from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
-from courage_handler import verify_season_pass
 from utils.gql import get_last_cleared_stage
+from utils.season_pass import verify_season_pass
 from worker.schemas.sqs import SQSMessage
 
 DB_URI = os.environ.get("DB_URI")
