@@ -18,19 +18,6 @@ DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 
-# See WorldSheet.csv in Lib9c to add new world
-WORLD_STAGE_DICT = {
-    1: {"min": 1, "max": 50},
-    2: {"min": 51, "max": 100},
-    3: {"min": 101, "max": 150},
-    4: {"min": 151, "max": 200},
-    5: {"min": 201, "max": 250},
-    6: {"min": 251, "max": 300},
-    7: {"min": 301, "max": 350},
-    8: {"min": 351, "max": 400},
-    # 9: {"min": 401, "max": 450},
-}
-
 engine = create_engine(DB_URI)
 
 
