@@ -96,7 +96,7 @@ def handle(event, context):
                             # Get current floor data from chain
                             # NOTE: Do not save this to DB because this can make confusion to explore action
                             current_floor = get_explore_floor(
-                                planet_id, block_index, action_data["season_index"], action_data["avatar_addr"]
+                                planet_id, block_index, action["season_index"], action["avatar_addr"]
                             )
                             action["count_base"] = current_floor
                     apply_exp(sess, planet_id, user_season_dict, ActionType.RUSH,
@@ -105,7 +105,7 @@ def handle(event, context):
                     # Get floor data before explore
                     for action in action_data:
                         current_floor = get_explore_floor(
-                            planet_id, block_index, action_data["season_index"], action_data["avatar_addr"]
+                            planet_id, block_index, action["season_index"], action["avatar_addr"]
                         )
                         explore_data = explore_dict.get(action["season_index"], {}).get(action["avatar_addr"], None)
                         if explore_data:
@@ -114,7 +114,7 @@ def handle(event, context):
                         else:
                             # FIXME: 이렇게 하면 상태를 엄청 많이 가져와야 하는데 지금 이거 말고는 어떻게 할 수 있는 방법이 없다...
                             current_floor = get_explore_floor(
-                                planet_id, block_index, action_data["season_index"], action_data["avatar_addr"]
+                                planet_id, block_index, action["season_index"], action["avatar_addr"]
                             )
                             explore_data = AdventureBossHistory(
                                 planet_id=planet_id, season=action["season_index"],
