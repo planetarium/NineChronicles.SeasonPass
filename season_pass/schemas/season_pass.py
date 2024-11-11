@@ -51,6 +51,9 @@ class SimpleSeasonPassSchema(BaseSchema):
     pass_type: PassType
     season_index: int
 
+    class Config:
+        from_attributes = True
+
 
 class SeasonPassSchema(SimpleSeasonPassSchema):
     start_date: Optional[date]
