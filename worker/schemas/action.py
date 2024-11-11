@@ -36,8 +36,8 @@ class AdventureBossActionJson:
         return self.a or self.avatarAddress
 
     @property
-    def season_index(self):
-        return self.s or self.season
+    def season_index(self) -> int:
+        return int(self.s or self.season)
 
     @property
     def count_base(self):
