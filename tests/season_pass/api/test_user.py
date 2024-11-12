@@ -78,34 +78,36 @@ def test_prev_season_claim_success(sess, season_delta, is_premium, level, exc):
     )
     with add_test_data(sess, prev_season_data, current_season_data, user_data) as test_data:
         prev_season, current_season, test_user = test_data
-
-        if exc:
-            with pytest.raises(exc):
-                tc.post("/api/user/claim-prev",
-                        content=json.dumps({
-                            "planet_id": test_user.planet_id.decode(),
-                            "agent_addr": test_user.agent_addr,
-                            "avatar_addr": test_user.avatar_addr,
-                            "pass_type": PassType.COURAGE_PASS.value,
-                            "season_index": 1,
-                            "prev": True
-                        }))
-        else:
-            resp = tc.post("/api/user/claim-prev",
-                           content=json.dumps({
-                               "planet_id": test_user.planet_id.decode(),
-                               "agent_addr": test_user.agent_addr,
-                               "avatar_addr": test_user.avatar_addr,
-                               "pass_type": PassType.COURAGE_PASS.value,
-                               "season_index": 1,
-                               "prev": True
-                           }))
-            assert resp.status_code == 200
-            data = resp.json()
-            data["user"]["planet_id"] = data["user"]["planet_id"].encode()
-            result = ClaimResultSchema(**data)
-            assert len(result.reward_list) > 0
-
-        for claim in sess.scalars(select(Claim)).fetchall():
-            sess.delete(claim)
-        sess.commit()
+        try:
+            if exc:
+                with pytest.raises(exc):
+                    tc.post("/api/user/claim-prev",
+                            content=json.dumps({
+                                "planet_id": test_user.planet_id.decode(),
+                                "agent_addr": test_user.agent_addr,
+                                "avatar_addr": test_user.avatar_addr,
+                                "pass_type": PassType.COURAGE_PASS.value,
+                                "season_index": 1,
+                                "prev": True
+                            }))
+            else:
+                resp = tc.post("/api/user/claim-prev",
+                               content=json.dumps({
+                                   "planet_id": test_user.planet_id.decode(),
+                                   "agent_addr": test_user.agent_addr,
+                                   "avatar_addr": test_user.avatar_addr,
+                                   "pass_type": PassType.COURAGE_PASS.value,
+                                   "season_index": 1,
+                                   "prev": True
+                               }))
+                assert resp.status_code == 200
+                data = resp.json()
+                data["user"]["planet_id"] = data["user"]["planet_id"].encode()
+                result = ClaimResultSchema(**data)
+                assert len(result.reward_list) > 0
+        finally:
+            for claim in sess.scalars(select(Claim)).fetchall():
+                print(claim.id)
+                sess.delete(claim)
+            sess.commit()
+            print("delete claims")

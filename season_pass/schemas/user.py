@@ -4,7 +4,7 @@ from typing import List, Optional
 from pydantic import BaseModel as BaseSchema, model_validator, Field
 
 from common.enums import PlanetID, PassType
-from season_pass.schemas.season_pass import ClaimSchema
+from season_pass.schemas.season_pass import ClaimSchema, SimpleSeasonPassSchema
 from season_pass.settings import stage
 
 
@@ -12,7 +12,7 @@ class UserSeasonPassSchema(BaseSchema):
     planet_id: PlanetID
     agent_addr: str = ""
     avatar_addr: str
-    season_pass_id: int = 0
+    season_pass: SimpleSeasonPassSchema
     level: int = 0
     exp: int = 0
     is_premium: bool = False
