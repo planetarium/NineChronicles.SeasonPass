@@ -11,8 +11,8 @@ from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
 from courage_handler import verify_season_pass
+from schemas.sqs import SQSMessage
 from utils.gql import get_last_cleared_stage
-from worker.schemas.sqs import SQSMessage
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -78,7 +78,7 @@ def handle(event, context):
                         if action["stage_id"] <= target_data.exp:  # Already cleared stage. pass.
                             continue
                         elif target_data.exp == 0:  # No data
-                            target_data.exp = get_last_cleared_stage(planet_id, action["avatar_addr"])
+                            cleared_world, target_data.exp = get_last_cleared_stage(planet_id, action["avatar_addr"])
                         else:  # HAS new stage
                             target_data.exp = action["stage_id"]
 
@@ -86,7 +86,6 @@ def handle(event, context):
                             if level.exp <= target_data.exp:
                                 target_data.level = level.level
                                 break
-
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.WORLD_CLEAR_PASS))
             sess.commit()
