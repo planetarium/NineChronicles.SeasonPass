@@ -13,7 +13,7 @@ def get_pass(sess, pass_type: PassType, season_index: int = None,
              validate_current: bool = False, include_exp: bool = False) -> Optional[SeasonPass]:
     stmt = select(SeasonPass).where(SeasonPass.pass_type == pass_type)
 
-    if season_index:
+    if season_index is not None:
         stmt = stmt.where(SeasonPass.season_index == season_index)
 
     if validate_current:
@@ -26,6 +26,7 @@ def get_pass(sess, pass_type: PassType, season_index: int = None,
 
     if include_exp:
         stmt = stmt.options(joinedload(SeasonPass.exp_list))
+
     return sess.scalar(stmt.order_by(desc(SeasonPass.id)))
 
 

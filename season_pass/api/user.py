@@ -56,7 +56,9 @@ def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
     avatar_addr = avatar_addr.lower()
     resp = []
+
     for pass_type in PassType:
+        # Get current passes
         target_pass = get_pass(sess, pass_type, validate_current=True)
         if not target_pass:
             continue
@@ -69,8 +71,21 @@ def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
         if not target:
             target = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
                                           season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
-
         resp.append(target)
+
+        # Get prev. pass
+        prev_pass = get_pass(sess, pass_type, season_index=target_pass.season_index-1)
+        if not prev_pass:
+            continue
+
+        prev = sess.scalar(select(UserSeasonPass).where(
+            UserSeasonPass.planet_id == planet_id,
+            UserSeasonPass.season_pass_id == prev_pass.id,
+            UserSeasonPass.avatar_addr == avatar_addr
+        ))
+        if not prev:
+            prev = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr, season_pass=prev_pass)
+        resp.append(prev)
     return resp
 
 
