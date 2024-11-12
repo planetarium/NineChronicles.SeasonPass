@@ -2,7 +2,7 @@ import json
 import logging
 from collections import defaultdict
 from datetime import timezone, datetime, timedelta
-from typing import Dict
+from typing import List
 from uuid import uuid4
 
 import boto3
@@ -55,15 +55,14 @@ def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_in
     return target
 
 
-@router.get("/status/all", response_model=Dict[PassType, UserSeasonPassSchema])
+@router.get("/status/all", response_model=List[UserSeasonPassSchema])
 def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
     avatar_addr = avatar_addr.lower()
-    resp = {}
+    resp = []
     for pass_type in PassType:
         target_pass = get_pass(sess, pass_type, validate_current=True)
         if not target_pass:
-            resp[pass_type] = None
             continue
 
         target = sess.scalar(select(UserSeasonPass).where(
@@ -75,7 +74,7 @@ def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
             target = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
                                           season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
 
-        resp[pass_type] = target
+        resp.append(target)
     return resp
 
 
