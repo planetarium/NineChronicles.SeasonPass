@@ -10,9 +10,9 @@ from common import logger
 from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.utils.aws import fetch_secrets
-from worker.schemas.action import AdventureBossActionJson
-from worker.utils.aws import send_sqs_message
-from worker.utils.gql import get_block_tip, fetch_block_data
+from schemas.action import AdventureBossActionJson
+from utils.aws import send_sqs_message
+from utils.gql import get_block_tip, fetch_block_data
 
 # envs of tracker comes from .env.*** in EC2 instance
 REGION_NAME = os.environ.get("REGION_NAME")
@@ -42,6 +42,7 @@ def process_block(block_index: int):
             action_json = AdventureBossActionJson(type_id=type_id, **(action_raw["values"]))
             action_data[action_json.type_id].append({
                 "tx_id": tx["id"],
+                "season_index": action_json.season_index,
                 "agent_addr": tx["signer"].lower(),
                 "avatar_addr": action_json.avatar_addr.lower(),
                 "count_base": action_json.count_base,
@@ -54,7 +55,7 @@ def main():
     sess = scoped_session(sessionmaker(bind=engine))
     # Get missing blocks
     start_block = int(os.environ.get("START_BLOCK_INDEX"))
-    expected_all = set(range(start_block, get_block_tip(os.environ.get("GQL_URL")) + 1))
+    expected_all = set(range(start_block, get_block_tip()))  # Sloth needs 1 block to render actions: get tip-1
     all_blocks = set(sess.scalars(
         select(Block.index)
         .where(

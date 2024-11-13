@@ -36,9 +36,13 @@ sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
     avatar_addr = avatar_addr.lower()
-    target_pass = get_pass(sess, pass_type, season_index, validate_current=True)
+    target_pass = get_pass(sess, pass_type, season_index)
     if not target_pass:
         raise SeasonNotFoundError(f"Requested Season {pass_type}:{season_index} not exists.")
+
+    now = datetime.now(tz=timezone.utc)
+    if target_pass.start_timestamp and target_pass.start_timestamp > now:
+        raise InvalidSeasonError(f"{pass_type}:{season_index} it not opened yet.")
 
     target = sess.scalar(select(UserSeasonPass).where(
         UserSeasonPass.planet_id == planet_id,
@@ -178,7 +182,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
 
 def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> Claim:
     available_rewards = user_season.available_rewards(sess)
-    max_level, repeat_exp = get_max_level(sess)
+    max_level, repeat_exp = get_max_level(sess, target_pass.pass_type)
 
     reward_dict = {x["level"]: x for x in target_pass.reward_list}
     target_reward_dict = defaultdict(int)

@@ -38,6 +38,8 @@ class WorkerStack(Stack):
             assumed_by=_iam.ServicePrincipal("ec2.amazonaws.com"),
         )
         self.shared_stack.brave_q.grant_send_messages(tracker_role)
+        self.shared_stack.adventure_boss_q.grant_send_messages(tracker_role)
+        self.shared_stack.world_clear_q.grant_send_messages(tracker_role)
         self.__add_policy(tracker_role, db_password=True)
 
         if self.config.stage == "mainnet":
@@ -76,7 +78,7 @@ class WorkerStack(Stack):
             compatible_runtimes=[
                 _lambda.Runtime.PYTHON_3_11,
             ],
-            removal_policy=RemovalPolicy.DESTROY,
+        removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Environment variables
@@ -90,6 +92,7 @@ class WorkerStack(Stack):
                       f"/season_pass",
             "COURAGE_Q_URL": self.shared_stack.brave_q.queue_url,
             "ADV_BOSS_Q_URL": self.shared_stack.adventure_boss_q.queue_url,
+            "WORLD_CLEAR_Q_URL": self.shared_stack.world_clear_q.queue_url,
             # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
             "ODIN_GQL_URL": self.config.odin_gql_url,
             "HEIMDALL_GQL_URL": self.config.heimdall_gql_url,

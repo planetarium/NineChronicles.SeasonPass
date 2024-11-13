@@ -27,7 +27,7 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
                                 doc="Last claim order of premium reward. This only activated when is_premium == True")
 
     def available_rewards(self, sess):
-        max_level, repeat_exp = get_max_level(sess)
+        max_level, repeat_exp = get_max_level(sess, self.season_pass.pass_type)
         rewards = {
             "normal": [] if self.level == self.last_normal_claim else list(
                 range(self.last_normal_claim + 1, min(self.level + 1, max_level.level + 1))),
@@ -35,6 +35,7 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
                 range(self.last_premium_claim + 1, min(self.level + 1, max_level.level + 1)))
         }
         # Get repeating reward
+        # NOTE: In case of World clear pass, no one can exceed max level.
         if self.level > max_level.level:
             rewards["normal"].extend([max_level.level + 1] * ((self.exp - max_level.exp) // repeat_exp))
 
@@ -42,7 +43,7 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
 
     @property
     def claim_limit_timestamp(self):
-        return self.season_pass.end_timestamp + timedelta(days=7)
+        return (self.season_pass.end_timestamp + timedelta(days=7)) if self.season_pass.end_timestamp else None
 
     __table_args__ = (
         Index("avatar_season", "avatar_addr", "season_pass_id"),

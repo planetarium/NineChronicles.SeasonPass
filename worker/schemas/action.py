@@ -11,22 +11,22 @@ class AdventureBossActionJson:
     type_id: str
 
     # wanted
-    a: str  # AvatarAddress
-    b: list  # Bounty
-    s: str  # Season
+    a: Optional[str] = None  # AvatarAddress
+    b: Optional[list] = None  # Bounty
+    s: Optional[str] = None  # Season
 
     # challenge
-    avatarAddress: str
-    costumes: list
-    equipments: list
-    foods: list
-    r: list  # Rune
-    season: str
+    avatarAddress: Optional[str] = None
+    costumes: Optional[list] = None
+    equipments: Optional[list] = None
+    foods: Optional[list] = None
+    r: Optional[list] = None  # Rune
+    season: Optional[str] = None
 
     # rush
     # a: str  # AvatarAddress
-    c: list  # Costume
-    e: list  # Equipments
+    c: Optional[list] = None  # Costume
+    e: Optional[list] = None  # Equipments
 
     # r: list  # Rune
     # s: str
@@ -36,13 +36,13 @@ class AdventureBossActionJson:
         return self.a or self.avatarAddress
 
     @property
-    def season_index(self):
-        return self.s or self.season
+    def season_index(self) -> int:
+        return int(self.s or self.season)
 
     @property
     def count_base(self):
         if self.type_id.startswith("wanted"):
-            return int(self.b[-1])
+            return int(int(self.b[-1])/100)
         else:
             # AP potion usage is defined inside action. Handler should get this.
             return 0
@@ -53,7 +53,7 @@ class ActionJson:
     id: str
     type_id: str
 
-    # hack_and_slash21
+    # hack_and_slash22
     avatarAddress: Optional[str] = None
     apStoneCount: Optional[int] = None
     costumes: Optional[List[str]] = None

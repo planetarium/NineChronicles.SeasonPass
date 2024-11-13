@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+from typing import Tuple
 
 import bencodex
 import eth_utils
@@ -106,7 +107,7 @@ def fetch_block_data(block_index: int, pass_type: PassType):
 def get_explore_floor(planet_id: PlanetID, block_index: int, season: int, avatar_addr: str) -> int:
     season_string = f"{season:040}"
     query = f"""{{ state(
-        index: {block_index},
+        index: {block_index + 1},  # Sloth needs 1 block to render actions
         accountAddress: "0000000000000000000000000000000000000102",  # Fixed address for exploreBoard
         address: "{derive_address(avatar_addr, season_string)}"
     ) }}
@@ -115,6 +116,19 @@ def get_explore_floor(planet_id: PlanetID, block_index: int, season: int, avatar
         GQL_DICT[planet_id], json={"query": query},
         headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
     )
-    status = bencodex.loads(bytes.fromhex(resp.json()["data"]["state"]))
-    return status[3]
+    data = resp.json()["data"]["state"]
+    if data is None:
+        return 0
+    return bencodex.loads(bytes.fromhex(data))[3]
 
+
+def get_last_cleared_stage(planet_id: PlanetID, avatar_addr: str) -> Tuple[int, int]:
+    query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{ 
+    worldInformation {{ lastClearedStage {{ worldId stageId }} }} 
+    }} }} }}"""
+    resp = requests.post(
+        GQL_DICT[planet_id], json={"query": query},
+        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+    )
+    result = resp.json()["data"]["stateQuery"]["avatar"]["worldInformation"]["lastClearedStage"]
+    return result["worldId"], result["stageId"]

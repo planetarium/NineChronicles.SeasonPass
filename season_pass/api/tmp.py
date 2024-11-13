@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
+from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import UserNotFoundError, SeasonNotFoundError
+from season_pass.schemas.season_pass import SeasonPassSchema
 from season_pass.schemas.tmp import (PremiumRequestSchema, RegisterRequestSchema, ExpRequestSchema,
+                                     SeasonChangeRequestSchema,
                                      )
 from season_pass.schemas.user import UserSeasonPassSchema
 
@@ -20,6 +23,15 @@ def register_user(request: RegisterRequestSchema, sess=Depends(session)):
     target_season = get_pass(sess, request.pass_type, request.season_index)
     if not target_season:
         raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
+    existing_data = sess.scalar(select(UserSeasonPass).where(
+        UserSeasonPass.planet_id == request.planet_id,
+        UserSeasonPass.agent_addr == request.agent_addr,
+        UserSeasonPass.avatar_addr == request.avatar_addr,
+        UserSeasonPass.season_pass_id == target_season.id
+    ))
+    if existing_data:
+        return existing_data
+
     new_data = UserSeasonPass(
         planet_id=request.planet_id,
         agent_addr=request.agent_addr,
@@ -40,7 +52,9 @@ def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == target_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
@@ -63,14 +77,18 @@ def add_exp(request: ExpRequestSchema, sess=Depends(session)):
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == target_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
     target_user.exp += request.exp
-    for exp_info in sorted(target_season.exp_list, key=lambda x: x.level, reverse=True):
-        if exp_info.exp <= target_user.exp:
-            target_user.level = exp_info.level
+    for lvl in sess.scalars(
+            select(Level).where(Level.pass_type == request.pass_type).order_by(desc(Level.level))
+    ).fetchall():
+        if lvl.exp <= target_user.exp:
+            target_user.level = lvl.level
             break
     sess.add(target_user)
     sess.commit()
@@ -86,7 +104,9 @@ def reset(request: RegisterRequestSchema, sess=Depends(session)):
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == target_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
@@ -97,3 +117,65 @@ def reset(request: RegisterRequestSchema, sess=Depends(session)):
     sess.commit()
     sess.refresh(target_user)
     return target_user
+
+
+@router.post("/change-pass-time", response_model=SeasonPassSchema)
+def change_pass_time(request: SeasonChangeRequestSchema, sess=Depends(session)):
+    target_season = get_pass(sess, request.pass_type, request.season_index)
+    if not target_season:
+        raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
+
+    target_season.start_timestamp = request.start_timestamp
+    target_season.end_timestamp = request.end_timestamp
+    sess.add(target_season)
+    sess.commit()
+    sess.refresh(target_season)
+    return SeasonPassSchema(
+        id=target_season.id,
+        pass_type=target_season.pass_type,
+        season_index=target_season.season_index,
+        start_date=target_season.start_date,
+        end_date=target_season.end_date,
+        start_timestamp=target_season.start_timestamp,
+        end_timestamp=target_season.end_timestamp,
+        reward_list=[
+            {
+                "level": reward["level"],
+                "normal": {
+                    "item": [
+                        {
+                            "id": x["ticker"].split("_")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["normal"] if x["ticker"].startswith("Item_")
+                    ],
+                    "currency": [
+                        {
+                            "ticker": x["ticker"].split("__")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["normal"] if x["ticker"].startswith("FAV__")
+                    ]
+                },
+                "premium": {
+                    "item": [
+                        {
+                            "id": x["ticker"].split("_")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["premium"] if x["ticker"].startswith("Item_")
+                    ],
+                    "currency": [
+                        {
+                            "ticker": x["ticker"].split("__")[-1],
+                            "amount": x["amount"]
+                        }
+                        for x in reward["premium"] if x["ticker"].startswith("FAV__")
+                    ]
+                }
+            }
+            for reward in target_season.reward_list
+        ],
+        # Repeat last level reward for seasonal repeat type pass
+        repeat_last_reward=target_season.start_timestamp is not None,
+    )
