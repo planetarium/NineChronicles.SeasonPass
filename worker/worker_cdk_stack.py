@@ -200,7 +200,7 @@ class WorkerStack(Stack):
             timeout=cdk_core.Duration.seconds(15),
             environment=env,
             events=[
-                _evt_src.SqsEventSource(self.shared_stack.adventure_boss_q)
+                _evt_src.SqsEventSource(self.shared_stack.world_clear_q)
             ],
             memory_size=256,
         )
