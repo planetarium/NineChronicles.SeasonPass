@@ -11,25 +11,12 @@ from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
 from courage_handler import verify_season_pass
+from schemas.sqs import SQSMessage
 from utils.gql import get_last_cleared_stage
-from worker.schemas.sqs import SQSMessage
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
 DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
-
-# See WorldSheet.csv in Lib9c to add new world
-WORLD_STAGE_DICT = {
-    1: {"min": 1, "max": 50},
-    2: {"min": 51, "max": 100},
-    3: {"min": 101, "max": 150},
-    4: {"min": 151, "max": 200},
-    5: {"min": 201, "max": 250},
-    6: {"min": 251, "max": 300},
-    7: {"min": 301, "max": 350},
-    8: {"min": 351, "max": 400},
-    # 9: {"min": 401, "max": 450},
-}
 
 engine = create_engine(DB_URI)
 
@@ -68,6 +55,7 @@ def handle(event, context):
             planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
             if sess.scalar(select(Block).where(
                     Block.planet_id == planet_id,
+                    Block.pass_type == PassType.WORLD_CLEAR_PASS,
                     Block.index == block_index,
             )):
                 logger.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
@@ -76,27 +64,28 @@ def handle(event, context):
             user_season_dict = verify_season_pass(sess, planet_id, current_pass, body["action_data"])
             for type_id, action_data in body["action_data"].items():
                 if type_id == "hack_and_slash22":
-                    target_data = user_season_dict.get(action_data["avatar_addr"], None)
-                    if target_data is None:
-                        user_season_dict[action_data["avatar_addr"]] = target_data = UserSeasonPass(
-                            planet_id=planet_id,
-                            agent_addr=action_data["agent_addr"],
-                            avatar_addr=action_data["avatar_addr"],
-                            season_pass_id=current_pass.id,
-                        )
+                    for action in action_data:
+                        target_data = user_season_dict.get(action["avatar_addr"], None)
+                        if target_data is None:
+                            user_season_dict[action["avatar_addr"]] = target_data = UserSeasonPass(
+                                planet_id=planet_id,
+                                agent_addr=action["agent_addr"],
+                                avatar_addr=action["avatar_addr"],
+                                season_pass_id=current_pass.id,
+                            )
 
-                    # Use `level` field as world, `exp` field as stage
-                    if action_data["stage_id"] <= target_data.exp:  # Already cleared stage. pass.
-                        continue
-                    elif target_data.exp == 0:  # No data
-                        target_data.exp = get_last_cleared_stage(planet_id, action_data["avatar_addr"])
-                    else:  # HAS new stage
-                        target_data.exp = action_data["stage_id"]
+                        # Use `level` field as world, `exp` field as stage
+                        if action["stage_id"] <= target_data.exp:  # Already cleared stage. pass.
+                            continue
+                        elif target_data.exp == 0:  # No data
+                            cleared_world, target_data.exp = get_last_cleared_stage(planet_id, action["avatar_addr"])
+                        else:  # HAS new stage
+                            target_data.exp = action["stage_id"]
 
-                    for level in level_list:
-                        if level.exp <= target_data.exp:
-                            target_data.level = level.level
-                            break
+                        for level in level_list:
+                            if level.exp <= target_data.exp:
+                                target_data.level = level.level
+                                break
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.WORLD_CLEAR_PASS))
             sess.commit()
