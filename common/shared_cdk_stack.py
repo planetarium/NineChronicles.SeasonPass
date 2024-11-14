@@ -165,7 +165,9 @@ class SharedStack(Stack):
         for param, secure in PARAMETER_LIST:
             param_value_dict[param] = None
             try:
-                prev_param = fetch_parameter(config.region_name, f"{config.stage}_9c_SEASON_PASS_{param}", secure)
+                prev_param = ssm.get_parameter(
+                    Name=f"{config.stage}_9c_SEASON_PASS_{param}", WithDecryption=secure
+                )["Parameter"]
                 logging.debug(prev_param["Value"])
                 if prev_param["Value"] != getattr(config, param.lower()):
                     logging.info(f"The value of {param} has been changed. Update to new value...")
