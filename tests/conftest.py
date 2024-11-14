@@ -9,6 +9,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from common.enums import PassType
 from common.models.season_pass import Level
 
 TEST_AGENT_ADDR = "0x49d5fceb955800b2c532d6319e803c7d80f817af"
@@ -52,7 +53,7 @@ def set_common_test_data(session):
     with open("tests/data/level.json", "r") as f:
         level_data = json.loads(f.read())
     for lvl in level_data:
-        session.add(Level(level=lvl["level"], exp=lvl["exp"]))
+        session.add(Level(pass_type=PassType[lvl['pass_type']], level=lvl["level"], exp=lvl["exp"]))
 
     # with open("tests/data/reward.json", "r") as f:
     #     reward = json.loads(f.read())

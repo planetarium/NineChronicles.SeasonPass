@@ -3,11 +3,12 @@ from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
-from common.models.season_pass import Level
-from common.utils.season_pass import get_current_season
+from common.enums import PassType
+from common.models.season_pass import Level, Exp
+from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import SeasonNotFoundError
-from season_pass.schemas.season_pass import LevelInfoSchema, SeasonPassSchema, ExpInfoSchema, NewSeasonPassSchema
+from season_pass.schemas.season_pass import LevelInfoSchema, SeasonPassSchema, ExpInfoSchema
 
 router = APIRouter(
     prefix="/season-pass",
@@ -16,13 +17,15 @@ router = APIRouter(
 
 
 @router.get("/current", response_model=SeasonPassSchema)
-def old_current_season(sess=Depends(session)):
-    curr_season = get_current_season(sess)
+def current_season(pass_type: PassType, sess=Depends(session)):
+    curr_season = get_pass(sess, pass_type, validate_current=True)
     if not curr_season:
         raise SeasonNotFoundError("No active season pass for today")
 
     return SeasonPassSchema(
         id=curr_season.id,
+        pass_type=curr_season.pass_type,
+        season_index=curr_season.season_index,
         start_date=curr_season.start_date,
         end_date=curr_season.end_date,
         start_timestamp=curr_season.start_timestamp,
@@ -64,24 +67,18 @@ def old_current_season(sess=Depends(session)):
                 }
             }
             for reward in curr_season.reward_list
-        ]
+        ],
+        # Repeat last level reward for seasonal repeat type pass
+        repeat_last_reward=curr_season.start_timestamp is not None,
     )
 
 
-@router.get("/current/new", response_model=NewSeasonPassSchema)
-def current_season(sess=Depends(session)):
-    curr_season = get_current_season(sess)
-    if not curr_season:
-        raise SeasonNotFoundError("No active season pass for today.")
-    return curr_season
-
-
 @router.get("/level", response_model=List[LevelInfoSchema])
-def level_info(sess=Depends(session)):
-    return sess.scalars(select(Level).order_by(Level.level)).fetchall()
+def level_info(pass_type: PassType, sess=Depends(session)):
+    return sess.scalars(select(Level).where(Level.pass_type == pass_type).order_by(Level.level)).fetchall()
 
 
 @router.get("/exp", response_model=List[ExpInfoSchema])
-def exp_info(sess=Depends(session)):
-    curr_season = get_current_season(sess, include_exp=True)
-    return curr_season.exp_list
+def exp_info(pass_type: PassType, season_index: int, sess=Depends(session)):
+    current_pass = get_pass(sess, pass_type=pass_type, season_index=season_index, include_exp=True)
+    return current_pass.exp_list

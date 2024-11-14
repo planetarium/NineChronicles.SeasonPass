@@ -1,6 +1,23 @@
 from enum import Enum
 
 
+class PassType(Enum):
+    """
+    # Type of pass
+    ---
+
+    - **`CouragePass`** : [Seasonal] Former season pass. Explore stage and get brave exp.
+
+    - **`AdventureBossPass`** : [Seasonal] Adventure boss pass. Explore adventure boss and get exp.
+
+    - **`WorldClearPass`** : [One time] Clear world
+    """
+
+    COURAGE_PASS = "CouragePass"
+    ADVENTURE_BOSS_PASS = "AdventureBossPass"
+    WORLD_CLEAR_PASS = "WorldClearPass"
+
+
 class TxStatus(Enum):
     """
     # Transaction Status
@@ -64,12 +81,18 @@ class ActionType(Enum):
     - **`battle_arena`**: Arena battle. Matches with type_id `battle_arena##`
     - **`raid`**: World boss battle. Matches with type_id `raid##`
     - **`event_dungeon`**: Event dungeon stage. Matches with type_id `event_dungeon_battle##`
+    - **`wanted`**: Add bounty to adventure boss
+    - **`explore_adventure_boss`**: Explore adventure boss stage
+    - **`sweep_adventure_boss`**: Rush adventure boss stage
     """
     HAS = "hack_and_slash"
     SWEEP = "hack_and_slash_sweep"
     ARENA = "battle_arena"
     RAID = "raid"
     EVENT = "event_dungeon"
+    WANTED = "wanted"
+    CHALLENGE = "explore_adventure_boss"
+    RUSH = "sweep_adventure_boss"
 
 
 class PlanetID(bytes, Enum):

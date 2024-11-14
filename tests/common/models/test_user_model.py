@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 
 import pytest
 
-from common.enums import PlanetID
+from common.enums import PlanetID, PassType
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass
 from conftest import TEST_AGENT_ADDR, TEST_AVATAR_ADDR, add_test_data
@@ -13,6 +13,7 @@ def test_new_user(sess):
     now = datetime.now(tz=timezone.utc)
     season_data = SeasonPass(
         id=1, instant_exp=100,
+        pass_type=PassType.COURAGE_PASS, season_index=1,
         start_timestamp=now - timedelta(days=1),
         end_timestamp=now + timedelta(days=1),
     )

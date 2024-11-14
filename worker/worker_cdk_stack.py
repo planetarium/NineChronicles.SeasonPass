@@ -38,6 +38,8 @@ class WorkerStack(Stack):
             assumed_by=_iam.ServicePrincipal("ec2.amazonaws.com"),
         )
         self.shared_stack.brave_q.grant_send_messages(tracker_role)
+        self.shared_stack.adventure_boss_q.grant_send_messages(tracker_role)
+        self.shared_stack.world_clear_q.grant_send_messages(tracker_role)
         self.__add_policy(tracker_role, db_password=True)
 
         if self.config.stage == "mainnet":
@@ -76,7 +78,7 @@ class WorkerStack(Stack):
             compatible_runtimes=[
                 _lambda.Runtime.PYTHON_3_11,
             ],
-            removal_policy=RemovalPolicy.DESTROY,
+        removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Environment variables
@@ -88,7 +90,9 @@ class WorkerStack(Stack):
                       f"{self.shared_stack.credentials.username}:[DB_PASSWORD]"
                       f"@{self.shared_stack.rds_endpoint}"
                       f"/season_pass",
-            "SQS_URL": self.shared_stack.brave_q.queue_url,
+            "COURAGE_Q_URL": self.shared_stack.brave_q.queue_url,
+            "ADV_BOSS_Q_URL": self.shared_stack.adventure_boss_q.queue_url,
+            "WORLD_CLEAR_Q_URL": self.shared_stack.world_clear_q.queue_url,
             # This is not used, but for reference compatibility. This can be deleted once after the stack is deployed.
             "ODIN_GQL_URL": self.config.odin_gql_url,
             "HEIMDALL_GQL_URL": self.config.heimdall_gql_url,
@@ -147,13 +151,13 @@ class WorkerStack(Stack):
         )
         self.__add_policy(handler_role, db_password=True)
 
-        brave_handler = _lambda.Function(
+        courage_handler = _lambda.Function(
             self, f"{self.config.stage}-9c-season_pass-brave_handler-function",
             function_name=f"{self.config.stage}-9c-season_pass-brave_handler",
             runtime=_lambda.Runtime.PYTHON_3_11,
             description="Brave exp handler of NineChronicles.SeasonPass",
             code=_lambda.AssetCode("worker/", exclude=exclude_list),
-            handler="brave_handler.handle",
+            handler="handler.courage_handler.handle",
             layers=[layer],
             role=handler_role,
             vpc=self.shared_stack.vpc,
@@ -161,6 +165,42 @@ class WorkerStack(Stack):
             environment=env,
             events=[
                 _evt_src.SqsEventSource(self.shared_stack.brave_q)
+            ],
+            memory_size=256,
+        )
+
+        adv_boss_handler = _lambda.Function(
+            self, f"{self.config.stage}-9c-season_pass-adv_boss_handler-function",
+            function_name=f"{self.config.stage}-9c-season_pass-adv_boss_handler",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            description="Adventure boss handler of NineChronicles.SeasonPass",
+            code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            handler="handler.adventure_boss_handler.handle",
+            layers=[layer],
+            role=handler_role,
+            vpc=self.shared_stack.vpc,
+            timeout=cdk_core.Duration.seconds(15),
+            environment=env,
+            events=[
+                _evt_src.SqsEventSource(self.shared_stack.adventure_boss_q)
+            ],
+            memory_size=256,
+        )
+
+        world_clear_handler = _lambda.Function(
+            self, f"{self.config.stage}-9c-season_pass-world_clear_handler-function",
+            function_name=f"{self.config.stage}-9c-season_pass-world_clear_handler",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            description="Adventure boss handler of NineChronicles.SeasonPass",
+            code=_lambda.AssetCode("worker/", exclude=exclude_list),
+            handler="handler.world_clear_handler.handle",
+            layers=[layer],
+            role=handler_role,
+            vpc=self.shared_stack.vpc,
+            timeout=cdk_core.Duration.seconds(15),
+            environment=env,
+            events=[
+                _evt_src.SqsEventSource(self.shared_stack.adventure_boss_q)
             ],
             memory_size=256,
         )
