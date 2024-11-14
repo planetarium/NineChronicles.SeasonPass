@@ -10,9 +10,9 @@ from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
+from schemas.sqs import SQSMessage
 from utils.gql import get_last_cleared_stage
 from utils.season_pass import verify_season_pass
-from worker.schemas.sqs import SQSMessage
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -77,7 +77,7 @@ def handle(event, context):
                         # Use `level` field as world, `exp` field as stage
                         if action["stage_id"] <= target_data.exp:  # Already cleared stage. pass.
                             continue
-                        elif target_data.exp == 0:  # No data
+                        elif target_data.exp == 0:  # No data: Get last cleared block from chain
                             cleared_world, target_data.exp = get_last_cleared_stage(planet_id, action["avatar_addr"])
                         else:  # HAS new stage
                             target_data.exp = action["stage_id"]
@@ -90,7 +90,7 @@ def handle(event, context):
             sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.WORLD_CLEAR_PASS))
             sess.commit()
             logger.info(
-                f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{body['block']} applied."
+                f"All {len(user_season_dict.values())} world clear for block {planet_id.name}:{body['block']} applied."
             )
     except InterruptedError as e:
         err_msg = str(e).split("\n")[0]
