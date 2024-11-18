@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from sqlalchemy import create_engine, select, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -45,6 +46,23 @@ def handle(event, context):
     try:
         sess = scoped_session(sessionmaker(bind=engine))
         current_pass = get_pass(sess, pass_type=PassType.WORLD_CLEAR_PASS, validate_current=True, include_exp=True)
+
+        # Skip blocks before season starts
+        if current_pass is None:
+            logger.warning(
+                f"There is no active {PassType.ADVENTURE_BOSS_PASS.name} at {datetime.now().strftime('%Y-%m-%d %H:%H:%S')}"
+            )
+            for i, record in enumerate(message.Records):
+                body = record.body
+                block_index = body["block"]
+                planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
+                sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.ADVENTURE_BOSS_PASS))
+                logger.info(
+                    f"Skip adv.boss exp for {planet_id.name} : #{block_index} before season starts."
+                )
+            sess.commit()
+            return
+
         level_list = sess.scalars(select(Level).where(Level.pass_type == PassType.WORLD_CLEAR_PASS)
                                   .order_by(desc(Level.level))
                                   ).fetchall()
