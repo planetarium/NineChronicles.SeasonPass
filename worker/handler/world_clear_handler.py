@@ -1,18 +1,19 @@
 import os
+from datetime import datetime
 
+from common import logger
 from sqlalchemy import create_engine, select, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from common import logger
 from common.enums import PassType, PlanetID
 from common.models.action import Block
 from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
-from courage_handler import verify_season_pass
 from schemas.sqs import SQSMessage
 from utils.gql import get_last_cleared_stage
+from utils.season_pass import verify_season_pass
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -45,6 +46,23 @@ def handle(event, context):
     try:
         sess = scoped_session(sessionmaker(bind=engine))
         current_pass = get_pass(sess, pass_type=PassType.WORLD_CLEAR_PASS, validate_current=True, include_exp=True)
+
+        # Skip blocks before season starts
+        if current_pass is None:
+            logger.warning(
+                f"There is no active {PassType.ADVENTURE_BOSS_PASS.name} at {datetime.now().strftime('%Y-%m-%d %H:%H:%S')}"
+            )
+            for i, record in enumerate(message.Records):
+                body = record.body
+                block_index = body["block"]
+                planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
+                sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.ADVENTURE_BOSS_PASS))
+                logger.info(
+                    f"Skip adv.boss exp for {planet_id.name} : #{block_index} before season starts."
+                )
+            sess.commit()
+            return
+
         level_list = sess.scalars(select(Level).where(Level.pass_type == PassType.WORLD_CLEAR_PASS)
                                   .order_by(desc(Level.level))
                                   ).fetchall()
@@ -77,7 +95,7 @@ def handle(event, context):
                         # Use `level` field as world, `exp` field as stage
                         if action["stage_id"] <= target_data.exp:  # Already cleared stage. pass.
                             continue
-                        elif target_data.exp == 0:  # No data
+                        elif target_data.exp == 0:  # No data: Get last cleared block from chain
                             cleared_world, target_data.exp = get_last_cleared_stage(planet_id, action["avatar_addr"])
                         else:  # HAS new stage
                             target_data.exp = action["stage_id"]
@@ -90,7 +108,7 @@ def handle(event, context):
             sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.WORLD_CLEAR_PASS))
             sess.commit()
             logger.info(
-                f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{body['block']} applied."
+                f"All {len(user_season_dict.values())} world clear for block {planet_id.name}:{body['block']} applied."
             )
     except InterruptedError as e:
         err_msg = str(e).split("\n")[0]

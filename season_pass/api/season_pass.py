@@ -68,8 +68,8 @@ def current_season(pass_type: PassType, sess=Depends(session)):
             }
             for reward in curr_season.reward_list
         ],
-        # Repeat last level reward for seasonal repeat type pass
-        repeat_last_reward=curr_season.start_timestamp is not None,
+        # World clear pass does not have repeat reward
+        repeat_last_reward=curr_season.pass_type != PassType.WORLD_CLEAR_PASS,
     )
 
 
