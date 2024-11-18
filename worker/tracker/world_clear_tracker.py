@@ -80,7 +80,7 @@ def main():
     sess = scoped_session(sessionmaker(bind=engine))
     # Get missing blocks
     start_block = int(os.environ.get("START_BLOCK_INDEX"))
-    expected_all = set(range(start_block, get_block_tip() + 1))
+    expected_all = set(range(start_block, get_block_tip()))
     all_blocks = set(sess.scalars(
         select(Block.index)
         .where(
