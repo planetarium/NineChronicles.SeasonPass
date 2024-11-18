@@ -35,7 +35,7 @@ class UpgradeRequestSchema(BaseSchema):
     planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
     avatar_addr: str
-    pass_type: PassType
+    pass_type: str | PassType
     season_index: int
     is_premium: bool = False
     is_premium_plus: bool = False
@@ -55,6 +55,10 @@ class UpgradeRequestSchema(BaseSchema):
 
         if isinstance(self.planet_id, str):
             self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
+
+        if isinstance(self.pass_type, str):
+            self.pass_type = PassType(self.pass_type)
+
         return self
 
 

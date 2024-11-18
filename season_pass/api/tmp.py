@@ -23,14 +23,14 @@ def register_user(request: RegisterRequestSchema, sess=Depends(session)):
     target_season = get_pass(sess, request.pass_type, request.season_index)
     if not target_season:
         raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
-    prev_data = sess.scalar(select(UserSeasonPass).where(
+    existing_data = sess.scalar(select(UserSeasonPass).where(
         UserSeasonPass.planet_id == request.planet_id,
         UserSeasonPass.agent_addr == request.agent_addr,
         UserSeasonPass.avatar_addr == request.avatar_addr,
         UserSeasonPass.season_pass_id == target_season.id
     ))
-    if prev_data:
-        return prev_data
+    if existing_data:
+        return existing_data
 
     new_data = UserSeasonPass(
         planet_id=request.planet_id,

@@ -21,7 +21,7 @@ def apply_exp(sess, planet_id: PlanetID, user_season_dict: Dict[str, UserSeasonP
 
         sess.add(ActionHistory(
             planet_id=planet_id,
-            block_index=block_index, tx_id=d.get("tx_id", "0" * 64),
+            block_index=block_index, tx_id=d.get("tx_id"),
             season_id=target.season_pass_id,
             agent_addr=target.agent_addr, avatar_addr=target.avatar_addr,
             action=action_type, count=d["count_base"], exp=exp * d["count_base"],
