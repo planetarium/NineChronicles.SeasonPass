@@ -56,9 +56,17 @@ def handle(event, context):
                 body = record.body
                 block_index = body["block"]
                 planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
+                if sess.scalar(select(Block).where(
+                        Block.planet_id == planet_id,
+                        Block.pass_type == PassType.WORLD_CLEAR_PASS,
+                        Block.index == block_index,
+                )):
+                    logger.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
+                    continue
+
                 sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.ADVENTURE_BOSS_PASS))
                 logger.info(
-                    f"Skip adv.boss exp for {planet_id.name} : #{block_index} before season starts."
+                    f"Skip world clear exp for {planet_id.name} : #{block_index} before season starts."
                 )
             sess.commit()
             return
