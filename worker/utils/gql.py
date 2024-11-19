@@ -15,8 +15,10 @@ GQL_URL = os.environ.get("GQL_URL")
 GQL_DICT = {
     PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
     PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+    PlanetID.THOR: os.environ.get("THOR_GQL_URL"),
     PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
     PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
+    PlanetID.THOR_INTERNAL: os.environ.get("THOR_GQL_URL"),
 }
 TARGET_ACTION_DICT = {
     PassType.COURAGE_PASS: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)",
