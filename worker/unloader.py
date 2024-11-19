@@ -34,7 +34,7 @@ def handle(event, context):
     message = SQSMessage(Records=event.get("Records", []))
     sess = None
     account = Account(fetch_kms_key_id(stage, region_name))
-    gql = GQL()
+    gql = GQL(os.environ.get("HEADLESS_GQL_JWT_SECRET"))
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
@@ -62,6 +62,10 @@ def handle(event, context):
             else:
                 nonce = nonce_dict[claim.planet_id]
 
+            if claim.tx:
+                target_claim_list.append(claim)
+                continue
+
             if not claim.nonce:
                 claim.nonce = nonce
                 use_nonce = True
@@ -70,7 +74,8 @@ def handle(event, context):
                 claim.planet_id,
                 "claim_items", pubkey=account.pubkey, nonce=claim.nonce,
                 avatar_addr=claim.avatar_addr, claim_data=claim.reward_list,
-                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels, "t": "claim"}}),
+                memo=json.dumps({"season_pass": {"n": claim.normal_levels, "p": claim.premium_levels, "t": "claim",
+                                                 "tp": claim.season_pass.pass_type.value}}),
             )
             signature = account.sign_tx(unsigned_tx)
             signed_tx = gql.sign(claim.planet_id, unsigned_tx, signature)

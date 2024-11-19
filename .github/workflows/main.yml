@@ -21,6 +21,7 @@ jobs:
     with:
       environment: ${{ github.ref == 'refs/heads/main' && 'mainnet' || ((startsWith(github.ref, 'refs/heads/release') || github.ref == 'refs/heads/preview') && 'internal' || 'development') }}
     secrets:
+      HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   synth:
@@ -33,11 +34,12 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   deploy_without_approval:
-    # This is for development / internal deployment
-    if: ${{ github.ref == 'refs/heads/internal' || github.ref == 'refs/heads/preview' || github.ref == 'refs/heads/development' || startsWith(github.ref, 'refs/heads/release') }}
+    # This is for internal / preview deployment
+    if: ${{ github.ref == 'refs/heads/internal' || github.ref == 'refs/heads/preview' || startsWith(github.ref, 'refs/heads/release') }}
     needs: [ "test", "synth" ]
     uses: ./.github/workflows/deploy.yml
     with:
@@ -48,6 +50,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   approval_notice:
@@ -85,4 +88,5 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
       JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+      HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

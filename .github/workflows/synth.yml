@@ -20,6 +20,8 @@ on:
         required: true
       SLACK_WEBHOOK_URL:
         required: true
+      HEADLESS_GQL_JWT_SECRET:
+        required: true
 
 jobs:
   synth:
@@ -43,7 +45,7 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: 1.6.1
+          version: 1.8.4
           virtualenvs-in-project: true
 
       - name: Cache Poetry
@@ -81,14 +83,10 @@ jobs:
           KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          ODIN_VALIDATOR_URL: ${{ vars.ODIN_VALIDATOR_URL }}
-          HEIMDALL_VALIDATOR_URL: ${{ vars.HEIMDALL_VALIDATOR_URL }}
           ODIN_GQL_URL: ${{ vars.ODIN_GQL_URL }}
-          ODIN_SCAN_URL: ${{ vars.ODIN_SCAN_URL }}
           HEIMDALL_GQL_URL: ${{ vars.HEIMDALL_GQL_URL }}
-          HEIMDALL_SCAN_URL: ${{ vars.HEIMDALL_SCAN_URL }}
-          ODIN_INTERNAL_GQL_URL: ${{ vars.ODIN_INTERNAL_GQL_URL }}
-          HEIMDALL_INTERNAL_GQL_URL: ${{ vars.HEIMDALL_INTERNAL_GQL_URL }}
+          THOR_GQL_URL: ${{ vars.THOR_GQL_URL }}
+          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
         run: |
           source $VENV
           yarn cdk synth

@@ -1,6 +1,23 @@
 from enum import Enum
 
 
+class PassType(Enum):
+    """
+    # Type of pass
+    ---
+
+    - **`CouragePass`** : [Seasonal] Former season pass. Explore stage and get brave exp.
+
+    - **`AdventureBossPass`** : [Seasonal] Adventure boss pass. Explore adventure boss and get exp.
+
+    - **`WorldClearPass`** : [One time] Clear world
+    """
+
+    COURAGE_PASS = "CouragePass"
+    ADVENTURE_BOSS_PASS = "AdventureBossPass"
+    WORLD_CLEAR_PASS = "WorldClearPass"
+
+
 class TxStatus(Enum):
     """
     # Transaction Status
@@ -64,12 +81,18 @@ class ActionType(Enum):
     - **`battle_arena`**: Arena battle. Matches with type_id `battle_arena##`
     - **`raid`**: World boss battle. Matches with type_id `raid##`
     - **`event_dungeon`**: Event dungeon stage. Matches with type_id `event_dungeon_battle##`
+    - **`wanted`**: Add bounty to adventure boss
+    - **`explore_adventure_boss`**: Explore adventure boss stage
+    - **`sweep_adventure_boss`**: Rush adventure boss stage
     """
     HAS = "hack_and_slash"
     SWEEP = "hack_and_slash_sweep"
     ARENA = "battle_arena"
     RAID = "raid"
     EVENT = "event_dungeon"
+    WANTED = "wanted"
+    CHALLENGE = "explore_adventure_boss"
+    RUSH = "sweep_adventure_boss"
 
 
 class PlanetID(bytes, Enum):
@@ -81,15 +104,19 @@ class PlanetID(bytes, Enum):
     - *0x000000000000* : Mainnet + Odin
     - *0x000000000001* : Mainnet + Heimdall
     - *0x000000000002* : Mainnet + Idun
+    - *0x000000000003* : Mainnet + Thor
     - *0x100000000000* : Internal + Odin
     - *0x100000000001* : Internal + Heimdall
     - *0x100000000002* : Internal + Idun
+    - *0x100000000003* : Internal + Thor
 
     """
     ODIN = b'0x000000000000'
     HEIMDALL = b'0x000000000001'
     IDUN = b'0x000000000002'
+    THOR = b'0x000000000003'
 
     ODIN_INTERNAL = b'0x100000000000'
     HEIMDALL_INTERNAL = b'0x100000000001'
     IDUN_INTERNAL = b'0x100000000002'
+    THOR_INTERNAL = b'0x100000000003'

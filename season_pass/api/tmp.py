@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, desc
-from sqlalchemy.orm import Session
 
-from common.models.season_pass import Level, SeasonPass
+from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
-from common.utils.season_pass import get_current_season
+from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import UserNotFoundError, SeasonNotFoundError
 from season_pass.schemas.season_pass import SeasonPassSchema
-from season_pass.schemas.tmp import (PremiumRequestSchema, LevelRequestSchema, RegisterRequestSchema,
-                                     SeasonChangeRequestSchema, )
+from season_pass.schemas.tmp import (PremiumRequestSchema, RegisterRequestSchema, ExpRequestSchema,
+                                     SeasonChangeRequestSchema,
+                                     )
 from season_pass.schemas.user import UserSeasonPassSchema
 
 router = APIRouter(
@@ -20,12 +20,23 @@ router = APIRouter(
 
 @router.post("/register", response_model=UserSeasonPassSchema)
 def register_user(request: RegisterRequestSchema, sess=Depends(session)):
-    current_season = get_current_season(sess)
+    target_season = get_pass(sess, request.pass_type, request.season_index)
+    if not target_season:
+        raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
+    existing_data = sess.scalar(select(UserSeasonPass).where(
+        UserSeasonPass.planet_id == request.planet_id,
+        UserSeasonPass.agent_addr == request.agent_addr,
+        UserSeasonPass.avatar_addr == request.avatar_addr,
+        UserSeasonPass.season_pass_id == target_season.id
+    ))
+    if existing_data:
+        return existing_data
+
     new_data = UserSeasonPass(
         planet_id=request.planet_id,
         agent_addr=request.agent_addr,
         avatar_addr=request.avatar_addr,
-        season_pass_id=current_season.id,
+        season_pass_id=target_season.id,
     )
     sess.add(new_data)
     sess.commit()
@@ -35,11 +46,15 @@ def register_user(request: RegisterRequestSchema, sess=Depends(session)):
 
 @router.post("/premium", response_model=UserSeasonPassSchema)
 def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
-    current_season = get_current_season(sess)
+    target_season = get_pass(sess, request.pass_type, season_index=request.season_index)
+    if not target_season:
+        raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == current_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
@@ -54,52 +69,71 @@ def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
     return target_user
 
 
-@router.post("/level", response_model=UserSeasonPassSchema)
-def set_level(request: LevelRequestSchema, sess=Depends(session)):
-    current_season = get_current_season(sess)
+@router.post("/add-exp", response_model=UserSeasonPassSchema)
+def add_exp(request: ExpRequestSchema, sess=Depends(session)):
+    target_season = get_pass(sess, request.pass_type, request.season_index, include_exp=True)
+    if not target_season:
+        raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
     target_user = sess.scalar(
         select(UserSeasonPass)
         .where(UserSeasonPass.avatar_addr == request.avatar_addr,
-               UserSeasonPass.season_pass_id == current_season.id)
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
     )
     if not target_user:
         raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
-
-    if request.level:
-        target_level = sess.scalar(select(Level).where(Level.level == request.level))
-    elif request.exp:
-        target_level = sess.scalar(select(Level).where(Level.exp <= request.exp).order_by(desc(Level.level)))
-    else:
-        raise Exception(f"Either level or exp must be provided.")
-    if not target_level:
-        raise Exception("Cannot find target level from provided data. Try again with new value.")
-
-    target_user.exp = request.exp or target_level.exp
-    target_user.level = target_level.level
+    target_user.exp += request.exp
+    for lvl in sess.scalars(
+            select(Level).where(Level.pass_type == request.pass_type).order_by(desc(Level.level))
+    ).fetchall():
+        if lvl.exp <= target_user.exp:
+            target_user.level = lvl.level
+            break
     sess.add(target_user)
     sess.commit()
     sess.refresh(target_user)
     return target_user
 
 
-@router.post("/change-season", response_model=SeasonPassSchema)
-def change_season(request: SeasonChangeRequestSchema, sess: Session = Depends(session)):
-    print(request)
-    target_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id))
+@router.post("/reset", response_model=UserSeasonPassSchema)
+def reset(request: RegisterRequestSchema, sess=Depends(session)):
+    target_season = get_pass(sess, request.pass_type, request.season_index, include_exp=True)
     if not target_season:
-        raise SeasonNotFoundError(f"Season {request.season_id} not found")
-    next_season = sess.scalar(select(SeasonPass).where(SeasonPass.id == request.season_id + 1))
-    if not next_season:
-        raise SeasonNotFoundError(f"Next season (Season ID {request.season_id + 1}) not found")
+        raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
+    target_user = sess.scalar(
+        select(UserSeasonPass)
+        .where(UserSeasonPass.avatar_addr == request.avatar_addr,
+               UserSeasonPass.planet_id == request.planet_id,
+               UserSeasonPass.season_pass_id == target_season.id,
+               )
+    )
+    if not target_user:
+        raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
 
-    target_season.end_timestamp = request.timestamp
-    next_season.start_timestamp = request.timestamp
+    target_user.level = 0
+    target_user.exp = 0
+    sess.add(target_user)
+    sess.commit()
+    sess.refresh(target_user)
+    return target_user
+
+
+@router.post("/change-pass-time", response_model=SeasonPassSchema)
+def change_pass_time(request: SeasonChangeRequestSchema, sess=Depends(session)):
+    target_season = get_pass(sess, request.pass_type, request.season_index)
+    if not target_season:
+        raise SeasonNotFoundError(f"{request.pass_type}:{request.season_index} not found")
+
+    target_season.start_timestamp = request.start_timestamp
+    target_season.end_timestamp = request.end_timestamp
     sess.add(target_season)
-    sess.add(next_season)
     sess.commit()
     sess.refresh(target_season)
     return SeasonPassSchema(
         id=target_season.id,
+        pass_type=target_season.pass_type,
+        season_index=target_season.season_index,
         start_date=target_season.start_date,
         end_date=target_season.end_date,
         start_timestamp=target_season.start_timestamp,
@@ -141,5 +175,7 @@ def change_season(request: SeasonChangeRequestSchema, sess: Session = Depends(se
                 }
             }
             for reward in target_season.reward_list
-        ]
+        ],
+        # Repeat last level reward for seasonal repeat type pass
+        repeat_last_reward=target_season.start_timestamp is not None,
     )

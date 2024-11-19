@@ -1,9 +1,10 @@
-from typing import List
+from datetime import datetime
+from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema, model_validator, Field
 
-from common.enums import PlanetID
-from season_pass.schemas.season_pass import ItemInfoSchema, CurrencyInfoSchema, ClaimSchema
+from common.enums import PlanetID, PassType
+from season_pass.schemas.season_pass import ClaimSchema, SimpleSeasonPassSchema
 from season_pass.settings import stage
 
 
@@ -11,13 +12,14 @@ class UserSeasonPassSchema(BaseSchema):
     planet_id: PlanetID
     agent_addr: str = ""
     avatar_addr: str
-    season_pass_id: int = 0
+    season_pass: SimpleSeasonPassSchema
     level: int = 0
     exp: int = 0
     is_premium: bool = False
     is_premium_plus: bool = False
     last_normal_claim: int = 0
     last_premium_claim: int = 0
+    claim_limit_timestamp: Optional[datetime] = None
 
     @model_validator(mode="after")
     def lowercase(self):
@@ -33,7 +35,8 @@ class UpgradeRequestSchema(BaseSchema):
     planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
     avatar_addr: str
-    season_id: int
+    pass_type: str | PassType
+    season_index: int
     is_premium: bool = False
     is_premium_plus: bool = False
     g_sku: str
@@ -52,6 +55,10 @@ class UpgradeRequestSchema(BaseSchema):
 
         if isinstance(self.planet_id, str):
             self.planet_id = PlanetID(bytes(self.planet_id, "utf-8"))
+
+        if isinstance(self.pass_type, str):
+            self.pass_type = PassType(self.pass_type)
+
         return self
 
 
@@ -59,8 +66,10 @@ class ClaimRequestSchema(BaseSchema):
     planet_id: PlanetID | str = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
     agent_addr: str
     avatar_addr: str
-    season_id: int
+    pass_type: PassType
+    season_index: int
     force: bool = False
+    prev: bool = False
 
     @model_validator(mode="after")
     def sanitize(self):
@@ -72,8 +81,5 @@ class ClaimRequestSchema(BaseSchema):
 
 
 class ClaimResultSchema(BaseSchema):
-    reward_list: List[ClaimSchema] = []
     user: UserSeasonPassSchema
-    # Deprecated: For backward compatibility
-    items: List[ItemInfoSchema]
-    currencies: List[CurrencyInfoSchema]
+    reward_list: List[ClaimSchema] = []

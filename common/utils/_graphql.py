@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Union, Dict, Any, Tuple, Optional, List
 
+import jwt
 from gql import Client
 from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
@@ -12,7 +13,7 @@ from common.enums import PlanetID
 
 
 class GQL:
-    def __init__(self):
+    def __init__(self, jwt_secret: str = None):
         if os.environ.get("STAGE") == "mainnet":
             self._url = {
                 PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
@@ -25,9 +26,25 @@ class GQL:
             }
         self.client = None
         self.ds = None
+        self.__jwt_secret = jwt_secret
+
+    def __create_token(self) -> str:
+        iat = datetime.datetime.now(tz=datetime.timezone.utc)
+        return jwt.encode({
+            "iat": iat,
+            "exp": iat + datetime.timedelta(minutes=1),
+            "iss": "planetariumhq.com"
+        }, self.__jwt_secret)
+
+    def __get_ttl(self) -> str:
+        return (datetime.datetime.utcnow() + datetime.timedelta(days=3)).isoformat()
+
+    def __create_header(self):
+        return {"Authorization": f"Bearer {self.__create_token()}"}
 
     def reset(self, planet_id: PlanetID):
-        transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2)
+        transport = RequestsHTTPTransport(url=self._url[planet_id], verify=True, retries=2,
+                                          headers=self.__create_header())
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
         with self.client as _:
             assert self.client.schema is not None
@@ -65,7 +82,7 @@ class GQL:
         return resp["transaction"]["nextTxNonce"]
 
     def _unload_from_garage(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
-        ts = kwargs.get("timestamp", (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat())
+        ts = kwargs.get("timestamp", self.__get_ttl())
         fav_data = kwargs.get("fav_data")
         avatar_addr = kwargs.get("avatar_addr")
         item_data = kwargs.get("item_data")
@@ -94,7 +111,7 @@ class GQL:
         return bytes.fromhex(result["actionTxQuery"]["unloadFromMyGarages"])
 
     def _claim_items(self, pubkey: bytes, nonce: int, **kwargs) -> bytes:
-        ts = kwargs.get("timestamp", (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat())
+        ts = kwargs.get("timestamp", self.__get_ttl())
         avatar_addr: str = kwargs.get("avatar_addr")
         claim_data: List[Dict[str, Any]] = kwargs.get("claim_data")
         memo = kwargs.get("memo")

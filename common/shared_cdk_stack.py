@@ -72,6 +72,26 @@ class SharedStack(Stack):
             dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.brave_dlq),
             visibility_timeout=cdk_core.Duration.seconds(20),
         )
+        self.adventure_boss_dlq = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-adventure_boss-dlq",
+            queue_name=f"{config.stage}-9c-season_pass-adventure_boss-dlq",
+        )
+        self.adventure_boss_q = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-adventure_boss-queue",
+            queue_name=f"{config.stage}-9c-season_pass-adventure_boss-queue",
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.adventure_boss_dlq),
+            visibility_timeout=cdk_core.Duration.seconds(20),
+        )
+        self.world_clear_dlq = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-world_clear-dlq",
+            queue_name=f"{config.stage}-9c-season_pass-world_clear-dlq",
+        )
+        self.world_clear_q = _sqs.Queue(
+            self, f"{config.stage}-9c-season_pass-world_clear-queue",
+            queue_name=f"{config.stage}-9c-season_pass-world_clear-queue",
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.adventure_boss_dlq),
+            visibility_timeout=cdk_core.Duration.seconds(20),
+        )
 
         # EC2 SG
         self.ec2_sg = _ec2.SecurityGroup(
@@ -104,7 +124,7 @@ class SharedStack(Stack):
         )
         self.credentials = _rds.Credentials.from_username("season_pass")
         if config.stage == "mainnet":
-            self.rds = _rds.ServerlessCluster(
+            self.rds = _rds.DatabaseCluster(
                 self, f"{config.stage}-9c-season_pass-aurora-cluster",
                 cluster_identifier=f"{config.stage}-9c-season-pass-aurora-cluster",
                 engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_2),
@@ -112,6 +132,13 @@ class SharedStack(Stack):
                 credentials=self.credentials,
                 vpc=self.vpc, vpc_subnets=_ec2.SubnetSelection(),
                 security_groups=[self.rds_security_group],
+                instance_update_behaviour=_rds.InstanceUpdateBehaviour.ROLLING,
+                deletion_protection=True,
+                storage_type=_rds.DBClusterStorageType.AURORA,
+                writer=_rds.ClusterInstance.provisioned(
+                    "writer",
+                    instance_type=_ec2.InstanceType.of(_ec2.InstanceClass.R6G, _ec2.InstanceSize.LARGE)
+                )
             )
             self.rds_endpoint = self.rds.cluster_endpoint.socket_address
         else:
@@ -131,18 +158,21 @@ class SharedStack(Stack):
         # SecureStrings in Parameter Store
         PARAMETER_LIST = (
             ("KMS_KEY_ID", True),
-            ("JWT_TOKEN_SECRET", True)
+            ("JWT_TOKEN_SECRET", True),
+            ("HEADLESS_GQL_JWT_SECRET", True)
         )
         ssm = boto3.client("ssm", region_name=config.region_name,
                            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-                           aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY")
+                           aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
                            )
 
         param_value_dict = {}
         for param, secure in PARAMETER_LIST:
             param_value_dict[param] = None
             try:
-                prev_param = fetch_parameter(config.region_name, f"{config.stage}_9c_SEASON_PASS_{param}", secure)
+                prev_param = ssm.get_parameter(
+                    Name=f"{config.stage}_9c_SEASON_PASS_{param}", WithDecryption=secure
+                )["Parameter"]
                 logging.debug(prev_param["Value"])
                 if prev_param["Value"] != getattr(config, param.lower()):
                     logging.info(f"The value of {param} has been changed. Update to new value...")

@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic.dataclasses import dataclass
 
+SEASONPASS_ADDRESS = "0x0E19A992ad976B4986098813DfCd24B0775AC0AA"
+
 COMMON_LAMBDA_EXCLUDE = [
     "!common",
     "!common/**",
@@ -32,13 +34,12 @@ class Config:
     account_id: str
     region_name: str
 
-    odin_validator_url: str
-    heimdall_validator_url: str
     odin_gql_url: str
-    odin_scan_url: str
     heimdall_gql_url: str
-    heimdall_scan_url: str
+    thor_gql_url: str
 
     kms_key_id: str
     jwt_token_secret: str
 
+    # JWT Headless
+    headless_gql_jwt_secret: Optional[str] = None

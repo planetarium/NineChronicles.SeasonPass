@@ -74,8 +74,10 @@ class APIStack(Stack):
             "LOGGING_LEVEL": "INFO",
             "DB_ECHO": "False",
             "SQS_URL": shared_stack.unload_q.queue_url,
-            "ODIN_VALIDATOR_URL": config.odin_validator_url,
-            "HEIMDALL_VALIDATOR_URL": config.heimdall_validator_url,
+            "ODIN_GQL_URL": config.odin_gql_url,
+            "HEIMDALL_GQL_URL": config.heimdall_gql_url,
+            "THOR_GQL_URL": config.thor_gql_url,
+            "HEADLESS_GQL_JWT_SECRET": config.headless_gql_jwt_secret,
         }
 
         # Lambda Function
@@ -94,9 +96,9 @@ class APIStack(Stack):
             role=role,
             vpc=shared_stack.vpc,
             security_groups=[shared_stack.rds_security_group],
-            timeout=cdk_core.Duration.seconds(10),
+            timeout=cdk_core.Duration.seconds(30),
             environment=env,
-            memory_size=256,
+            memory_size=512,
         )
 
         # ACM & Custom Domain
