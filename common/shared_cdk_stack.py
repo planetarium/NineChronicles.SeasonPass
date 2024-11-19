@@ -127,7 +127,7 @@ class SharedStack(Stack):
             self.rds = _rds.DatabaseCluster(
                 self, f"{config.stage}-9c-season_pass-aurora-cluster",
                 cluster_identifier=f"{config.stage}-9c-season-pass-aurora-cluster",
-                engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_2),
+                engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_7),
                 default_database_name="season_pass",
                 credentials=self.credentials,
                 vpc=self.vpc, vpc_subnets=_ec2.SubnetSelection(),
@@ -145,7 +145,7 @@ class SharedStack(Stack):
             self.rds = _rds.DatabaseInstance(
                 self, f"{config.stage}-9c-season_pass-rds",
                 instance_identifier=f"{config.stage}-9c-season-pass-rds",
-                engine=_rds.DatabaseInstanceEngine.postgres(version=_rds.PostgresEngineVersion.VER_15_2),
+                engine=_rds.DatabaseInstanceEngine.postgres(version=_rds.PostgresEngineVersion.VER_15_7),
                 vpc=self.vpc,
                 vpc_subnets=_ec2.SubnetSelection(),
                 database_name="season_pass",
