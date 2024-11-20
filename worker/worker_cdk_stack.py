@@ -50,7 +50,7 @@ class WorkerStack(Stack):
         elif self.config.stage == "internal":
             instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
             ami = _ec2.MachineImage.lookup(
-                name="internal-9c-season_pass-block_tracker-20231209",
+                name="internal-season_pass-20241115",
             )
         else:
             instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
