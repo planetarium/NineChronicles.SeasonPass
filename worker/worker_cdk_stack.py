@@ -61,6 +61,7 @@ class WorkerStack(Stack):
         block_tracker = _ec2.Instance(
             self, f"{self.config.stage}-9c-season_pass-block_tracker",
             vpc=self.shared_stack.vpc,
+            availability_zone="us-east-2c",
             instance_name=f"{self.config.stage}-9c-season_pass-block_tracker",
             instance_type=instance_type,
             machine_image=ami,
