@@ -18,11 +18,13 @@ class GQL:
             self._url = {
                 PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
                 PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+                PlanetID.THOR: os.environ.get("THOR_GQL_URL"),
             }
         else:
             self._url = {
                 PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
                 PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
+                PlanetID.THOR_INTERNAL: os.environ.get("THOR_GQL_URL"),
             }
         self.client = None
         self.ds = None
