@@ -167,7 +167,8 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         target_usp.is_premium_plus = request.is_premium_plus
         target_usp.exp += target_pass.instant_exp
         target_usp.level = sess.scalar(
-            select(Level.level).where(Level.exp <= target_usp.exp)
+            select(Level.level)
+            .where(Level.pass_type == request.pass_type, Level.exp <= target_usp.exp)
             .order_by(desc(Level.level)).limit(1)
         )
 
