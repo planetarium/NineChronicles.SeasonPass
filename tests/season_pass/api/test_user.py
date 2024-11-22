@@ -38,10 +38,11 @@ def test_prev_season_status_success(sess):
         prev_season, current_season, test_user = test_data
         resp = tc.get("/api/user/status",
                       params={
+                          "planet_id": test_user.planet_id.decode(),
                           "pass_type": PassType.COURAGE_PASS.value,
                           "season_index": 1,
+                          "agent_addr": test_user.agent_addr,
                           "avatar_addr": test_user.avatar_addr,
-                          "planet_id": test_user.planet_id.decode(),
                       })
         assert resp.status_code == 200
         data = resp.json()
