@@ -4,12 +4,24 @@ import os
 from typing import Union, Dict, Any, Tuple, Optional, List
 
 import jwt
+import requests
 from gql import Client
 from gql.dsl import DSLSchema, dsl_gql, DSLQuery, DSLMutation
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
 
+from common import logger
 from common.enums import PlanetID
+from common.utils.season_pass import create_jwt_token
+
+GQL_DICT = {
+    PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
+    PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+    PlanetID.THOR: os.environ.get("THOR_GQL_URL"),
+    PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
+    PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
+    PlanetID.THOR_INTERNAL: os.environ.get("THOR_GQL_URL"),
+}
 
 
 class GQL:
@@ -18,11 +30,13 @@ class GQL:
             self._url = {
                 PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
                 PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+                PlanetID.THOR: os.environ.get("THOR_GQL_URL"),
             }
         else:
             self._url = {
                 PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
                 PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
+                PlanetID.THOR_INTERNAL: os.environ.get("THOR_GQL_URL"),
             }
         self.client = None
         self.ds = None
@@ -177,3 +191,23 @@ class GQL:
         if "errors" in result:
             return False, result["errors"][0]["message"], None
         return True, "", result["stageTransaction"]
+
+
+def get_last_cleared_stage(planet_id: PlanetID, avatar_addr: str, timeout: int = None) -> Tuple[int, int]:
+    query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{ 
+    worldInformation {{ lastClearedStage {{ worldId stageId }} }} 
+    }} }} }}"""
+    resp = requests.post(
+        GQL_DICT[planet_id], json={"query": query},
+        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"},
+        timeout=timeout
+    )
+    if resp.status_code != 200:
+        return 0, 0
+    try:
+        result = resp.json()["data"]["stateQuery"]["avatar"]["worldInformation"]["lastClearedStage"]
+    except Exception as e:
+        logger.error(f"Error while getting last cleared stage for {planet_id.name}:{avatar_addr}\n{e}")
+        return 0, 0
+    else:
+        return result["worldId"], result["stageId"]

@@ -2,24 +2,16 @@ import hashlib
 import hmac
 import json
 import os
-from typing import Tuple
 
 import bencodex
 import eth_utils
 import requests
 
 from common.enums import PassType, PlanetID
+from common.utils._graphql import GQL_DICT
 from common.utils.season_pass import create_jwt_token
 
 GQL_URL = os.environ.get("GQL_URL")
-GQL_DICT = {
-    PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
-    PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
-    PlanetID.THOR: os.environ.get("THOR_GQL_URL"),
-    PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
-    PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
-    PlanetID.THOR_INTERNAL: os.environ.get("THOR_GQL_URL"),
-}
 TARGET_ACTION_DICT = {
     PassType.COURAGE_PASS: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)",
     PassType.ADVENTURE_BOSS_PASS: "(wanted.*)|(explore_adventure_boss.*)|(sweep_adventure_boss.*)",
@@ -122,15 +114,3 @@ def get_explore_floor(planet_id: PlanetID, block_index: int, season: int, avatar
     if data is None:
         return 0
     return bencodex.loads(bytes.fromhex(data))[3]
-
-
-def get_last_cleared_stage(planet_id: PlanetID, avatar_addr: str) -> Tuple[int, int]:
-    query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{ 
-    worldInformation {{ lastClearedStage {{ worldId stageId }} }} 
-    }} }} }}"""
-    resp = requests.post(
-        GQL_DICT[planet_id], json={"query": query},
-        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
-    )
-    result = resp.json()["data"]["stateQuery"]["avatar"]["worldInformation"]["lastClearedStage"]
-    return result["worldId"], result["stageId"]
