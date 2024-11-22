@@ -129,10 +129,11 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     ---
     **NOTE** : This API is server-to-server API between IAP and SeasonPass. Do not call it directly.
 
-    Upgrade user's season pass status to premium(_plus) by purchasing IAP product.
+    Upgrade user's season pass status to premium by purchasing IAP product.
 
     This API is not opened and should be verified using signed JWT. (See `verify_token` function for details.)
 
+    This API does not handle thor specific changes due to IAP sends modified reward value.
     """
     if not (request.is_premium or request.is_premium_plus):
         raise InvalidUpgradeRequestError(f"Neither premium nor premium_plus requested. Please request at least one.")
@@ -209,6 +210,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             planet_id=request.planet_id,
             agent_addr=request.agent_addr,
             avatar_addr=request.avatar_addr,
+            # NOTE: reward_list is already modified from IAP service. Do not modify this.
             reward_list=[{"ticker": x.ticker, "amount": x.amount, "decimal_places": x.decimal_places}
                          for x in request.reward_list],
         )
@@ -228,17 +230,20 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
 def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> Claim:
     available_rewards = user_season.available_rewards(sess)
     max_level, repeat_exp = get_max_level(sess, target_pass.pass_type)
+    reward_coef = 1
+    if user_season.planet_id in (PlanetID.THOR, PlanetID.THOR_INTERNAL):
+        reward_coef = 5
 
     reward_dict = {x["level"]: x for x in target_pass.reward_list}
     target_reward_dict = defaultdict(int)
     for reward_level in available_rewards["normal"]:
         reward = reward_dict[reward_level]
         for item in reward["normal"]:
-            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"] * reward_coef
     for reward_level in available_rewards["premium"]:
         reward = reward_dict[reward_level]
         for item in reward["premium"]:
-            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"] * reward_coef
 
     claim = Claim(
         uuid=str(uuid4()),
