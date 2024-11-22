@@ -8,6 +8,7 @@ import bencodex
 import eth_utils
 import requests
 
+from common import logger
 from common.enums import PassType, PlanetID
 from common.utils.season_pass import create_jwt_token
 
@@ -124,13 +125,21 @@ def get_explore_floor(planet_id: PlanetID, block_index: int, season: int, avatar
     return bencodex.loads(bytes.fromhex(data))[3]
 
 
-def get_last_cleared_stage(planet_id: PlanetID, avatar_addr: str) -> Tuple[int, int]:
+def get_last_cleared_stage(planet_id: PlanetID, avatar_addr: str, timeout: int = None) -> Tuple[int, int]:
     query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{ 
     worldInformation {{ lastClearedStage {{ worldId stageId }} }} 
     }} }} }}"""
     resp = requests.post(
         GQL_DICT[planet_id], json={"query": query},
-        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"},
+        timeout=timeout
     )
-    result = resp.json()["data"]["stateQuery"]["avatar"]["worldInformation"]["lastClearedStage"]
-    return result["worldId"], result["stageId"]
+    if resp.status_code != 200:
+        return 0, 0
+    try:
+        result = resp.json()["data"]["stateQuery"]["avatar"]["worldInformation"]["lastClearedStage"]
+    except Exception as e:
+        logger.error(f"Error while getting last cleared stage for {planet_id.name}:{avatar_addr}\n{e}")
+        return 0, 0
+    else:
+        return result["worldId"], result["stageId"]

@@ -16,13 +16,14 @@ from common.models.user import UserSeasonPass, Claim
 from common.utils.season_pass import get_pass, get_max_level
 from season_pass import settings
 from season_pass.dependencies import session
-from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError,
-                                    NotPremiumError, )
-from season_pass.schemas.season_pass import SimpleSeasonPassSchema
+from season_pass.exceptions import (
+    SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError, NotPremiumError,
+)
 from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
 from season_pass.utils import verify_token
+from utils.gql import get_last_cleared_stage
 
 router = APIRouter(
     prefix="/user",
@@ -32,9 +33,36 @@ router = APIRouter(
 sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 
+def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str, season_pass: SeasonPass) \
+        -> UserSeasonPass:
+    match season_pass.pass_type:
+        case PassType.WORLD_CLEAR_PASS:
+            _, cleared_stage = get_last_cleared_stage(planet_id, avatar_addr, timeout=1)
+            usp = UserSeasonPass(planet_id=planet_id, agent_addr=agent_addr, avatar_addr=avatar_addr,
+                                 season_pass=season_pass, exp=cleared_stage)
+            if cleared_stage > 0:
+                usp.level = sess.scalar(
+                    select(Level)
+                    .where(Level.pass_type == season_pass.pass_type, Level.exp >= usp.exp)
+                    .order_by(Level.level)
+                )
+            sess.add(usp)
+            sess.commit(usp)
+
+        case PassType.COURAGE_PASS | PassType.ADVENTURE_BOSS_PASS:
+            usp = UserSeasonPass(planet_id=planet_id, agent_addr=agent_addr, avatar_addr=avatar_addr,
+                                 season_pass=season_pass)
+
+        case _:
+            raise ValueError(f"{season_pass.pass_type.name} is not valid pass type to create default UserSeasonPass")
+
+    return usp
+
+
 @router.get("/status", response_model=UserSeasonPassSchema)
-def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
+def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
+    agent_addr = agent_addr.lower()
     avatar_addr = avatar_addr.lower()
     target_pass = get_pass(sess, pass_type, season_index)
     if not target_pass:
@@ -50,14 +78,15 @@ def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_in
         UserSeasonPass.avatar_addr == avatar_addr
     ))
     if not target:
-        return UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
-                                    season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
+        target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
+
     return target
 
 
 @router.get("/status/all", response_model=List[UserSeasonPassSchema])
-def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
+def all_user_status(planet_id: str, agent_addr: str, avatar_addr: str, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
+    agent_addr = agent_addr.lower()
     avatar_addr = avatar_addr.lower()
     resp = []
 
@@ -73,12 +102,11 @@ def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
             UserSeasonPass.avatar_addr == avatar_addr
         ))
         if not target:
-            target = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
-                                          season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
+            target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
         resp.append(target)
 
         # Get prev. pass
-        prev_pass = get_pass(sess, pass_type, season_index=target_pass.season_index-1)
+        prev_pass = get_pass(sess, pass_type, season_index=target_pass.season_index - 1)
         if not prev_pass:
             continue
 
@@ -88,8 +116,9 @@ def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
             UserSeasonPass.avatar_addr == avatar_addr
         ))
         if not prev:
-            prev = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr, season_pass=prev_pass)
+            prev = get_default_usp(sess, planet_id, agent_addr, avatar_addr, prev_pass)
         resp.append(prev)
+
     return resp
 
 
