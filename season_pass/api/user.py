@@ -23,7 +23,7 @@ from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
 from season_pass.utils import verify_token
-from utils.gql import get_last_cleared_stage
+from common.utils._graphql import get_last_cleared_stage
 
 router = APIRouter(
     prefix="/user",

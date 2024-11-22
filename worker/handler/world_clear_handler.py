@@ -12,7 +12,7 @@ from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
 from schemas.sqs import SQSMessage
-from utils.gql import get_last_cleared_stage
+from common.utils._graphql import get_last_cleared_stage
 from utils.season_pass import verify_season_pass
 
 DB_URI = os.environ.get("DB_URI")
