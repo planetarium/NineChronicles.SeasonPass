@@ -45,9 +45,9 @@ def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str
                     select(Level)
                     .where(Level.pass_type == season_pass.pass_type, Level.exp >= usp.exp)
                     .order_by(Level.level)
-                )
+                ).level
             sess.add(usp)
-            sess.commit(usp)
+            sess.commit()
             sess.refresh(usp)
 
         case PassType.COURAGE_PASS | PassType.ADVENTURE_BOSS_PASS:
