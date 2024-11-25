@@ -45,13 +45,15 @@ def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str
                     select(Level)
                     .where(Level.pass_type == season_pass.pass_type, Level.exp >= usp.exp)
                     .order_by(Level.level)
-                )
+                ).level
             sess.add(usp)
-            sess.commit(usp)
+            sess.commit()
+            sess.refresh(usp)
 
         case PassType.COURAGE_PASS | PassType.ADVENTURE_BOSS_PASS:
             usp = UserSeasonPass(planet_id=planet_id, agent_addr=agent_addr, avatar_addr=avatar_addr,
-                                 season_pass=season_pass)
+                                 season_pass=season_pass, exp=0, level=0, is_premium=False, is_premium_plus=False,
+                                 last_normal_claim=0, last_premium_claim=0)
 
         case _:
             raise ValueError(f"{season_pass.pass_type.name} is not valid pass type to create default UserSeasonPass")
