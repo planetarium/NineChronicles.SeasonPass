@@ -47,7 +47,7 @@ def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str
                     .order_by(Level.level)
                 )
             sess.add(usp)
-            sess.commit(usp)
+            sess.commit()
             sess.refresh(usp)
 
         case PassType.COURAGE_PASS | PassType.ADVENTURE_BOSS_PASS:
