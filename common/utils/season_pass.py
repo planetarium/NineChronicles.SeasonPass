@@ -19,9 +19,17 @@ def get_pass(sess, pass_type: PassType, season_index: int = None,
     if validate_current:
         now = datetime.now(tz=timezone.utc)
         stmt = stmt.where(or_(  # match least one of following conditions
-            and_(SeasonPass.start_timestamp.is_(None), SeasonPass.end_timestamp.is_(None)),  # infinite pass
-            and_(SeasonPass.start_timestamp.isnot(None), SeasonPass.start_timestamp <= now),  # start before now
-            and_(SeasonPass.end_timestamp.isnot(None), SeasonPass.end_timestamp >= now),  # end after now
+            # All time infinite
+            and_(SeasonPass.start_timestamp.is_(None), SeasonPass.end_timestamp.is_(None)),
+            # Finite season with both start and end
+            and_(SeasonPass.start_timestamp.isnot(None), SeasonPass.start_timestamp <= now,
+                 SeasonPass.end_timestamp.isnot(None), SeasonPass.end_timestamp >= now),
+            # Infinite season with start
+            and_(SeasonPass.start_timestamp.isnot(None), SeasonPass.start_timestamp <= now,
+                 SeasonPass.end_timestamp.is_(None)),
+            # Finite season without start
+            and_(SeasonPass.start_timestamp.is_(None),
+                 SeasonPass.end_timestamp.isnot(None), SeasonPass.end_timestamp >= now),
         ))
 
     if include_exp:
