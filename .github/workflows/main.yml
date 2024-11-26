@@ -8,6 +8,7 @@ on:
       - release/*
       - main
       - thor-test
+      - preview
   pull_request:
     branches:
       - development
@@ -59,7 +60,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     with:
       type: approval
-      environment: ${{ (startsWith(github.ref, 'refs/heads/release') || github.ref == 'refs/heads/internal') && 'internal' || 'development' }}
+      environment: ${{ (startsWith(github.ref, 'refs/heads/release') || github.ref == 'refs/heads/internal' || github.ref == 'refs/heads/preview') && 'internal' || 'development' }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 

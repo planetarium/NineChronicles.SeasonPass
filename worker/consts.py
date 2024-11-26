@@ -7,6 +7,9 @@ HOST_LIST = {
     "internal": [
         "https://9c-internal-rpc-1.nine-chronicles.com",
     ],
+    "preview": [
+        "http://k8s-9codinli-remotehe-55686c889c-fbbfdb2f7f6d58ec.elb.us-east-2.amazonaws.com",
+    ],
     "mainnet": [
         "https://9c-main-full-state.nine-chronicles.com",
         "https://9c-main-validator-5.nine-chronicles.com",

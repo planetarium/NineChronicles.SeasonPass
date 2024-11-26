@@ -50,7 +50,7 @@ def handle(event, context):
         # Skip blocks before season starts
         if current_pass is None:
             logger.warning(
-                f"There is no active {PassType.ADVENTURE_BOSS_PASS.name} at {datetime.now().strftime('%Y-%m-%d %H:%H:%S')}"
+                f"There is no active {PassType.WORLD_CLEAR_PASS.name} at {datetime.now().strftime('%Y-%m-%d %H:%H:%S')}"
             )
             for i, record in enumerate(message.Records):
                 body = record.body
@@ -64,7 +64,7 @@ def handle(event, context):
                     logger.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
                     continue
 
-                sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.ADVENTURE_BOSS_PASS))
+                sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.WORLD_CLEAR_PASS))
                 logger.info(
                     f"Skip world clear exp for {planet_id.name} : #{block_index} before season starts."
                 )
