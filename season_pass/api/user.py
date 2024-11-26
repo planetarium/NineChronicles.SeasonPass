@@ -16,13 +16,14 @@ from common.models.user import UserSeasonPass, Claim
 from common.utils.season_pass import get_pass, get_max_level
 from season_pass import settings
 from season_pass.dependencies import session
-from season_pass.exceptions import (SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError,
-                                    NotPremiumError, )
-from season_pass.schemas.season_pass import SimpleSeasonPassSchema
+from season_pass.exceptions import (
+    SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError, NotPremiumError,
+)
 from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
 from season_pass.utils import verify_token
+from common.utils._graphql import get_last_cleared_stage
 
 router = APIRouter(
     prefix="/user",
@@ -32,9 +33,38 @@ router = APIRouter(
 sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 
+def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str, season_pass: SeasonPass) \
+        -> UserSeasonPass:
+    match season_pass.pass_type:
+        case PassType.WORLD_CLEAR_PASS:
+            _, cleared_stage = get_last_cleared_stage(planet_id, avatar_addr, timeout=1)
+            usp = UserSeasonPass(planet_id=planet_id, agent_addr=agent_addr, avatar_addr=avatar_addr,
+                                 season_pass=season_pass, exp=cleared_stage)
+            if cleared_stage > 0:
+                usp.level = sess.scalar(
+                    select(Level)
+                    .where(Level.pass_type == season_pass.pass_type, Level.exp >= usp.exp)
+                    .order_by(Level.level)
+                ).level
+            sess.add(usp)
+            sess.commit()
+            sess.refresh(usp)
+
+        case PassType.COURAGE_PASS | PassType.ADVENTURE_BOSS_PASS:
+            usp = UserSeasonPass(planet_id=planet_id, agent_addr=agent_addr, avatar_addr=avatar_addr,
+                                 season_pass=season_pass, exp=0, level=0, is_premium=False, is_premium_plus=False,
+                                 last_normal_claim=0, last_premium_claim=0)
+
+        case _:
+            raise ValueError(f"{season_pass.pass_type.name} is not valid pass type to create default UserSeasonPass")
+
+    return usp
+
+
 @router.get("/status", response_model=UserSeasonPassSchema)
-def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
+def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
+    agent_addr = agent_addr.lower()
     avatar_addr = avatar_addr.lower()
     target_pass = get_pass(sess, pass_type, season_index)
     if not target_pass:
@@ -50,14 +80,15 @@ def user_status(planet_id: str, avatar_addr: str, pass_type: PassType, season_in
         UserSeasonPass.avatar_addr == avatar_addr
     ))
     if not target:
-        return UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
-                                    season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
+        target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
+
     return target
 
 
 @router.get("/status/all", response_model=List[UserSeasonPassSchema])
-def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
+def all_user_status(planet_id: str, agent_addr: str, avatar_addr: str, sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
+    agent_addr = agent_addr.lower()
     avatar_addr = avatar_addr.lower()
     resp = []
 
@@ -73,12 +104,11 @@ def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
             UserSeasonPass.avatar_addr == avatar_addr
         ))
         if not target:
-            target = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr,
-                                          season_pass=SimpleSeasonPassSchema(**target_pass.__dict__))
+            target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
         resp.append(target)
 
         # Get prev. pass
-        prev_pass = get_pass(sess, pass_type, season_index=target_pass.season_index-1)
+        prev_pass = get_pass(sess, pass_type, season_index=target_pass.season_index - 1)
         if not prev_pass:
             continue
 
@@ -88,8 +118,9 @@ def all_user_status(planet_id: str, avatar_addr: str, sess=Depends(session)):
             UserSeasonPass.avatar_addr == avatar_addr
         ))
         if not prev:
-            prev = UserSeasonPassSchema(planet_id=planet_id, avatar_addr=avatar_addr, season_pass=prev_pass)
+            prev = get_default_usp(sess, planet_id, agent_addr, avatar_addr, prev_pass)
         resp.append(prev)
+
     return resp
 
 
@@ -100,10 +131,11 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     ---
     **NOTE** : This API is server-to-server API between IAP and SeasonPass. Do not call it directly.
 
-    Upgrade user's season pass status to premium(_plus) by purchasing IAP product.
+    Upgrade user's season pass status to premium by purchasing IAP product.
 
     This API is not opened and should be verified using signed JWT. (See `verify_token` function for details.)
 
+    This API does not handle thor specific changes due to IAP sends modified reward value.
     """
     if not (request.is_premium or request.is_premium_plus):
         raise InvalidUpgradeRequestError(f"Neither premium nor premium_plus requested. Please request at least one.")
@@ -167,7 +199,8 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         target_usp.is_premium_plus = request.is_premium_plus
         target_usp.exp += target_pass.instant_exp
         target_usp.level = sess.scalar(
-            select(Level.level).where(Level.exp <= target_usp.exp)
+            select(Level.level)
+            .where(Level.pass_type == request.pass_type, Level.exp <= target_usp.exp)
             .order_by(desc(Level.level)).limit(1)
         )
 
@@ -179,6 +212,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             planet_id=request.planet_id,
             agent_addr=request.agent_addr,
             avatar_addr=request.avatar_addr,
+            # NOTE: reward_list is already modified from IAP service. Do not modify this.
             reward_list=[{"ticker": x.ticker, "amount": x.amount, "decimal_places": x.decimal_places}
                          for x in request.reward_list],
         )
@@ -198,17 +232,20 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
 def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> Claim:
     available_rewards = user_season.available_rewards(sess)
     max_level, repeat_exp = get_max_level(sess, target_pass.pass_type)
+    reward_coef = 1
+    if user_season.planet_id in (PlanetID.THOR, PlanetID.THOR_INTERNAL):
+        reward_coef = 5
 
     reward_dict = {x["level"]: x for x in target_pass.reward_list}
     target_reward_dict = defaultdict(int)
     for reward_level in available_rewards["normal"]:
         reward = reward_dict[reward_level]
         for item in reward["normal"]:
-            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"] * reward_coef
     for reward_level in available_rewards["premium"]:
         reward = reward_dict[reward_level]
         for item in reward["premium"]:
-            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"]
+            target_reward_dict[(item["ticker"], item.get("decimal_places", 0))] += item["amount"] * reward_coef
 
     claim = Claim(
         uuid=str(uuid4()),
