@@ -76,7 +76,7 @@ jobs:
 
       - name: Synth stack
         env:
-          STAGE: ${{ vars.STAGE }}
+          STAGE: ${{ github.ref == 'refs/heads/thor-test' && 'thor-test' || vars.STAGE }}
           REGION_NAME: ${{ vars.REGION_NAME }}
           ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

@@ -102,7 +102,7 @@ class APIStack(Stack):
         )
 
         # ACM & Custom Domain
-        if config.stage != "development":
+        if config.stage in ("internal", "mainnet"):
             certificate = _acm.Certificate.from_certificate_arn(
                 self, "9c-acm",
                 certificate_arn="arn:aws:acm:us-east-1:319679068466:certificate/8e3f8d11-ead8-4a90-bda0-94a35db71678",

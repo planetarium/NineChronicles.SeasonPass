@@ -40,6 +40,11 @@ RESOURCE_DICT: Dict[str, ResourceDict] = {
         key_name="9c_main_bastion",
         sg_id="",
     ),
+    "thor-test": ResourceDict(
+        vpc_id="vpc-01a0ef2aa2c41bb26",  # Main VPC
+        key_name="9c_main_bastion",
+        sg_id="",
+    ),
 }
 
 
