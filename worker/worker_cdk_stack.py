@@ -61,8 +61,8 @@ class WorkerStack(Stack):
         block_tracker = _ec2.Instance(
             self, f"{self.config.stage}-9c-season_pass-block_tracker",
             vpc=self.shared_stack.vpc,
-            availability_zone="us-east-2c",
-            vpc_subnets=_ec2.SubnetSelection(subnet_type=_ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            # availability_zone="us-east-2c",
+            # vpc_subnets=_ec2.SubnetSelection(subnet_type=_ec2.SubnetType.PRIVATE_WITH_EGRESS),
             instance_name=f"{self.config.stage}-9c-season_pass-block_tracker",
             instance_type=instance_type,
             machine_image=ami,
