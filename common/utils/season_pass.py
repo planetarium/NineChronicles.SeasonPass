@@ -56,6 +56,14 @@ def get_max_level(sess, pass_type: PassType) -> Tuple[Level, int]:
     return m2, abs(m1.exp - m2.exp)
 
 
+def get_level(sess, pass_type: PassType, exp: int) -> int:
+    return sess.scalar(
+        select(Level.level)
+        .where(Level.pass_type == pass_type, Level.exp <= exp)
+        .order_by(desc(Level.level))
+    ) or 0
+
+
 def create_jwt_token(jwt_secret: str):
     iat = datetime.now(tz=timezone.utc)
     return jwt.encode({
