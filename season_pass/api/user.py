@@ -7,13 +7,14 @@ from uuid import uuid4
 
 import boto3
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from common.enums import PlanetID, PassType
-from common.models.season_pass import SeasonPass, Level
+from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass, Claim
-from common.utils.season_pass import get_pass, get_max_level
+from common.utils._graphql import get_last_cleared_stage
+from common.utils.season_pass import get_pass, get_max_level, get_level
 from season_pass import settings
 from season_pass.dependencies import session
 from season_pass.exceptions import (
@@ -23,7 +24,6 @@ from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
 )
 from season_pass.utils import verify_token
-from common.utils._graphql import get_last_cleared_stage
 
 router = APIRouter(
     prefix="/user",
@@ -41,11 +41,7 @@ def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str
             usp = UserSeasonPass(planet_id=planet_id, agent_addr=agent_addr, avatar_addr=avatar_addr,
                                  season_pass=season_pass, exp=cleared_stage)
             if cleared_stage > 0:
-                usp.level = sess.scalar(
-                    select(Level)
-                    .where(Level.pass_type == season_pass.pass_type, Level.exp >= usp.exp)
-                    .order_by(Level.level)
-                ).level
+                usp.level = get_level(sess, season_pass.pass_type, usp.exp)
             sess.add(usp)
             sess.commit()
             sess.refresh(usp)
@@ -62,7 +58,8 @@ def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str
 
 
 @router.get("/status", response_model=UserSeasonPassSchema)
-def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
+def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: PassType, season_index: int,
+                sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
     agent_addr = agent_addr.lower()
     avatar_addr = avatar_addr.lower()
@@ -81,6 +78,13 @@ def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: Pa
     ))
     if not target:
         target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
+    elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
+        # 0 cleared stage is usually not normal data.
+        _, cleared_stage = get_last_cleared_stage(planet_id, target.avatar_addr, timeout=1)
+        target.exp = cleared_stage
+        target.level = get_level(sess, target_pass.pass_type, target.exp)
+        sess.add(target)
+        sess.commit()
 
     return target
 
@@ -105,6 +109,14 @@ def all_user_status(planet_id: str, agent_addr: str, avatar_addr: str, sess=Depe
         ))
         if not target:
             target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
+        elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
+            # 0 cleared stage is usually not normal data.
+            _, cleared_stage = get_last_cleared_stage(planet_id, target.avatar_addr, timeout=1)
+            target.exp = cleared_stage
+            target.level = get_level(sess, target_pass.pass_type, target.exp)
+            sess.add(target)
+            sess.commit()
+
         resp.append(target)
 
         # Get prev. pass
@@ -156,12 +168,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         )
     )
     if not target_usp:
-        target_usp = UserSeasonPass(
-            planet_id=request.planet_id,
-            agent_addr=request.agent_addr,
-            avatar_addr=request.avatar_addr,
-            season_pass_id=target_pass.id,
-        )
+        target_usp = get_default_usp(sess, request.planet_id, request.agent_addr, request.avatar_addr, target_pass)
         sess.add(target_usp)
         try:
             sess.commit()
@@ -198,11 +205,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     if request.is_premium_plus:
         target_usp.is_premium_plus = request.is_premium_plus
         target_usp.exp += target_pass.instant_exp
-        target_usp.level = sess.scalar(
-            select(Level.level)
-            .where(Level.pass_type == request.pass_type, Level.exp <= target_usp.exp)
-            .order_by(desc(Level.level)).limit(1)
-        )
+        target_usp.level = get_level(sess, target_pass.pass_type, target_usp.exp)
 
     if request.reward_list:
         # ClaimItems
