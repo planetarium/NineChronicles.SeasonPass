@@ -58,7 +58,8 @@ def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str
 
 
 @router.get("/status", response_model=UserSeasonPassSchema)
-def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: PassType, season_index: int, sess=Depends(session)):
+def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: PassType, season_index: int,
+                sess=Depends(session)):
     planet_id = PlanetID(bytes(planet_id, "utf-8"))
     agent_addr = agent_addr.lower()
     avatar_addr = avatar_addr.lower()
@@ -77,6 +78,13 @@ def user_status(planet_id: str, agent_addr: str, avatar_addr: str, pass_type: Pa
     ))
     if not target:
         target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
+    elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
+        # 0 cleared stage is usually not normal data.
+        _, cleared_stage = get_last_cleared_stage(planet_id, target.avatar_addr, timeout=1)
+        target.exp = cleared_stage
+        target.level = get_level(sess, target_pass.pass_type, target.exp)
+        sess.add(target)
+        sess.commit()
 
     return target
 
@@ -101,6 +109,14 @@ def all_user_status(planet_id: str, agent_addr: str, avatar_addr: str, sess=Depe
         ))
         if not target:
             target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
+        elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
+            # 0 cleared stage is usually not normal data.
+            _, cleared_stage = get_last_cleared_stage(planet_id, target.avatar_addr, timeout=1)
+            target.exp = cleared_stage
+            target.level = get_level(sess, target_pass.pass_type, target.exp)
+            sess.add(target)
+            sess.commit()
+
         resp.append(target)
 
         # Get prev. pass
