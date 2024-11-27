@@ -50,7 +50,7 @@ class WorkerStack(Stack):
         elif self.config.stage in ("internal", "preview"):
             instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
             ami = _ec2.MachineImage.lookup(
-                name="internal-9c-season_pass-block_tracker-20231209",
+                name="internal-season_pass-20241115",
             )
         else:
             instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
@@ -61,6 +61,8 @@ class WorkerStack(Stack):
         block_tracker = _ec2.Instance(
             self, f"{self.config.stage}-9c-season_pass-block_tracker",
             vpc=self.shared_stack.vpc,
+            # availability_zone="us-east-2c",
+            # vpc_subnets=_ec2.SubnetSelection(subnet_type=_ec2.SubnetType.PRIVATE_WITH_EGRESS),
             instance_name=f"{self.config.stage}-9c-season_pass-block_tracker",
             instance_type=instance_type,
             machine_image=ami,
