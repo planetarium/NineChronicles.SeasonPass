@@ -35,6 +35,11 @@ RESOURCE_DICT: Dict[str, ResourceDict] = {
         key_name="9c_internal_tunnel",
         sg_id="",
     ),
+    "preview": ResourceDict(
+        vpc_id="vpc-08ee9f2dbd1c97ac6",  # Internal VPC
+        key_name="9c_internal_tunnel",
+        sg_id="",
+    ),
     "mainnet": ResourceDict(
         vpc_id="vpc-01a0ef2aa2c41bb26",  # Main VPC
         key_name="9c_main_bastion",
@@ -84,7 +89,7 @@ class SharedStack(Stack):
         self.world_clear_q = _sqs.Queue(
             self, f"{config.stage}-9c-season_pass-world_clear-queue",
             queue_name=f"{config.stage}-9c-season_pass-world_clear-queue",
-            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.adventure_boss_dlq),
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.world_clear_dlq),
             visibility_timeout=cdk_core.Duration.seconds(20),
         )
 
