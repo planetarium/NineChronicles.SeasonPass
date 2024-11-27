@@ -42,10 +42,10 @@ def get_default_usp(sess, planet_id: PlanetID, agent_addr: str, avatar_addr: str
                                  season_pass=season_pass, exp=cleared_stage)
             if cleared_stage > 0:
                 usp.level = sess.scalar(
-                    select(Level)
-                    .where(Level.pass_type == season_pass.pass_type, Level.exp >= usp.exp)
-                    .order_by(Level.level)
-                ).level
+                    select(Level.level)
+                    .where(Level.pass_type == season_pass.pass_type, Level.exp <= usp.exp)
+                    .order_by(desc(Level.level))
+                )
             sess.add(usp)
             sess.commit()
             sess.refresh(usp)
