@@ -156,12 +156,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         )
     )
     if not target_usp:
-        target_usp = UserSeasonPass(
-            planet_id=request.planet_id,
-            agent_addr=request.agent_addr,
-            avatar_addr=request.avatar_addr,
-            season_pass_id=target_pass.id,
-        )
+        target_usp = get_default_usp(sess, request.planet_id, request.agent_addr, request.avatar_addr, target_pass)
         sess.add(target_usp)
         try:
             sess.commit()
