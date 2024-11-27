@@ -202,7 +202,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             select(Level.level)
             .where(Level.pass_type == request.pass_type, Level.exp <= target_usp.exp)
             .order_by(desc(Level.level)).limit(1)
-        )
+        ) or 0
 
     if request.reward_list:
         # ClaimItems
