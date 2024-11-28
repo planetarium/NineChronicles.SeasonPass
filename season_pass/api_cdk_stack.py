@@ -76,8 +76,7 @@ class APIStack(Stack):
             "SQS_URL": shared_stack.unload_q.queue_url,
             "ODIN_GQL_URL": config.odin_gql_url,
             "HEIMDALL_GQL_URL": config.heimdall_gql_url,
-            "ODIN_VALIDATOR_URL": config.odin_validator_url,
-            "HEIMDALL_VALIDATOR_URL": config.heimdall_validator_url,
+            "THOR_GQL_URL": config.thor_gql_url,
             "HEADLESS_GQL_JWT_SECRET": config.headless_gql_jwt_secret,
         }
 
@@ -109,7 +108,7 @@ class APIStack(Stack):
                 certificate_arn="arn:aws:acm:us-east-1:319679068466:certificate/8e3f8d11-ead8-4a90-bda0-94a35db71678",
             )
             custom_domain = _apig.DomainNameOptions(
-                domain_name=f"season-pass{'-internal' if config.stage == 'internal' else ''}.9c.gg",
+                domain_name=f"season-pass{f'-{config.stage}' if config.stage != 'mainnet' else ''}.9c.gg",
                 certificate=certificate,
                 security_policy=_apig.SecurityPolicy.TLS_1_2,
                 endpoint_type=_apig.EndpointType.EDGE,
