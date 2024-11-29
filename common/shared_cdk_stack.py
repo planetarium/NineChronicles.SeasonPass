@@ -35,6 +35,11 @@ RESOURCE_DICT: Dict[str, ResourceDict] = {
         key_name="9c_internal_tunnel",
         sg_id="",
     ),
+    "preview": ResourceDict(
+        vpc_id="vpc-08ee9f2dbd1c97ac6",  # Internal VPC
+        key_name="9c_internal_tunnel",
+        sg_id="",
+    ),
     "mainnet": ResourceDict(
         vpc_id="vpc-01a0ef2aa2c41bb26",  # Main VPC
         key_name="9c_main_bastion",
@@ -84,7 +89,7 @@ class SharedStack(Stack):
         self.world_clear_q = _sqs.Queue(
             self, f"{config.stage}-9c-season_pass-world_clear-queue",
             queue_name=f"{config.stage}-9c-season_pass-world_clear-queue",
-            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.adventure_boss_dlq),
+            dead_letter_queue=_sqs.DeadLetterQueue(max_receive_count=6, queue=self.world_clear_dlq),
             visibility_timeout=cdk_core.Duration.seconds(20),
         )
 
@@ -122,7 +127,7 @@ class SharedStack(Stack):
             self.rds = _rds.DatabaseCluster(
                 self, f"{config.stage}-9c-season_pass-aurora-cluster",
                 cluster_identifier=f"{config.stage}-9c-season-pass-aurora-cluster",
-                engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_2),
+                engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_7),
                 default_database_name="season_pass",
                 credentials=self.credentials,
                 vpc=self.vpc, vpc_subnets=_ec2.SubnetSelection(),
@@ -140,7 +145,7 @@ class SharedStack(Stack):
             self.rds = _rds.DatabaseInstance(
                 self, f"{config.stage}-9c-season_pass-rds",
                 instance_identifier=f"{config.stage}-9c-season-pass-rds",
-                engine=_rds.DatabaseInstanceEngine.postgres(version=_rds.PostgresEngineVersion.VER_15_2),
+                engine=_rds.DatabaseInstanceEngine.postgres(version=_rds.PostgresEngineVersion.VER_15_7),
                 vpc=self.vpc,
                 vpc_subnets=_ec2.SubnetSelection(),
                 database_name="season_pass",
@@ -158,14 +163,16 @@ class SharedStack(Stack):
         )
         ssm = boto3.client("ssm", region_name=config.region_name,
                            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-                           aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY")
+                           aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
                            )
 
         param_value_dict = {}
         for param, secure in PARAMETER_LIST:
             param_value_dict[param] = None
             try:
-                prev_param = fetch_parameter(config.region_name, f"{config.stage}_9c_SEASON_PASS_{param}", secure)
+                prev_param = ssm.get_parameter(
+                    Name=f"{config.stage}_9c_SEASON_PASS_{param}", WithDecryption=secure
+                )["Parameter"]
                 logging.debug(prev_param["Value"])
                 if prev_param["Value"] != getattr(config, param.lower()):
                     logging.info(f"The value of {param} has been changed. Update to new value...")

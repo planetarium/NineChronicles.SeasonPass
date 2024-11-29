@@ -3,8 +3,8 @@ from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
-from common.enums import PassType
-from common.models.season_pass import Level, Exp
+from common.enums import PassType, PlanetID
+from common.models.season_pass import Level
 from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import SeasonNotFoundError
@@ -17,10 +17,13 @@ router = APIRouter(
 
 
 @router.get("/current", response_model=SeasonPassSchema)
-def current_season(pass_type: PassType, sess=Depends(session)):
+def current_season(planet_id: str, pass_type: PassType, sess=Depends(session)):
+    planet_id = PlanetID(bytes(planet_id, "utf-8"))
     curr_season = get_pass(sess, pass_type, validate_current=True)
     if not curr_season:
         raise SeasonNotFoundError("No active season pass for today")
+
+    reward_coef = 5 if planet_id in (PlanetID.THOR, PlanetID.THOR_INTERNAL) else 1
 
     return SeasonPassSchema(
         id=curr_season.id,
@@ -37,14 +40,14 @@ def current_season(pass_type: PassType, sess=Depends(session)):
                     "item": [
                         {
                             "id": x["ticker"].split("_")[-1],
-                            "amount": x["amount"]
+                            "amount": x["amount"] * reward_coef
                         }
                         for x in reward["normal"] if x["ticker"].startswith("Item_")
                     ],
                     "currency": [
                         {
                             "ticker": x["ticker"].split("__")[-1],
-                            "amount": x["amount"]
+                            "amount": x["amount"] * reward_coef
                         }
                         for x in reward["normal"] if x["ticker"].startswith("FAV__")
                     ]
@@ -53,14 +56,14 @@ def current_season(pass_type: PassType, sess=Depends(session)):
                     "item": [
                         {
                             "id": x["ticker"].split("_")[-1],
-                            "amount": x["amount"]
+                            "amount": x["amount"] * reward_coef
                         }
                         for x in reward["premium"] if x["ticker"].startswith("Item_")
                     ],
                     "currency": [
                         {
                             "ticker": x["ticker"].split("__")[-1],
-                            "amount": x["amount"]
+                            "amount": x["amount"] * reward_coef
                         }
                         for x in reward["premium"] if x["ticker"].startswith("FAV__")
                     ]
@@ -68,8 +71,8 @@ def current_season(pass_type: PassType, sess=Depends(session)):
             }
             for reward in curr_season.reward_list
         ],
-        # Repeat last level reward for seasonal repeat type pass
-        repeat_last_reward=curr_season.start_timestamp is not None,
+        # World clear pass does not have repeat reward
+        repeat_last_reward=curr_season.pass_type != PassType.WORLD_CLEAR_PASS,
     )
 
 

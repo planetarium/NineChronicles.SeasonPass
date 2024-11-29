@@ -18,10 +18,18 @@ def get_pass(sess, pass_type: PassType, season_index: int = None,
 
     if validate_current:
         now = datetime.now(tz=timezone.utc)
-        stmt = stmt.where(or_(
+        stmt = stmt.where(or_(  # match least one of following conditions
+            # All time infinite
             and_(SeasonPass.start_timestamp.is_(None), SeasonPass.end_timestamp.is_(None)),
-            and_(SeasonPass.start_timestamp.isnot(None), SeasonPass.start_timestamp <= now),
-            and_(SeasonPass.end_timestamp.isnot(None), SeasonPass.end_timestamp >= now)
+            # Finite season with both start and end
+            and_(SeasonPass.start_timestamp.isnot(None), SeasonPass.start_timestamp <= now,
+                 SeasonPass.end_timestamp.isnot(None), SeasonPass.end_timestamp >= now),
+            # Infinite season with start
+            and_(SeasonPass.start_timestamp.isnot(None), SeasonPass.start_timestamp <= now,
+                 SeasonPass.end_timestamp.is_(None)),
+            # Finite season without start
+            and_(SeasonPass.start_timestamp.is_(None),
+                 SeasonPass.end_timestamp.isnot(None), SeasonPass.end_timestamp >= now),
         ))
 
     if include_exp:
@@ -46,6 +54,14 @@ def get_max_level(sess, pass_type: PassType) -> Tuple[Level, int]:
         .order_by(desc(Level.level)).limit(2)
     ).fetchall()
     return m2, abs(m1.exp - m2.exp)
+
+
+def get_level(sess, pass_type: PassType, exp: int) -> int:
+    return sess.scalar(
+        select(Level.level)
+        .where(Level.pass_type == pass_type, Level.exp <= exp)
+        .order_by(desc(Level.level))
+    ) or 0
 
 
 def create_jwt_token(jwt_secret: str):

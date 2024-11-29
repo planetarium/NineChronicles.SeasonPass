@@ -104,6 +104,8 @@ def balance(planet: str):
         url = os.environ.get("ODIN_GQL_URL")
     elif planet.lower() == "heimdall":
         url = os.environ.get("HEIMDALL_GQL_URL")
+    elif planet.lower() == "thor":
+        url = os.environ.get("THOR_GQL_URL")
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet."
                             )
@@ -115,9 +117,16 @@ def balance(planet: str):
               APPotion: balance(address: $address, currency: {{ticker: \"Item_NT_500000\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
               GoldenDust: balance(address: $address, currency: {{ticker: \"Item_NT_600201\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
               RubyDust: balance(address: $address, currency: {{ticker: \"Item_NT_600202\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
+              EmeraldDust: balance(address: $address, currency: {{ticker: \"Item_NT_600203\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
+              Scroll: balance(address: $address, currency: {{ticker: \"Item_NT_600401\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               SilverDust: balance(address: $address, currency: {{ticker: \"Item_NT_800201\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               Crystal: balance(address: $address, currency: {{ticker: \"FAV__CRYSTAL\", decimalPlaces: 18, minters: []}}) {{ currency {{   ticker }} quantity }}
               GoldenLeaf: balance(address: $address, currency: {{ticker: \"FAV__RUNE_GOLDENLEAF\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              CriRune: balance(address: $address, currency: {{ticker: \"FAV__RUNESTONE_CRI\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              HPRune: balance(address: $address, currency: {{ticker: \"FAV__RUNESTONE_HP\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              GoldenThor: balance(address: $address, currency: {{ticker: \"FAV__RUNESTONE_GOLDENTHOR\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              Title: balance(address: $address, currency: {{ticker: \"Item_T_49900026\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
+              Costume: balance(address: $address, currency: {{ticker: \"Item_T_40100032\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
           }}
         }}"""},
         headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}

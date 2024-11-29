@@ -1,18 +1,19 @@
 import os
+from datetime import datetime
 
+from common import logger
 from sqlalchemy import create_engine, select, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from common import logger
 from common.enums import PassType, PlanetID
 from common.models.action import Block
 from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
-from utils.gql import get_last_cleared_stage
+from schemas.sqs import SQSMessage
+from common.utils._graphql import get_last_cleared_stage
 from utils.season_pass import verify_season_pass
-from worker.schemas.sqs import SQSMessage
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -45,6 +46,31 @@ def handle(event, context):
     try:
         sess = scoped_session(sessionmaker(bind=engine))
         current_pass = get_pass(sess, pass_type=PassType.WORLD_CLEAR_PASS, validate_current=True, include_exp=True)
+
+        # Skip blocks before season starts
+        if current_pass is None:
+            logger.warning(
+                f"There is no active {PassType.WORLD_CLEAR_PASS.name} at {datetime.now().strftime('%Y-%m-%d %H:%H:%S')}"
+            )
+            for i, record in enumerate(message.Records):
+                body = record.body
+                block_index = body["block"]
+                planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
+                if sess.scalar(select(Block).where(
+                        Block.planet_id == planet_id,
+                        Block.pass_type == PassType.WORLD_CLEAR_PASS,
+                        Block.index == block_index,
+                )):
+                    logger.warning(f"Planet {planet_id.name} : Block {block_index} already applied. Skip.")
+                    continue
+
+                sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.WORLD_CLEAR_PASS))
+                logger.info(
+                    f"Skip world clear exp for {planet_id.name} : #{block_index} before season starts."
+                )
+            sess.commit()
+            return
+
         level_list = sess.scalars(select(Level).where(Level.pass_type == PassType.WORLD_CLEAR_PASS)
                                   .order_by(desc(Level.level))
                                   ).fetchall()
@@ -77,20 +103,19 @@ def handle(event, context):
                         # Use `level` field as world, `exp` field as stage
                         if action["stage_id"] <= target_data.exp:  # Already cleared stage. pass.
                             continue
-                        elif target_data.exp == 0:  # No data
-                            cleared_world, target_data.exp = get_last_cleared_stage(planet_id, action["avatar_addr"])
                         else:  # HAS new stage
-                            target_data.exp = action["stage_id"]
+                            cleared_world, target_data.exp = get_last_cleared_stage(planet_id, action["avatar_addr"])
 
                         for level in level_list:
                             if level.exp <= target_data.exp:
                                 target_data.level = level.level
                                 break
+
             sess.add_all(list(user_season_dict.values()))
             sess.add(Block(planet_id=planet_id, index=block_index, pass_type=PassType.WORLD_CLEAR_PASS))
             sess.commit()
             logger.info(
-                f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{body['block']} applied."
+                f"All {len(user_season_dict.values())} world clear for block {planet_id.name}:{body['block']} applied."
             )
     except InterruptedError as e:
         err_msg = str(e).split("\n")[0]

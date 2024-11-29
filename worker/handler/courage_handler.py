@@ -28,11 +28,13 @@ if STAGE == "mainnet":
     GQL_DICT = {
         PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
         PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
+        PlanetID.THOR: os.environ.get("THOR_GQL_URL"),
     }
 else:
     GQL_DICT = {
         PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
         PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
+        PlanetID.THOR_INTERNAL: os.environ.get("THOR_GQL_URL"),
     }
 
 engine = create_engine(DB_URI)
