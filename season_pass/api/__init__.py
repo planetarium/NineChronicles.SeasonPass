@@ -7,8 +7,8 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
-from common import SEASONPASS_ADDRESS
-from common.enums import TxStatus, PlanetID
+from common import SEASONPASS_ADDRESS, logger
+from common.enums import TxStatus, PlanetID, PassType
 from common.models.action import Block
 from common.models.user import Claim
 from common.utils.season_pass import create_jwt_token
@@ -33,56 +33,59 @@ for view in __all__:
     router.include_router(view.router)
 
 
+def get_tip(url) -> int:
+    resp = requests.post(
+        url,
+        json={"query": "{ nodeStatus { tip { index } } }"},
+        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"},
+        timeout=2
+    )
+    if resp.status_code != 200:
+        return 0
+    try:
+        return resp.json()["data"]["nodeStatus"]["tip"]["index"]
+    except Exception as e:
+        logger.warning(f"Error occurred while getting {url}: {e}")
+        return 0
+
+
+def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
+    tips = sess.execute(
+        select(Block.pass_type, func.max(Block.index))
+        .where(Block.planet_id == planet_id)
+        .group_by(Block.pass_type)
+    ).all()
+    return {pass_type: index for pass_type, index in tips}
+
+
 @router.get("/block-status")
 def block_status(sess=Depends(session)):
     stage = os.environ.get("STAGE", "development")
-    resp = requests.post(
-        os.environ["ODIN_GQL_URL"],
-        json={"query": "{ nodeStatus { tip { index } } }"},
-        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
-    )
-    odin_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
-    odin_blocks = sess.scalars(
-        select(Block.index)
-        .where(Block.planet_id == (PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL))
-    ).fetchall()
-    all_odin_blocks = set(range(min(odin_blocks), max(odin_blocks)))
-    missing_odin_blocks = len(all_odin_blocks - set(odin_blocks))
+    result = {}
 
-    resp = requests.post(
-        os.environ["HEIMDALL_GQL_URL"],
-        json={"query": "{ nodeStatus { tip { index } } }"},
-        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
-    )
-    heimdall_tip = resp.json()["data"]["nodeStatus"]["tip"]["index"]
-    heimdall_blocks = sess.scalars(
-        select(Block.index)
-        .where(Block.planet_id == (PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL))
-    ).fetchall()
-    all_heimdall_blocks = set(range(min(heimdall_blocks), max(heimdall_blocks)))
-    missing_heimdall_blocks = len(all_heimdall_blocks - set(heimdall_blocks))
+    odin_planet = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
+    odin_tip = get_tip(os.environ.get("ODIN_GQL_URL"))
+    odin_blocks = get_db_tip(sess, odin_planet)
+    result[odin_planet.name] = {k.value: odin_tip - v for k, v in odin_blocks.items()}
 
-    latest = (sess.query(Block.planet_id, func.max(Block.index))
-              .group_by(Block.planet_id).order_by(Block.planet_id)
-              ).all()
+    heimdall_planet = PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL
+    heimdall_tip = get_tip(os.environ.get("HEIMDALL_GQL_URL"))
+    heimdall_blocks = get_db_tip(sess, heimdall_planet)
+    result[heimdall_planet.name] = {k.value: heimdall_tip - v for k, v in heimdall_blocks.items()}
 
-    err = (abs(latest[0][1] - odin_tip) > 10 or abs(latest[1][1] - heimdall_tip) > 10
-           or missing_odin_blocks > 0 or missing_heimdall_blocks > 0)
-    msg = {
-        latest[0][0].decode(): {
-            "headless_tip": odin_tip,
-            "db_tip": latest[0][1],
-            "diverge": odin_tip - latest[0][1],
-            "missing": missing_odin_blocks,
-        },
-        latest[1][0].decode(): {
-            "headless_tip": heimdall_tip,
-            "db_tip": latest[1][1],
-            "diverge": heimdall_tip - latest[1][1],
-            "missing": missing_heimdall_blocks,
-        },
-    }
-    return JSONResponse(status_code=503 if err else 200, content=msg, )
+    thor_planet = PlanetID.THOR if stage == "mainnet" else PlanetID.THOR_INTERNAL
+    thor_tip = get_tip(os.environ.get("THOR_GQL_URL"))
+    thor_blocks = get_db_tip(sess, thor_planet)
+    result[thor_planet.name] = {k.value: thor_tip - v for k, v in thor_blocks.items()}
+
+    err = False
+    for planet, report in result.items():
+        for pass_type, divergence in report.items():
+            if abs(divergence) > 35:  # ~ 5min with 8 sec block internal
+                err = True
+                break
+
+    return JSONResponse(status_code=503 if err else 200, content=result)
 
 
 @router.get("/invalid-claim")
