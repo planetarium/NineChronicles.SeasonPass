@@ -92,13 +92,26 @@ def block_status(sess=Depends(session)):
 def invalid_claim(sess: Session = Depends(session)):
     now = datetime.now(tz=timezone.utc)
     invalid_claim_list = sess.scalars(select(Claim).where(
-        Claim.created_at <= now - timedelta(minutes=3),
+        Claim.created_at <= now - timedelta(minutes=5),
         Claim.reward_list != [],
         or_(Claim.tx_status != TxStatus.SUCCESS, Claim.tx_status.is_(None))
     )).fetchall()
     if invalid_claim_list:
         return JSONResponse(status_code=503, content=f"{len(invalid_claim_list)} of invalid claims found.")
     return JSONResponse(status_code=200, content="No invalid claims found.")
+
+
+@router.get("/failure-claim")
+def failure_claim(sess: Session = Depends(session)):
+    now = datetime.now(tz=timezone.utc)
+    failure_claim_list = sess.scalars(select(Claim).where(
+        Claim.created_at <= now - timedelta(minutes=5),
+        Claim.reward_list != [],
+        Claim.tx_status == TxStatus.FAILURE
+    )).fetchall()
+    if failure_claim_list:
+        return JSONResponse(status_code=503, content=f"{len(failure_claim_list)} of failure claims found.")
+    return JSONResponse(status_code=200, content="No failure claims found.")
 
 
 @router.get("/balance/{planet}")
