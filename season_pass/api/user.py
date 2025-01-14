@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import boto3
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 
 from common.enums import PlanetID, PassType, TxStatus
@@ -302,11 +302,12 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         raise SeasonNotFoundError(
             f"No activity recorded for season {target_pass.id} for avatar {request.avatar_addr}"
         )
-    
-    inprogress_claim_count = sess.scalars(select(Claim).where(
+
+    inprogress_claim_count = sess.scalar(select(func.count()).where(
         Claim.reward_list != [],
         or_(Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID)
-    )).count()
+    ))
+
     if inprogress_claim_count > 10:
         return ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
 
