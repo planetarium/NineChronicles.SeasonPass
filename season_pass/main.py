@@ -36,7 +36,7 @@ def handle_exceptions(e: Exception):
         status_code = HTTP_404_NOT_FOUND
     elif type(e) in (InvalidSeasonError, NotPremiumError):
         status_code = HTTP_400_BAD_REQUEST
-    elif type(e) in (ServerOverloadError):
+    elif type(e) == ServerOverloadError:
         status_code = HTTP_503_SERVICE_UNAVAILABLE
     else:
         status_code = HTTP_500_INTERNAL_SERVER_ERROR
