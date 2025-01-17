@@ -105,7 +105,6 @@ def invalid_claim(sess: Session = Depends(session)):
 def failure_claim(sess: Session = Depends(session)):
     now = datetime.now(tz=timezone.utc)
     failure_claim_list = sess.scalars(select(Claim).where(
-        Claim.created_at <= now - timedelta(minutes=5),
         Claim.reward_list != [],
         Claim.tx_status == TxStatus.FAILURE
     )).fetchall()
