@@ -58,6 +58,33 @@ def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
     return {pass_type: index for pass_type, index in tips}
 
 
+@router.get("/check-nonce")
+def check_nonce(sess=Depends(session)):
+    if planet.lower() == "odin":
+        url = os.environ.get("ODIN_GQL_URL")
+    elif planet.lower() == "heimdall":
+        url = os.environ.get("HEIMDALL_GQL_URL")
+    elif planet.lower() == "thor":
+        url = os.environ.get("THOR_GQL_URL")
+    else:
+        return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
+    
+    address = ?
+    resp = requests.post(
+        url,
+        json={"query": f"{{ nextTxNonce(\"{address}\")}}"},
+        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
+    )
+    next_nonce = resp.json()["data"]
+
+    highest_nonce = sess.scalar(select(Claim.nonce).order_by(Claim.nonce.desc())).limit(1)
+
+    if (highest_nonce > next_nonce + 100):
+        return JSONResponse(status_code=503, content=f"highest_nonce: {highest_nonce}, next_nonce: {next_nonce}")
+
+    return JSONResponse(status_code=200, content=resp)
+
+
 @router.get("/block-status")
 def block_status(sess=Depends(session)):
     stage = os.environ.get("STAGE", "development")
