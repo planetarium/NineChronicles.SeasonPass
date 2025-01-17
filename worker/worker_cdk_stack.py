@@ -70,6 +70,10 @@ class WorkerStack(Stack):
             security_group=self.shared_stack.ec2_sg,
             user_data=_ec2.UserData.for_linux().add_execute_file_command(file_path=init_file),
             role=tracker_role,
+            vpc_subnets=_ec2.SubnetSelection(
+                availability_zones=[f"{self.config.region_name}c"],
+                subnet_type=_ec2.SubnetType.PRIVATE_WITH_EGRESS
+            ),
         )
 
         # Lambda Layer
