@@ -308,7 +308,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         or_(Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID)
     ))
 
-    if inprogress_claim_count > 10:
+    if inprogress_claim_count > 50:
         return ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
 
     claim = create_claim(sess, target_pass, user_season)
