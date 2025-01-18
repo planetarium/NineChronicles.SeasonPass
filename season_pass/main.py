@@ -5,11 +5,11 @@ from fastapi import FastAPI
 from mangum import Mangum
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST, HTTP_500_INTERNAL_SERVER_ERROR
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST, HTTP_500_INTERNAL_SERVER_ERROR, HTTP_503_SERVICE_UNAVAILABLE
 
 from common import logger
 from season_pass import settings, api
-from season_pass.exceptions import SeasonNotFoundError, UserNotFoundError, InvalidSeasonError, NotPremiumError
+from season_pass.exceptions import SeasonNotFoundError, ServerOverloadError, UserNotFoundError, InvalidSeasonError, NotPremiumError
 
 __VERSION__ = "0.3.1"
 
@@ -36,6 +36,8 @@ def handle_exceptions(e: Exception):
         status_code = HTTP_404_NOT_FOUND
     elif type(e) in (InvalidSeasonError, NotPremiumError):
         status_code = HTTP_400_BAD_REQUEST
+    elif type(e) == ServerOverloadError:
+        status_code = HTTP_503_SERVICE_UNAVAILABLE
     else:
         status_code = HTTP_500_INTERNAL_SERVER_ERROR
 

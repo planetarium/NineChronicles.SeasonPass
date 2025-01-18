@@ -6,6 +6,10 @@ class InvalidSeasonError(Exception):
     pass
 
 
+class ServerOverloadError(Exception):
+    pass
+
+
 class UserNotFoundError(Exception):
     pass
 
