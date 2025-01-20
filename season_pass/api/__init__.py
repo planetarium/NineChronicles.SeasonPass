@@ -59,7 +59,7 @@ def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
 
 
 @router.get("/check-nonce")
-def check_nonce(sess=Depends(session)):
+def check_nonce(planet: str, sess=Depends(session)):
     if planet.lower() == "odin":
         url = os.environ.get("ODIN_GQL_URL")
     elif planet.lower() == "heimdall":
@@ -69,7 +69,7 @@ def check_nonce(sess=Depends(session)):
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
     
-    address = ?
+    address = "0x0E19A992ad976B4986098813DfCd24B0775AC0AA"
     resp = requests.post(
         url,
         json={"query": f"{{ nextTxNonce(\"{address}\")}}"},
