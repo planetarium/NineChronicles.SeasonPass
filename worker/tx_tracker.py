@@ -1,9 +1,11 @@
 import concurrent.futures
 import json
 import os
+import boto3
 from collections import defaultdict
 from typing import Optional, Tuple
 
+from datetime import datetime, timezone, timedelta
 from gql.dsl import dsl_gql, DSLQuery
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -21,6 +23,9 @@ DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 BLOCK_LIMIT = 200
 
 engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
+
+SQS_URL = os.environ.get("SQS_URL")
+sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
 
 
 def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], Optional[str]]:
@@ -62,6 +67,24 @@ def track_tx(event, context):
         .order_by(Claim.id).limit(BLOCK_LIMIT)
     ).fetchall()
     result = defaultdict(list)
+
+    now = datetime.now(tz=timezone.utc)
+    created_claim_list = sess.scalars(
+        select(Claim).where(
+            Claim.created_at <= now - timedelta(minutes=5),
+            Claim.tx_status == TxStatus.CREATED,
+            Claim.reward_list != []
+        ).order_by(Claim.id)
+    ).fetchall()
+
+    if created_claim_list:
+        for created_claim in created_claim_list:
+            msg = {
+                "uuid": str(created_claim.uuid),
+            }
+
+            sqs.send_message(QueueUrl=SQS_URL, MessageBody=json.dumps(msg))
+        logger.info(f"Found created claim [{len(created_claim_list)}], re queuing.")
 
     futures = {}
     with concurrent.futures.ThreadPoolExecutor() as executor:
