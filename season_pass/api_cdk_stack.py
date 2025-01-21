@@ -63,16 +63,16 @@ class APIStack(Stack):
                 ]
             )
         )
-        ssm = boto3.client("ssm", region_name=self.config.region_name,
+        ssm = boto3.client("ssm", region_name=config.region_name,
                             aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
                             aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
                             )
-        resp = ssm.get_parameter(Name=f"{self.config.stage}_9c_SEASON_PASS_KMS_KEY_ID", WithDecryption=True)
+        resp = ssm.get_parameter(Name=f"{config.stage}_9c_SEASON_PASS_KMS_KEY_ID", WithDecryption=True)
         kms_key_id = resp["Parameter"]["Value"]
         role.add_to_policy(
             _iam.PolicyStatement(
                 actions=["kms:GetPublicKey"],
-                resources=[f"arn:aws:kms:{self.config.region_name}:{self.config.account_id}:key/{kms_key_id}"]
+                resources=[f"arn:aws:kms:{config.region_name}:{config.account_id}:key/{kms_key_id}"]
             )
         )
         role.add_to_policy(
