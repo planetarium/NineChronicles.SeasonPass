@@ -7,10 +7,10 @@ from uuid import uuid4
 
 import boto3
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 
-from common.enums import PlanetID, PassType
+from common.enums import PlanetID, PassType, TxStatus
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass, Claim
 from common.utils._graphql import get_last_cleared_stage
@@ -18,7 +18,7 @@ from common.utils.season_pass import get_pass, get_max_level, get_level
 from season_pass import settings
 from season_pass.dependencies import session
 from season_pass.exceptions import (
-    SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError, NotPremiumError,
+    SeasonNotFoundError, InvalidSeasonError, InvalidUpgradeRequestError, NotPremiumError, ServerOverloadError,
 )
 from season_pass.schemas.user import (
     ClaimResultSchema, ClaimRequestSchema, UserSeasonPassSchema, UpgradeRequestSchema,
@@ -302,6 +302,14 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
         raise SeasonNotFoundError(
             f"No activity recorded for season {target_pass.id} for avatar {request.avatar_addr}"
         )
+
+    inprogress_claim_count = sess.scalar(select(func.count()).where(
+        Claim.reward_list != [],
+        or_(Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID)
+    ))
+
+    if inprogress_claim_count > 50:
+        return ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
 
     claim = create_claim(sess, target_pass, user_season)
     sess.commit()
