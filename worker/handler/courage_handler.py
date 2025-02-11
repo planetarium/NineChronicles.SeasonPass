@@ -106,7 +106,7 @@ def handle(event, context):
             "hack_and_slash_sweep##: [
                 ...
             ],
-            "battle_arena##: [
+            "battle##: [
                 ...
             ],
             "raid##: [
@@ -146,7 +146,7 @@ def handle(event, context):
                     apply_exp(sess, planet_id, user_season_dict, ActionType.RAID,
                               current_pass.exp_dict[ActionType.RAID], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} Raid applied.")
-                elif "battle_arena" in type_id:
+                elif "battle" in type_id:
                     apply_exp(sess, planet_id, user_season_dict, ActionType.ARENA,
                               current_pass.exp_dict[ActionType.ARENA], level_dict, block_index, action_data)
                     logger.info(f"{len(action_data)} Arena applied.")
