@@ -13,7 +13,7 @@ from common.utils.season_pass import create_jwt_token
 
 GQL_URL = os.environ.get("GQL_URL")
 TARGET_ACTION_DICT = {
-    PassType.COURAGE_PASS: "(hack_and_slash.*)|(battle_arena.*)|(raid.*)|(event_dungeon_battle.*)",
+    PassType.COURAGE_PASS: "(hack_and_slash.*)|(battle.*)|(raid.*)|(event_dungeon_battle.*)",
     PassType.ADVENTURE_BOSS_PASS: "(wanted.*)|(explore_adventure_boss.*)|(sweep_adventure_boss.*)",
     PassType.WORLD_CLEAR_PASS: "(hack_and_slash.*)"
 }

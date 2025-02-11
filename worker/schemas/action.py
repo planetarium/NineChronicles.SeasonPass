@@ -74,15 +74,10 @@ class ActionJson:
     # stageId: Optional[int] = None
     # worldId: Optional[int] = None
 
-    # battle_arena13
-    chi: Optional[int] = None
-    cs: Optional[List[str]] = None
-    eaa: Optional[str] = None
-    es: Optional[List[str]] = None
+    # battle
     maa: Optional[str] = None
-    rd: Optional[int] = None
-    ri: Optional[List[List[int]]] = None
-    tk: Optional[int] = None
+    arp: Optional[str] = None
+    m: Optional[str] = None
 
     # raid6
     a: Optional[str] = None
@@ -99,7 +94,7 @@ class ActionJson:
     def avatar_addr(self) -> str:
         return (
                 self.avatarAddress  # HAS / Sweep
-                or self.maa  # Arena
+                or self.maa  # Battle
                 or self.a  # Raid
                 or self.l[0]  # Event dungeon
         )
@@ -108,8 +103,8 @@ class ActionJson:
     def count_base(self) -> int:
         if self.type_id.startswith("raid"):
             return 1
-        elif self.type_id.startswith("battle_arena"):
-            return self.tk
+        elif self.type_id.startswith("battle"):
+            return 1
         elif "sweep" in self.type_id:
             # !!! WARNING: This returns used AP, not play count !!!
             return self.actionPoint + self.apStoneCount * AP_PER_STONE
