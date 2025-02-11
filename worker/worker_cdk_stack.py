@@ -45,7 +45,7 @@ class WorkerStack(Stack):
         if self.config.stage == "mainnet":
             instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.M6G, _ec2.InstanceSize.LARGE)
             ami = _ec2.MachineImage.lookup(
-                name="mainnet_9c_season-pass_block_tracker-20231219",
+                name="9c_season-pass_block-tracker_20241128",
             )
         elif self.config.stage in ("internal", "preview"):
             instance_type = _ec2.InstanceType.of(_ec2.InstanceClass.BURSTABLE4_GRAVITON, _ec2.InstanceSize.SMALL)
