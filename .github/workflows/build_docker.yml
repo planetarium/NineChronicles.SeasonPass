@@ -1,6 +1,7 @@
 name: Build and push NineChronicles.SeasonPass Block Tracker Docker image
 
 on:
+  push:
   workflow_call:
     secrets:
       DOCKER_USERNAME:
