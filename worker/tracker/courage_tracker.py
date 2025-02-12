@@ -22,8 +22,6 @@ REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
-db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
-DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 SQS_URL = os.environ.get("SQS_URL")
 ARENA_SERVICE_JWT_PUBLIC_KEY = os.environ.get("ARENA_SERVICE_JWT_PUBLIC_KEY")
 
