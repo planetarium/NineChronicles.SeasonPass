@@ -1,6 +1,8 @@
 import concurrent.futures
 import json
 import os
+import time
+
 import jwt
 import base64
 from collections import defaultdict
@@ -106,31 +108,34 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
 
 
 def main():
-    sess = scoped_session(sessionmaker(bind=engine))
-    # Get missing blocks
-    start_block = int(os.environ.get("START_BLOCK_INDEX"))
-    expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
-    all_blocks = set(sess.scalars(select(Block.index).where(
-        Block.planet_id == CURRENT_PLANET,
-        Block.pass_type == PassType.COURAGE_PASS,
-        Block.index >= start_block,
-    )).fetchall())
-    missing_blocks = expected_all - all_blocks
+    while True:
+        sess = scoped_session(sessionmaker(bind=engine))
+        # Get missing blocks
+        start_block = int(os.environ.get("START_BLOCK_INDEX"))
+        expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
+        all_blocks = set(sess.scalars(select(Block.index).where(
+            Block.planet_id == CURRENT_PLANET,
+            Block.pass_type == PassType.COURAGE_PASS,
+            Block.index >= start_block,
+        )).fetchall())
+        missing_blocks = expected_all - all_blocks
 
-    block_dict = {}
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for index in missing_blocks:
-            block_dict[executor.submit(process_block, index, PassType.COURAGE_PASS, CURRENT_PLANET)] = (index, PassType.COURAGE_PASS)
+        block_dict = {}
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for index in missing_blocks:
+                block_dict[executor.submit(process_block, index, PassType.COURAGE_PASS, CURRENT_PLANET)] = (index, PassType.COURAGE_PASS)
 
-        for future in concurrent.futures.as_completed(block_dict):
-            index = block_dict[future]
-            exc = future.exception()
+            for future in concurrent.futures.as_completed(block_dict):
+                index = block_dict[future]
+                exc = future.exception()
 
-            if exc:
-                logger.error(f"Error occurred processing block {index} :: {exc}")
-            else:
-                result = future.result()
-                logger.info(f"Block {index} collected :: {result}")
+                if exc:
+                    logger.error(f"Error occurred processing block {index} :: {exc}")
+                else:
+                    result = future.result()
+                    logger.info(f"Block {index} collected :: {result}")
+        # wait for block time
+        time.sleep(8)
 
 
 if __name__ == "__main__":
