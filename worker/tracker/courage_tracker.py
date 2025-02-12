@@ -73,7 +73,7 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
             agent_list.add(tx["signer"].lower())
             action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
 
-            if "battle" in type_id:
+            if "battle" == type_id:
                 if action_json.arp != "PLANETARIUM":
                     continue
 
