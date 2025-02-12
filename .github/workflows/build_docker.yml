@@ -38,3 +38,4 @@ jobs:
           context: .
           push: true
           tags: planetariumhq/season-pass:git-${{ github.sha }}
+          platforms: linux/arm64, linux/amd64
