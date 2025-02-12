@@ -14,9 +14,9 @@ from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.models.arena import BattleHistory
 from common.utils.aws import fetch_secrets
-from schemas.action import ActionJson
-from utils.aws import send_sqs_message
-from utils.gql import get_block_tip, fetch_block_data
+from worker.schemas.action import ActionJson
+from worker.utils.aws import send_sqs_message
+from worker.utils.gql import get_block_tip, fetch_block_data
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
