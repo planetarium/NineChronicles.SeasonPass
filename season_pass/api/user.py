@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import boto3
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.exc import IntegrityError
 
 from common.enums import PlanetID, PassType, TxStatus

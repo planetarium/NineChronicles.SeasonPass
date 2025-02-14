@@ -78,7 +78,7 @@ class ActionType(Enum):
 
     - **`hack_and_slash`**: Stage adventure. Matches with type_id `hack_and_slash##`
     - **`hack_and_slash_sweep`**: Sweep stage. Matches with type_id `hack_and_slash_sweep##`
-    - **`battle_arena`**: Arena battle. Matches with type_id `battle_arena##`
+    - **`battle`**: Arena battle. Matches with type_id `battle##`
     - **`raid`**: World boss battle. Matches with type_id `raid##`
     - **`event_dungeon`**: Event dungeon stage. Matches with type_id `event_dungeon_battle##`
     - **`wanted`**: Add bounty to adventure boss
@@ -87,6 +87,8 @@ class ActionType(Enum):
     """
     HAS = "hack_and_slash"
     SWEEP = "hack_and_slash_sweep"
+    # FIXME update interface next release
+    # https://github.com/planetarium/NineChronicles/blob/release/280.0.10/nekoyume/Assets/_Scripts/ApiClient/GeneratedApi/SeasonPassServiceClient.cs#L39
     ARENA = "battle_arena"
     RAID = "raid"
     EVENT = "event_dungeon"
