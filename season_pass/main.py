@@ -1,11 +1,12 @@
 import os
 
+from requests import ReadTimeout
 import uvicorn
 from fastapi import FastAPI
 from mangum import Mangum
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST, HTTP_500_INTERNAL_SERVER_ERROR, HTTP_503_SERVICE_UNAVAILABLE
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST, HTTP_500_INTERNAL_SERVER_ERROR, HTTP_503_SERVICE_UNAVAILABLE, HTTP_204_NO_CONTENT
 
 from common import logger
 from season_pass import settings, api
@@ -38,6 +39,8 @@ def handle_exceptions(e: Exception):
         status_code = HTTP_400_BAD_REQUEST
     elif type(e) == ServerOverloadError:
         status_code = HTTP_503_SERVICE_UNAVAILABLE
+    elif type(e) == ReadTimeout:
+        status_code = HTTP_204_NO_CONTENT
     else:
         status_code = HTTP_500_INTERNAL_SERVER_ERROR
 

@@ -71,7 +71,7 @@ def check_nonce(planet: str, sess=Depends(session)):
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
     
-    account = Account(fetch_kms_key_id(settings.STAGE, settings.REGION_NAME))
+    account = Account(fetch_kms_key_id(settings.stage, settings.REGION_NAME))
     resp = requests.post(
         url,
         json={"query": f"{{ nextTxNonce(\"{account.address}\")}}"},
