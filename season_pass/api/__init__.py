@@ -110,7 +110,7 @@ def block_status(sess=Depends(session)):
     err = False
     for planet, report in result.items():
         for pass_type, divergence in report.items():
-            if abs(divergence) > 35:  # ~ 5min with 8 sec block internal
+            if abs(divergence) > 150:  # ~ 5min with 8 sec block internal
                 err = True
                 break
 
