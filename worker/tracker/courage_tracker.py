@@ -1,6 +1,8 @@
 import concurrent.futures
 import json
 import os
+import time
+
 import jwt
 import base64
 from collections import defaultdict
@@ -14,16 +16,14 @@ from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.models.arena import BattleHistory
 from common.utils.aws import fetch_secrets
-from schemas.action import ActionJson
-from utils.aws import send_sqs_message
-from utils.gql import get_block_tip, fetch_block_data
+from worker.schemas.action import ActionJson
+from worker.utils.aws import send_sqs_message
+from worker.utils.gql import get_block_tip, fetch_block_data
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
-db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
-DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 SQS_URL = os.environ.get("SQS_URL")
 ARENA_SERVICE_JWT_PUBLIC_KEY = os.environ.get("ARENA_SERVICE_JWT_PUBLIC_KEY")
 
@@ -73,7 +73,7 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
             agent_list.add(tx["signer"].lower())
             action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
 
-            if "battle" in type_id:
+            if "battle" == type_id:
                 if action_json.arp != "PLANETARIUM":
                     continue
 
@@ -108,31 +108,34 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
 
 
 def main():
-    sess = scoped_session(sessionmaker(bind=engine))
-    # Get missing blocks
-    start_block = int(os.environ.get("START_BLOCK_INDEX"))
-    expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
-    all_blocks = set(sess.scalars(select(Block.index).where(
-        Block.planet_id == CURRENT_PLANET,
-        Block.pass_type == PassType.COURAGE_PASS,
-        Block.index >= start_block,
-    )).fetchall())
-    missing_blocks = expected_all - all_blocks
+    while True:
+        sess = scoped_session(sessionmaker(bind=engine))
+        # Get missing blocks
+        start_block = int(os.environ.get("START_BLOCK_INDEX"))
+        expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
+        all_blocks = set(sess.scalars(select(Block.index).where(
+            Block.planet_id == CURRENT_PLANET,
+            Block.pass_type == PassType.COURAGE_PASS,
+            Block.index >= start_block,
+        )).fetchall())
+        missing_blocks = expected_all - all_blocks
 
-    block_dict = {}
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for index in missing_blocks:
-            block_dict[executor.submit(process_block, index, PassType.COURAGE_PASS, CURRENT_PLANET)] = (index, PassType.COURAGE_PASS)
+        block_dict = {}
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for index in missing_blocks:
+                block_dict[executor.submit(process_block, index, PassType.COURAGE_PASS, CURRENT_PLANET)] = (index, PassType.COURAGE_PASS)
 
-        for future in concurrent.futures.as_completed(block_dict):
-            index = block_dict[future]
-            exc = future.exception()
+            for future in concurrent.futures.as_completed(block_dict):
+                index = block_dict[future]
+                exc = future.exception()
 
-            if exc:
-                logger.error(f"Error occurred processing block {index} :: {exc}")
-            else:
-                result = future.result()
-                logger.info(f"Block {index} collected :: {result}")
+                if exc:
+                    logger.error(f"Error occurred processing block {index} :: {exc}")
+                else:
+                    result = future.result()
+                    logger.info(f"Block {index} collected :: {result}")
+        # wait for block time
+        time.sleep(8)
 
 
 if __name__ == "__main__":

@@ -87,7 +87,9 @@ class ActionType(Enum):
     """
     HAS = "hack_and_slash"
     SWEEP = "hack_and_slash_sweep"
-    ARENA = "battle"
+    # FIXME update interface next release
+    # https://github.com/planetarium/NineChronicles/blob/release/280.0.10/nekoyume/Assets/_Scripts/ApiClient/GeneratedApi/SeasonPassServiceClient.cs#L39
+    ARENA = "battle_arena"
     RAID = "raid"
     EVENT = "event_dungeon"
     WANTED = "wanted"

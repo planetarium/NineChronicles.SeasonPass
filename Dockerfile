@@ -16,4 +16,4 @@ COPY poetry.lock /app/NineChronicles/SeasonPass
 COPY block_tracker.service /etc/systemd/system/block_tracker.service
 
 WORKDIR /app/NineChronicles.SeasonPass
-RUN poetry install --no-root --no-dev
+RUN poetry install --no-root
