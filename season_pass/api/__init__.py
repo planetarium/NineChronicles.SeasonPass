@@ -162,7 +162,7 @@ def balance(planet: str):
               GoldenDust: balance(address: $address, currency: {{ticker: \"Item_NT_600201\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
               RubyDust: balance(address: $address, currency: {{ticker: \"Item_NT_600202\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               EmeraldDust: balance(address: $address, currency: {{ticker: \"Item_NT_600203\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
-              Scroll: balance(address: $address, currency: {{ticker: \"Item_NT_600401\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
+              Scroll: balance(address: $address, currency: {{ticker: \"Item_T_600401\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               SilverDust: balance(address: $address, currency: {{ticker: \"Item_NT_800201\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               Crystal: balance(address: $address, currency: {{ticker: \"FAV__CRYSTAL\", decimalPlaces: 18, minters: []}}) {{ currency {{   ticker }} quantity }}
               GoldenLeaf: balance(address: $address, currency: {{ticker: \"FAV__RUNE_GOLDENLEAF\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
