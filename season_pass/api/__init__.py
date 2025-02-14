@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, desc
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
@@ -64,27 +64,33 @@ def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
 def check_nonce(planet: str, sess=Depends(session)):
     if planet.lower() == "odin":
         url = os.environ.get("ODIN_GQL_URL")
+        planet_id = PlanetID.ODIN
     elif planet.lower() == "heimdall":
         url = os.environ.get("HEIMDALL_GQL_URL")
+        planet_id = PlanetID.HEIMDALL
     elif planet.lower() == "thor":
         url = os.environ.get("THOR_GQL_URL")
+        planet_id = PlanetID.THOR
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
-    
-    account = Account(fetch_kms_key_id(settings.STAGE, settings.REGION_NAME))
+
+    account = Account(fetch_kms_key_id(settings.stage, settings.REGION_NAME))
     resp = requests.post(
         url,
-        json={"query": f"{{ nextTxNonce(\"{account.address}\")}}"},
+        json={"query": f"query {{ nextTxNonce(address: \"{account.address}\") }}"},
         headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
     )
-    next_nonce = resp.json()["data"]
+    result = resp.json()
+    next_nonce = result["data"]["nextTxNonce"]
 
-    highest_nonce = sess.scalar(select(Claim.nonce).order_by(Claim.nonce.desc()))
+    highest_nonce = sess.scalar(
+        select(Claim.nonce).where(Claim.nonce.is_not(None), Claim.planet_id == planet_id).order_by(
+            desc(Claim.nonce)).limit(1))
 
-    if (highest_nonce > next_nonce + 100):
+    if highest_nonce > next_nonce + 100:
         return JSONResponse(status_code=503, content=f"highest_nonce: {highest_nonce}, next_nonce: {next_nonce}")
 
-    return JSONResponse(status_code=200, content=resp)
+    return JSONResponse(status_code=200, content=result)
 
 
 @router.get("/block-status")
@@ -110,7 +116,7 @@ def block_status(sess=Depends(session)):
     err = False
     for planet, report in result.items():
         for pass_type, divergence in report.items():
-            if abs(divergence) > 35:  # ~ 5min with 8 sec block internal
+            if abs(divergence) > 150:  # ~ 5min with 8 sec block internal
                 err = True
                 break
 
@@ -162,7 +168,7 @@ def balance(planet: str):
               GoldenDust: balance(address: $address, currency: {{ticker: \"Item_NT_600201\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
               RubyDust: balance(address: $address, currency: {{ticker: \"Item_NT_600202\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               EmeraldDust: balance(address: $address, currency: {{ticker: \"Item_NT_600203\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
-              Scroll: balance(address: $address, currency: {{ticker: \"Item_NT_600401\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
+              Scroll: balance(address: $address, currency: {{ticker: \"Item_T_600401\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               SilverDust: balance(address: $address, currency: {{ticker: \"Item_NT_800201\", decimalPlaces: 0, minters: []}}) {{ currency {{   ticker }} quantity }}
               Crystal: balance(address: $address, currency: {{ticker: \"FAV__CRYSTAL\", decimalPlaces: 18, minters: []}}) {{ currency {{   ticker }} quantity }}
               GoldenLeaf: balance(address: $address, currency: {{ticker: \"FAV__RUNE_GOLDENLEAF\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}

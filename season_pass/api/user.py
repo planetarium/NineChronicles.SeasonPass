@@ -309,7 +309,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     ))
 
     if inprogress_claim_count > 50:
-        return ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
+        raise ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
 
     claim = create_claim(sess, target_pass, user_season)
     sess.commit()
