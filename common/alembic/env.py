@@ -2,14 +2,12 @@ import sys
 from importlib import import_module
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 sys.path = ["", ".."] + sys.path[1:]
 from common import models
+from season_pass.settings import DB_URI
 
 for model in models.__all__:
     import_module(f".{model}", "common.models")
@@ -34,6 +32,7 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+config.set_main_option("sqlalchemy.url", DB_URI)
 
 
 def run_migrations_offline() -> None:
@@ -74,9 +73,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
