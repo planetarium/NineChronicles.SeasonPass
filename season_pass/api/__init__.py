@@ -1,21 +1,21 @@
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, or_, func, desc
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
 from common import SEASONPASS_ADDRESS, logger
-from common.enums import TxStatus, PlanetID, PassType
+from common.enums import PassType, PlanetID, TxStatus
 from common.models.action import Block
 from common.models.user import Claim
-from common.utils.season_pass import create_jwt_token
 from common.utils._crypto import Account
 from common.utils.aws import fetch_kms_key_id
+from common.utils.season_pass import create_jwt_token
 from season_pass import settings
-from season_pass.api import season_pass, user, tmp
+from season_pass.api import season_pass, tmp, user
 from season_pass.dependencies import session
 
 __all__ = [
@@ -39,8 +39,10 @@ def get_tip(url) -> int:
     resp = requests.post(
         url,
         json={"query": "{ nodeStatus { tip { index } } }"},
-        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"},
-        timeout=2
+        headers={
+            "Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"
+        },
+        timeout=2,
     )
     if resp.status_code != 200:
         return 0
@@ -77,18 +79,26 @@ def check_nonce(planet: str, sess=Depends(session)):
     account = Account(fetch_kms_key_id(settings.stage, settings.REGION_NAME))
     resp = requests.post(
         url,
-        json={"query": f"query {{ nextTxNonce(address: \"{account.address}\") }}"},
-        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
+        json={"query": f'query {{ nextTxNonce(address: "{account.address}") }}'},
+        headers={
+            "Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"
+        },
     )
     result = resp.json()
     next_nonce = result["data"]["nextTxNonce"]
 
     highest_nonce = sess.scalar(
-        select(Claim.nonce).where(Claim.nonce.is_not(None), Claim.planet_id == planet_id).order_by(
-            desc(Claim.nonce)).limit(1))
+        select(Claim.nonce)
+        .where(Claim.nonce.is_not(None), Claim.planet_id == planet_id)
+        .order_by(desc(Claim.nonce))
+        .limit(1)
+    )
 
     if highest_nonce > next_nonce + 100:
-        return JSONResponse(status_code=503, content=f"highest_nonce: {highest_nonce}, next_nonce: {next_nonce}")
+        return JSONResponse(
+            status_code=503,
+            content=f"highest_nonce: {highest_nonce}, next_nonce: {next_nonce}",
+        )
 
     return JSONResponse(status_code=200, content=result)
 
@@ -103,10 +113,14 @@ def block_status(sess=Depends(session)):
     odin_blocks = get_db_tip(sess, odin_planet)
     result[odin_planet.name] = {k.value: odin_tip - v for k, v in odin_blocks.items()}
 
-    heimdall_planet = PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL
+    heimdall_planet = (
+        PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL
+    )
     heimdall_tip = get_tip(os.environ.get("HEIMDALL_GQL_URL"))
     heimdall_blocks = get_db_tip(sess, heimdall_planet)
-    result[heimdall_planet.name] = {k.value: heimdall_tip - v for k, v in heimdall_blocks.items()}
+    result[heimdall_planet.name] = {
+        k.value: heimdall_tip - v for k, v in heimdall_blocks.items()
+    }
 
     thor_planet = PlanetID.THOR if stage == "mainnet" else PlanetID.THOR_INTERNAL
     thor_tip = get_tip(os.environ.get("THOR_GQL_URL"))
@@ -126,25 +140,34 @@ def block_status(sess=Depends(session)):
 @router.get("/invalid-claim")
 def invalid_claim(sess: Session = Depends(session)):
     now = datetime.now(tz=timezone.utc)
-    invalid_claim_list = sess.scalars(select(Claim).where(
-        Claim.created_at <= now - timedelta(minutes=5),
-        Claim.reward_list != [],
-        or_(Claim.tx_status != TxStatus.SUCCESS, Claim.tx_status.is_(None))
-    )).fetchall()
+    invalid_claim_list = sess.scalars(
+        select(Claim).where(
+            Claim.created_at <= now - timedelta(minutes=5),
+            Claim.reward_list != [],
+            or_(Claim.tx_status != TxStatus.SUCCESS, Claim.tx_status.is_(None)),
+        )
+    ).fetchall()
     if invalid_claim_list:
-        return JSONResponse(status_code=503, content=f"{len(invalid_claim_list)} of invalid claims found.")
+        return JSONResponse(
+            status_code=503,
+            content=f"{len(invalid_claim_list)} of invalid claims found.",
+        )
     return JSONResponse(status_code=200, content="No invalid claims found.")
 
 
 @router.get("/failure-claim")
 def failure_claim(sess: Session = Depends(session)):
     now = datetime.now(tz=timezone.utc)
-    failure_claim_list = sess.scalars(select(Claim).where(
-        Claim.reward_list != [],
-        Claim.tx_status == TxStatus.FAILURE
-    )).fetchall()
+    failure_claim_list = sess.scalars(
+        select(Claim).where(
+            Claim.reward_list != [], Claim.tx_status == TxStatus.FAILURE
+        )
+    ).fetchall()
     if failure_claim_list:
-        return JSONResponse(status_code=503, content=f"{len(failure_claim_list)} of failure claims found.")
+        return JSONResponse(
+            status_code=503,
+            content=f"{len(failure_claim_list)} of failure claims found.",
+        )
     return JSONResponse(status_code=200, content="No failure claims found.")
 
 
@@ -157,11 +180,11 @@ def balance(planet: str):
     elif planet.lower() == "thor":
         url = os.environ.get("THOR_GQL_URL")
     else:
-        return JSONResponse(status_code=400, content=f"{planet} is not valid planet."
-                            )
+        return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
     resp = requests.post(
         url,
-        json={"query": f"""query balanceQuery($address: Address! = \"{SEASONPASS_ADDRESS}\") {{
+        json={
+            "query": f"""query balanceQuery($address: Address! = \"{SEASONPASS_ADDRESS}\") {{
           stateQuery {{
               hourglass: balance(address: $address, currency: {{ticker: \"Item_NT_400000\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
               APPotion: balance(address: $address, currency: {{ticker: \"Item_NT_500000\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
@@ -178,12 +201,18 @@ def balance(planet: str):
               Title: balance(address: $address, currency: {{ticker: \"Item_T_49900026\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
               Costume: balance(address: $address, currency: {{ticker: \"Item_T_40100032\", decimalPlaces: 0, minters: []}}) {{ currency {{ ticker }} quantity }}
           }}
-        }}"""},
-        headers={"Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"}
+        }}"""
+        },
+        headers={
+            "Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"
+        },
     )
     data = resp.json()["data"]["stateQuery"]
     resp = {}
     for k, v in data.items():
-        resp[k.lower()] = {"ticker": v["currency"]["ticker"], "amount": float(v["quantity"])}
+        resp[k.lower()] = {
+            "ticker": v["currency"]["ticker"],
+            "amount": float(v["quantity"]),
+        }
 
     return JSONResponse(status_code=200, content=resp)

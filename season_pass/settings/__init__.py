@@ -11,7 +11,9 @@ if not stage:
     raise FileNotFoundError(f"No config file found for stage {stage}")
 
 if os.path.exists(os.path.join("season_pass", "settings", f"{stage}.py")):
-    env_module = __import__(f"season_pass.settings.{stage}", fromlist=["season_pass.settings"])
+    env_module = __import__(
+        f"season_pass.settings.{stage}", fromlist=["season_pass.settings"]
+    )
     envs = {k: v for k, v in env_module.__dict__.items() if k.upper() == k}
     config = Config(environ=envs)
 else:
