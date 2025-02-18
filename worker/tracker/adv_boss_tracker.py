@@ -64,6 +64,7 @@ def main():
             )
         ).fetchall())
         missing_blocks = expected_all - all_blocks
+        sess.close()
 
         block_dict = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
