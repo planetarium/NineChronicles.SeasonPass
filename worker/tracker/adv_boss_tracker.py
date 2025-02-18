@@ -1,6 +1,7 @@
 import concurrent.futures
 import json
 import os
+import time
 from collections import defaultdict
 
 from sqlalchemy import create_engine, select
@@ -9,10 +10,9 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from common import logger
 from common.enums import PlanetID, PassType
 from common.models.action import Block
-from common.utils.aws import fetch_secrets
-from schemas.action import AdventureBossActionJson
-from utils.aws import send_sqs_message
-from utils.gql import get_block_tip, fetch_block_data
+from worker.schemas.action import AdventureBossActionJson
+from worker.utils.aws import send_sqs_message
+from worker.utils.gql import get_block_tip, fetch_block_data
 
 # envs of tracker comes from .env.*** in EC2 instance
 REGION_NAME = os.environ.get("REGION_NAME")
@@ -21,8 +21,6 @@ SQS_URL = os.environ.get("ADVENTURE_BOSS_SQS_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 
 DB_URI = os.environ.get("DB_URI")
-db_password = fetch_secrets(os.environ.get("REGION_NAME", "us-east-2"), os.environ.get("SECRET_ARN"))["password"]
-DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 
 engine = create_engine(DB_URI)
 
@@ -52,34 +50,38 @@ def process_block(block_index: int):
 
 
 def main():
-    sess = scoped_session(sessionmaker(bind=engine))
-    # Get missing blocks
-    start_block = int(os.environ.get("START_BLOCK_INDEX"))
-    expected_all = set(range(start_block, get_block_tip()))  # Sloth needs 1 block to render actions: get tip-1
-    all_blocks = set(sess.scalars(
-        select(Block.index)
-        .where(
-            Block.planet_id == CURRENT_PLANET,
-            Block.index >= start_block,
-            Block.pass_type == PassType.ADVENTURE_BOSS_PASS
-        )
-    ).fetchall())
-    missing_blocks = expected_all - all_blocks
+    while True:
+        sess = scoped_session(sessionmaker(bind=engine))
+        # Get missing blocks
+        start_block = int(os.environ.get("START_BLOCK_INDEX"))
+        expected_all = set(range(start_block, get_block_tip()))  # Sloth needs 1 block to render actions: get tip-1
+        all_blocks = set(sess.scalars(
+            select(Block.index)
+            .where(
+                Block.planet_id == CURRENT_PLANET,
+                Block.index >= start_block,
+                Block.pass_type == PassType.ADVENTURE_BOSS_PASS
+            )
+        ).fetchall())
+        missing_blocks = expected_all - all_blocks
+        sess.close()
 
-    block_dict = {}
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for index in missing_blocks:
-            block_dict[executor.submit(process_block, index)] = index
+        block_dict = {}
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for index in missing_blocks:
+                block_dict[executor.submit(process_block, index)] = index
 
-        for future in concurrent.futures.as_completed(block_dict):
-            index = block_dict[future]
-            exc = future.exception()
+            for future in concurrent.futures.as_completed(block_dict):
+                index = block_dict[future]
+                exc = future.exception()
 
-            if exc:
-                logger.error(f"Error occurred processing block {index} :: {exc}")
-            else:
-                result = future.result()
-                logger.info(f"Block {index} collected :: {result}")
+                if exc:
+                    logger.error(f"Error occurred processing block {index} :: {exc}")
+                else:
+                    result = future.result()
+                    logger.info(f"Block {index} collected :: {result}")
+        # wait for block time
+        time.sleep(8)
 
 
 if __name__ == "__main__":
