@@ -35,8 +35,6 @@ router = APIRouter(
 for view in __all__:
     router.include_router(view.router)
 
-logger = logging.getLogger("uvicorn.error")
-
 
 def get_tip(url) -> int:
     resp = requests.post(
@@ -52,7 +50,7 @@ def get_tip(url) -> int:
     try:
         return resp.json()["data"]["nodeStatus"]["tip"]["index"]
     except Exception as e:
-        logger.warning(f"Error occurred while getting {url}: {e}")
+        logging.warning(f"Error occurred while getting {url}: {e}")
         return 0
 
 

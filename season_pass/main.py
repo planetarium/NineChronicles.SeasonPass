@@ -27,7 +27,6 @@ from season_pass.exceptions import (
 __VERSION__ = "0.3.1"
 
 stage = os.environ.get("STAGE", "local")
-logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(
     title="Nine Chronicles Season Pass Service",
@@ -39,13 +38,13 @@ app = FastAPI(
 
 @app.middleware("http")
 def log_incoming_url(request: Request, call_next):
-    logger.info(f"[{request.method}] {request.url}")
+    logging.info(f"[{request.method}] {request.url}")
     return call_next(request)
 
 
 @app.exception_handler(Exception)
 def handle_exceptions(e: Exception):
-    logger.error(e)
+    logging.error(e)
     if type(e) in (SeasonNotFoundError, UserNotFoundError):
         status_code = HTTP_404_NOT_FOUND
     elif type(e) in (InvalidSeasonError, NotPremiumError):
