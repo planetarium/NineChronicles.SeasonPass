@@ -12,8 +12,6 @@ from common import SEASONPASS_ADDRESS
 from common.enums import PassType, PlanetID, TxStatus
 from common.models.action import Block
 from common.models.user import Claim
-from common.utils._crypto import Account
-from common.utils.aws import fetch_kms_key_id
 from common.utils.season_pass import create_jwt_token
 from season_pass import settings
 from season_pass.api import season_pass, tmp, user
@@ -78,10 +76,9 @@ def check_nonce(planet: str, sess=Depends(session)):
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
 
-    account = Account(fetch_kms_key_id(settings.stage, settings.REGION_NAME))
     resp = requests.post(
         url,
-        json={"query": f'query {{ nextTxNonce(address: "{account.address}") }}'},
+        json={"query": f'query {{ nextTxNonce(address: "{SEASONPASS_ADDRESS}") }}'},
         headers={
             "Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"
         },
