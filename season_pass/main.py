@@ -1,3 +1,4 @@
+import logging
 import os
 
 import uvicorn
@@ -14,7 +15,6 @@ from starlette.status import (
     HTTP_503_SERVICE_UNAVAILABLE,
 )
 
-from common import logger
 from season_pass import api, settings
 from season_pass.exceptions import (
     InvalidSeasonError,
@@ -27,6 +27,7 @@ from season_pass.exceptions import (
 __VERSION__ = "0.3.1"
 
 stage = os.environ.get("STAGE", "local")
+logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(
     title="Nine Chronicles Season Pass Service",

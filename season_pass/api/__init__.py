@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -7,7 +8,7 @@ from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
-from common import SEASONPASS_ADDRESS, logger
+from common import SEASONPASS_ADDRESS
 from common.enums import PassType, PlanetID, TxStatus
 from common.models.action import Block
 from common.models.user import Claim
@@ -33,6 +34,8 @@ router = APIRouter(
 
 for view in __all__:
     router.include_router(view.router)
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def get_tip(url) -> int:
