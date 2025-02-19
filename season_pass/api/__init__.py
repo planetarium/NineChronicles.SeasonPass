@@ -65,15 +65,16 @@ def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
 
 @router.get("/check-nonce")
 def check_nonce(planet: str, sess=Depends(session)):
+    is_mainnet = os.environ.get("STAGE", "development") == "mainnet"
     if planet.lower() == "odin":
         url = os.environ.get("ODIN_GQL_URL")
-        planet_id = PlanetID.ODIN
+        planet_id = PlanetID.ODIN if is_mainnet else PlanetID.ODIN_INTERNAL
     elif planet.lower() == "heimdall":
         url = os.environ.get("HEIMDALL_GQL_URL")
-        planet_id = PlanetID.HEIMDALL
+        planet_id = PlanetID.HEIMDALL if is_mainnet else PlanetID.HEIMDALL_INTERNAL
     elif planet.lower() == "thor":
         url = os.environ.get("THOR_GQL_URL")
-        planet_id = PlanetID.THOR
+        planet_id = PlanetID.THOR if is_mainnet else PlanetID.THOR_INTERNAL
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
 
