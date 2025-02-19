@@ -11,6 +11,7 @@ RUN poetry config virtualenvs.create false
 
 COPY ./worker /app/NineChronicles.SeasonPass/worker
 COPY ./common /app/NineChronicles.SeasonPass/common
+COPY ./season_pass /app/NineChronicles.SeasonPass/season_pass
 COPY pyproject.toml /app/NineChronicles.SeasonPass
 COPY poetry.lock /app/NineChronicles.SeasonPass
 COPY block_tracker.service /etc/systemd/system/block_tracker.service
