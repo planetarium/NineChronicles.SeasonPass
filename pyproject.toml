@@ -20,13 +20,12 @@ hexbytes = "^1.2.1"
 bencodex = "^1.0.1"
 pyjwt = "^2.8.0"
 pre-commit = "^4.1.0"
+pika = "^1.3.2"
 
 [tool.poetry.group.api.dependencies]
 fastapi = "^0.103.2"
 mangum = "^0.17.0"
 uvicorn = "^0.23.2"
-
-[tool.poetry.group.worker.dependencies]
 
 [tool.poetry.group.dev.dependencies]
 boto3 = "^1.28.65"
