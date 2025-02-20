@@ -80,4 +80,18 @@ app.include_router(api.router)
 handler = Mangum(app)
 
 if __name__ == "__main__":
-    uvicorn.run("season_pass.main:app", reload=settings.DEBUG, host="0.0.0.0")
+    # 기본값 설정
+    workers = int(os.environ.get("API_WORKERS", 1))
+    timeout_keep_alive = int(os.environ.get("API_TIMEOUT_KEEP_ALIVE", 5))
+    host = os.environ.get("API_DEFAULT_HOST", "127.0.0.1")
+    port = int(os.environ.get("API_DEFAULT_PORT", 8000))
+
+    # uvicorn 서버 실행
+    uvicorn.run(
+        "season_pass.main:app",
+        reload=settings.DEBUG,
+        host=host,
+        port=port,
+        workers=workers,
+        timeout_keep_alive=timeout_keep_alive,
+    )
