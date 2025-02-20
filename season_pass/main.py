@@ -80,4 +80,4 @@ app.include_router(api.router)
 handler = Mangum(app)
 
 if __name__ == "__main__":
-    uvicorn.run("season_pass.main:app", reload=settings.DEBUG)
+    uvicorn.run("season_pass.main:app", reload=settings.DEBUG, host="0.0.0.0")
