@@ -5,14 +5,14 @@ import time
 from collections import defaultdict
 
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 from common import logger
-from common.enums import PlanetID, PassType
+from common.enums import PassType, PlanetID
 from common.models.action import Block
 from worker.schemas.action import AdventureBossActionJson
-from worker.utils.aws import send_sqs_message
-from worker.utils.gql import get_block_tip, fetch_block_data
+from worker.utils.gql import fetch_block_data, get_block_tip
+from worker.utils.mq import send_message
 
 # envs of tracker comes from .env.*** in EC2 instance
 REGION_NAME = os.environ.get("REGION_NAME")
@@ -26,7 +26,9 @@ engine = create_engine(DB_URI)
 
 
 def process_block(block_index: int):
-    tx_data, tx_result_list = fetch_block_data(block_index, PassType.ADVENTURE_BOSS_PASS)
+    tx_data, tx_result_list = fetch_block_data(
+        block_index, PassType.ADVENTURE_BOSS_PASS
+    )
 
     action_data = defaultdict(list)
     for i, tx in enumerate(tx_data):
@@ -37,16 +39,20 @@ def process_block(block_index: int):
             action_raw = json.loads(action["json"].replace(r"\uFEFF", ""))
             type_id = action_raw["type_id"]
 
-            action_json = AdventureBossActionJson(type_id=type_id, **(action_raw["values"]))
-            action_data[action_json.type_id].append({
-                "tx_id": tx["id"],
-                "season_index": action_json.season_index,
-                "agent_addr": tx["signer"].lower(),
-                "avatar_addr": action_json.avatar_addr.lower(),
-                "count_base": action_json.count_base,
-            })
+            action_json = AdventureBossActionJson(
+                type_id=type_id, **(action_raw["values"])
+            )
+            action_data[action_json.type_id].append(
+                {
+                    "tx_id": tx["id"],
+                    "season_index": action_json.season_index,
+                    "agent_addr": tx["signer"].lower(),
+                    "avatar_addr": action_json.avatar_addr.lower(),
+                    "count_base": action_json.count_base,
+                }
+            )
 
-    send_sqs_message(REGION_NAME, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
 
 
 def main():
@@ -54,15 +60,18 @@ def main():
         sess = scoped_session(sessionmaker(bind=engine))
         # Get missing blocks
         start_block = int(os.environ.get("START_BLOCK_INDEX"))
-        expected_all = set(range(start_block, get_block_tip()))  # Sloth needs 1 block to render actions: get tip-1
-        all_blocks = set(sess.scalars(
-            select(Block.index)
-            .where(
-                Block.planet_id == CURRENT_PLANET,
-                Block.index >= start_block,
-                Block.pass_type == PassType.ADVENTURE_BOSS_PASS
-            )
-        ).fetchall())
+        expected_all = set(
+            range(start_block, get_block_tip())
+        )  # Sloth needs 1 block to render actions: get tip-1
+        all_blocks = set(
+            sess.scalars(
+                select(Block.index).where(
+                    Block.planet_id == CURRENT_PLANET,
+                    Block.index >= start_block,
+                    Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
+                )
+            ).fetchall()
+        )
         missing_blocks = expected_all - all_blocks
         sess.close()
 
