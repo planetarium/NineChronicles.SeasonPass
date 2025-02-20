@@ -41,6 +41,7 @@ ap_coef = StakeAPCoef(jwt_secret=os.getenv("HEADLESS_GQL_JWT_SECRET"))
 coef_dict = {}
 
 
+
 def validate_battle_token(token: str):
     try:
         decoded_token = jwt.decode(
