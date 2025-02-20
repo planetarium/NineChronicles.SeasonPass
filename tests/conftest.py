@@ -20,7 +20,7 @@ TEST_AVATAR_ADDR = "0xc8ca85ae399de5c4dcad39e8a13cfa7cbceff066"
 def setup_alembic():
     config = Config("common/alembic.ini")
     config.set_main_option("script_location", "common/alembic")
-    config.set_main_option("sqlalchemy.url", os.environ.get('DB_URI'))
+    config.set_main_option("sqlalchemy.url", os.environ.get("DB_URI"))
     try:
         alembic.command.upgrade(config, "head")
         alembic.command.history(config)
@@ -53,7 +53,11 @@ def set_common_test_data(session):
     with open("tests/data/level.json", "r") as f:
         level_data = json.loads(f.read())
     for lvl in level_data:
-        session.add(Level(pass_type=PassType[lvl['pass_type']], level=lvl["level"], exp=lvl["exp"]))
+        session.add(
+            Level(
+                pass_type=PassType[lvl["pass_type"]], level=lvl["level"], exp=lvl["exp"]
+            )
+        )
 
     # with open("tests/data/reward.json", "r") as f:
     #     reward = json.loads(f.read())
@@ -65,6 +69,8 @@ def set_common_test_data(session):
     # )
 
     session.commit()
+
+
 #
 #
 # @pytest.fixture(scope="session")
