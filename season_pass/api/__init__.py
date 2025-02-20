@@ -92,6 +92,7 @@ def check_nonce(planet: str, sess=Depends(session)):
         .order_by(desc(Claim.nonce))
         .limit(1)
     )
+    logging.info(highest_nonce, next_nonce)
 
     if highest_nonce > next_nonce + 100:
         return JSONResponse(
