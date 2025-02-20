@@ -1,0 +1,21 @@
+import json
+import logging
+from collections import defaultdict
+
+from pika import BlockingConnection, ConnectionParameters
+
+from common.enums import PlanetID
+
+
+def send_message(planet: PlanetID, queue: str, index: int, action_data: defaultdict):
+    message = {
+        "planet_id": planet.value.decode(),
+        "block": index,
+        "action_data": dict(action_data),
+    }
+    connection = BlockingConnection(ConnectionParameters("localhost"))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue)
+    channel.basic_publish(exchange="", routing_key=queue, body=json.dumps(message))
+    logging.info(f"Message {message} sent to SQS for block {index}.")
+    connection.close()
