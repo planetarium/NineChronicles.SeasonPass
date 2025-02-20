@@ -5,10 +5,10 @@ import time
 from collections import defaultdict
 
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 from common import logger
-from common.enums import PlanetID, PassType
+from common.enums import PassType, PlanetID
 from common.models.action import Block
 from worker.schemas.action import AdventureBossActionJson
 from worker.utils.gql import get_block_tip, fetch_block_data

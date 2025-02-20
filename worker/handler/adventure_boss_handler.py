@@ -1,15 +1,17 @@
 import os
+import sys
 from collections import defaultdict
 from datetime import datetime
 
+from pika.adapters.blocking_connection import BlockingConnection
+from pika.connection import ConnectionParameters
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 from common import logger
-from common.enums import PassType, PlanetID, ActionType
-from common.models.action import Block, AdventureBossHistory
+from common.enums import ActionType, PassType, PlanetID
+from common.models.action import AdventureBossHistory, Block
 from common.models.season_pass import Level
-from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
 from utils.exp import apply_exp
 from utils.gql import get_explore_floor
@@ -24,9 +26,10 @@ DB_URI = DB_URI.replace("[DB_PASSWORD]", db_password)
 AP_PER_ACTION = 2
 
 engine = create_engine(DB_URI)
+SQS_URL = os.environ.get("ADVENTURE_BOSS_SQS_URL")
 
 
-def handle(event, context):
+def handle(ch, method, properties, message_body):
     """
     Receive action data from adv_boss_tracker and give adv.boss exp. to avatar.
 
@@ -112,7 +115,6 @@ def handle(event, context):
             if sess.scalar(
                 select(Block).where(
                     Block.planet_id == planet_id,
-                    Block.index == block_index,
                     Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
                 )
             ):
@@ -251,3 +253,25 @@ def handle(event, context):
         if sess is not None:
             sess.rollback()
             sess.close()
+
+
+def main():
+    connection = BlockingConnection(ConnectionParameters(host="localhost"))
+    channel = connection.channel()
+
+    channel.queue_declare(queue=SQS_URL)
+    channel.basic_consume(queue=SQS_URL, on_message_callback=handle, auto_ack=True)
+
+    print(" [*] Waiting for messages. To exit press CTRL+C")
+    channel.start_consuming()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Interrupted")
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
