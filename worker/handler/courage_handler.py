@@ -4,8 +4,6 @@ import sys
 from typing import Dict, List
 
 import requests
-from pika.adapters.blocking_connection import BlockingConnection
-from pika.connection import ConnectionParameters
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -16,6 +14,9 @@ from common.models.action import ActionHistory, Block
 from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.season_pass import create_jwt_token, get_pass
+from worker.common.utils._graphql import GQL_DICT
+from worker.tracker.courage_tracker import COURAGE_QUEUE_NAME
+from worker.utils.mq import get_connection
 from worker.utils.season_pass import apply_exp, verify_season_pass
 from worker.utils.stake import StakeAPCoef
 
@@ -24,19 +25,7 @@ STAGE = os.environ.get("STAGE", "development")
 
 DB_URI = os.environ.get("DB_URI")
 SQS_URL = os.environ.get("SQS_URL")
-
-if STAGE == "mainnet":
-    GQL_DICT = {
-        PlanetID.ODIN: os.environ.get("ODIN_GQL_URL"),
-        PlanetID.HEIMDALL: os.environ.get("HEIMDALL_GQL_URL"),
-        PlanetID.THOR: os.environ.get("THOR_GQL_URL"),
-    }
-else:
-    GQL_DICT = {
-        PlanetID.ODIN_INTERNAL: os.environ.get("ODIN_GQL_URL"),
-        PlanetID.HEIMDALL_INTERNAL: os.environ.get("HEIMDALL_GQL_URL"),
-        PlanetID.THOR_INTERNAL: os.environ.get("THOR_GQL_URL"),
-    }
+DUPLICATED_MSG = '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_pass_planet_unique"'
 
 engine = create_engine(DB_URI)
 ap_coef = StakeAPCoef(jwt_secret=os.environ.get("HEADLESS_GQL_JWT_SECRET"))
@@ -105,13 +94,15 @@ def handle_sweep(
 
 
 def main():
-    connection = BlockingConnection(ConnectionParameters(host="localhost"))
+    connection = get_connection()
     channel = connection.channel()
 
-    channel.queue_declare(queue=SQS_URL)
-    channel.basic_consume(queue=SQS_URL, on_message_callback=handle, auto_ack=True)
+    channel.queue_declare(queue=COURAGE_QUEUE_NAME)
+    channel.basic_consume(
+        queue=COURAGE_QUEUE_NAME, on_message_callback=handle, auto_ack=True
+    )
 
-    print(" [*] Waiting for messages. To exit press CTRL+C")
+    print(f" [*] Waiting for {COURAGE_QUEUE_NAME} messages. To exit press CTRL+C")
     channel.start_consuming()
 
 
@@ -259,10 +250,7 @@ def handle(ch, method, properties, message_body):
     except IntegrityError as e:
         err_msg = str(e).split("\n")[0]
         detail = str(e).split("\n")[1]
-        if (
-            err_msg
-            == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_pass_type_unique"'
-        ):
+        if err_msg == DUPLICATED_MSG:
             logger.warning(f"{err_msg} :: {detail}")
         else:
             raise e

@@ -22,8 +22,8 @@ REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
-SQS_URL = os.environ.get("SQS_URL")
 ARENA_SERVICE_JWT_PUBLIC_KEY = os.environ.get("ARENA_SERVICE_JWT_PUBLIC_KEY")
+COURAGE_QUEUE_NAME = "courage"
 
 public_key_pem = base64.b64decode(ARENA_SERVICE_JWT_PUBLIC_KEY).decode("utf-8")
 
@@ -104,7 +104,7 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
                 }
             )
 
-    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, COURAGE_QUEUE_NAME, block_index, action_data)
 
 
 def main():
