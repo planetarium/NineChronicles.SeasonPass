@@ -1,35 +1,34 @@
+import base64
 import concurrent.futures
 import json
 import os
 import time
-
-import jwt
-import base64
 from collections import defaultdict
 
+import jwt
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 from common import logger
-from common.enums import PlanetID, PassType
+from common.enums import PassType, PlanetID
 from common.models.action import Block
 from common.models.arena import BattleHistory
-from common.utils.aws import fetch_secrets
 from worker.schemas.action import ActionJson
-from worker.utils.aws import send_sqs_message
-from worker.utils.gql import get_block_tip, fetch_block_data
+from worker.utils.gql import fetch_block_data, get_block_tip
+from worker.utils.mq import send_message
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
-SQS_URL = os.environ.get("SQS_URL")
 ARENA_SERVICE_JWT_PUBLIC_KEY = os.environ.get("ARENA_SERVICE_JWT_PUBLIC_KEY")
+COURAGE_QUEUE_NAME = "courage"
 
 public_key_pem = base64.b64decode(ARENA_SERVICE_JWT_PUBLIC_KEY).decode("utf-8")
 
 engine = create_engine(DB_URI)
+
 
 def validate_battle_token(token: str):
     try:
@@ -86,8 +85,7 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
                 try:
 
                     battle_history = BattleHistory(
-                        planet_id=planet_id,
-                        battle_id=battle_id
+                        planet_id=planet_id, battle_id=battle_id
                     )
                     sess.add(battle_history)
                     sess.commit()
@@ -97,14 +95,16 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
                 finally:
                     sess.remove()
 
-            action_data[action_json.type_id].append({
-                "tx_id": tx["id"],
-                "agent_addr": tx["signer"].lower(),
-                "avatar_addr": action_json.avatar_addr.lower(),
-                "count_base": action_json.count_base,
-            })
+            action_data[action_json.type_id].append(
+                {
+                    "tx_id": tx["id"],
+                    "agent_addr": tx["signer"].lower(),
+                    "avatar_addr": action_json.avatar_addr.lower(),
+                    "count_base": action_json.count_base,
+                }
+            )
 
-    send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, COURAGE_QUEUE_NAME, block_index, action_data)
 
 
 def main():
@@ -112,18 +112,28 @@ def main():
         sess = scoped_session(sessionmaker(bind=engine))
         # Get missing blocks
         start_block = int(os.environ.get("START_BLOCK_INDEX"))
-        expected_all = set(range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1))
-        all_blocks = set(sess.scalars(select(Block.index).where(
-            Block.planet_id == CURRENT_PLANET,
-            Block.pass_type == PassType.COURAGE_PASS,
-            Block.index >= start_block,
-        )).fetchall())
+        expected_all = set(
+            range(int(os.environ.get("START_BLOCK_INDEX")), get_block_tip() + 1)
+        )
+        all_blocks = set(
+            sess.scalars(
+                select(Block.index).where(
+                    Block.planet_id == CURRENT_PLANET,
+                    Block.pass_type == PassType.COURAGE_PASS,
+                    Block.index >= start_block,
+                )
+            ).fetchall()
+        )
         missing_blocks = expected_all - all_blocks
 
         block_dict = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
             for index in missing_blocks:
-                block_dict[executor.submit(process_block, index, PassType.COURAGE_PASS, CURRENT_PLANET)] = (index, PassType.COURAGE_PASS)
+                block_dict[
+                    executor.submit(
+                        process_block, index, PassType.COURAGE_PASS, CURRENT_PLANET
+                    )
+                ] = (index, PassType.COURAGE_PASS)
 
             for future in concurrent.futures.as_completed(block_dict):
                 index = block_dict[future]

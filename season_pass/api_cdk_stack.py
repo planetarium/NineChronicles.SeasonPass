@@ -1,13 +1,12 @@
 import os
-import boto3
+
 import aws_cdk as cdk_core
-from aws_cdk import (
-    RemovalPolicy, Stack,
-    aws_apigateway as _apig,
-    aws_iam as _iam,
-    aws_lambda as _lambda,
-    aws_certificatemanager as _acm,
-)
+import boto3
+from aws_cdk import RemovalPolicy, Stack
+from aws_cdk import aws_apigateway as _apig
+from aws_cdk import aws_certificatemanager as _acm
+from aws_cdk import aws_iam as _iam
+from aws_cdk import aws_lambda as _lambda
 from constructs import Construct
 
 from common import COMMON_LAMBDA_EXCLUDE, Config
@@ -24,7 +23,8 @@ class APIStack(Stack):
 
         # Lambda Layer
         layer = _lambda.LayerVersion(
-            self, f"{config.stage}-9c-season_pass-api-lambda-layer",
+            self,
+            f"{config.stage}-9c-season_pass-api-lambda-layer",
             code=_lambda.AssetCode("season_pass/layer/"),
             description="Lambda layer for 9c SeasonPass API Service",
             compatible_runtimes=[
@@ -35,10 +35,13 @@ class APIStack(Stack):
 
         # Lambda Role
         role = _iam.Role(
-            self, f"{config.stage}-9c-season_pass-api-role",
+            self,
+            f"{config.stage}-9c-season_pass-api-role",
             assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
+                _iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaVPCAccessExecutionRole"
+                ),
             ],
         )
         role.add_to_policy(
@@ -52,7 +55,7 @@ class APIStack(Stack):
                 actions=["ssm:GetParameter"],
                 resources=[
                     shared_stack.jwt_token_secret_arn,
-                ]
+                ],
             )
         )
         role.add_to_policy(
@@ -60,19 +63,25 @@ class APIStack(Stack):
                 actions=["sqs:sendmessage"],
                 resources=[
                     shared_stack.unload_q.queue_arn,
-                ]
+                ],
             )
         )
-        ssm = boto3.client("ssm", region_name=config.region_name,
-                            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-                            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-                            )
-        resp = ssm.get_parameter(Name=f"{config.stage}_9c_SEASON_PASS_KMS_KEY_ID", WithDecryption=True)
+        ssm = boto3.client(
+            "ssm",
+            region_name=config.region_name,
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        )
+        resp = ssm.get_parameter(
+            Name=f"{config.stage}_9c_SEASON_PASS_KMS_KEY_ID", WithDecryption=True
+        )
         kms_key_id = resp["Parameter"]["Value"]
         role.add_to_policy(
             _iam.PolicyStatement(
                 actions=["kms:GetPublicKey"],
-                resources=[f"arn:aws:kms:{config.region_name}:{config.account_id}:key/{kms_key_id}"]
+                resources=[
+                    f"arn:aws:kms:{config.region_name}:{config.account_id}:key/{kms_key_id}"
+                ],
             )
         )
         role.add_to_policy(
@@ -80,7 +89,7 @@ class APIStack(Stack):
                 actions=["ssm:GetParameter"],
                 resources=[
                     shared_stack.kms_key_id_arn,
-                ]
+                ],
             )
         )
 
@@ -90,9 +99,9 @@ class APIStack(Stack):
             "REGION_NAME": config.region_name,
             "SECRET_ARN": shared_stack.rds.secret.secret_arn,
             "DB_URI": f"postgresql://"
-                      f"{shared_stack.credentials.username}:[DB_PASSWORD]"
-                      f"@{shared_stack.rds_endpoint}"
-                      f"/season_pass",
+            f"{shared_stack.credentials.username}:[DB_PASSWORD]"
+            f"@{shared_stack.rds_endpoint}"
+            f"/season_pass",
             "LOGGING_LEVEL": "INFO",
             "DB_ECHO": "False",
             "SQS_URL": shared_stack.unload_q.queue_url,
@@ -103,12 +112,21 @@ class APIStack(Stack):
         }
 
         # Lambda Function
-        exclude_list = [".", "*", ".idea", ".git", ".pytest_cache", ".gitignore", ".github", ]
+        exclude_list = [
+            ".",
+            "*",
+            ".idea",
+            ".git",
+            ".pytest_cache",
+            ".gitignore",
+            ".github",
+        ]
         exclude_list.extend(COMMON_LAMBDA_EXCLUDE)
         exclude_list.extend(API_LAMBDA_EXCLUDE)
 
         function = _lambda.Function(
-            self, f"{config.stage}-9c-season_pass-api-function",
+            self,
+            f"{config.stage}-9c-season_pass-api-function",
             runtime=_lambda.Runtime.PYTHON_3_11,
             function_name=f"{config.stage}-9c-season_pass-api",
             description="HTTP API/Backoffice service of NineChronicles.SeasonPass",
@@ -126,7 +144,8 @@ class APIStack(Stack):
         # ACM & Custom Domain
         if config.stage != "development":
             certificate = _acm.Certificate.from_certificate_arn(
-                self, "9c-acm",
+                self,
+                "9c-acm",
                 certificate_arn="arn:aws:acm:us-east-1:319679068466:certificate/8e3f8d11-ead8-4a90-bda0-94a35db71678",
             )
             custom_domain = _apig.DomainNameOptions(
@@ -141,7 +160,8 @@ class APIStack(Stack):
 
         # API Gateway
         apig = _apig.LambdaRestApi(
-            self, f"{config.stage}-9c_season_pass-api-apig",
+            self,
+            f"{config.stage}-9c_season_pass-api-apig",
             handler=function,
             deploy_options=_apig.StageOptions(
                 stage_name=config.stage,

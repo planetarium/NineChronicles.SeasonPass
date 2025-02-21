@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel as BaseSchema, model_validator
+from pydantic import BaseModel as BaseSchema
+from pydantic import model_validator
 
-from common.enums import PlanetID, PassType
+from common.enums import PassType, PlanetID
 
 
 class RegisterRequestSchema(BaseSchema):
@@ -62,7 +63,11 @@ class SeasonChangeRequestSchema(BaseSchema):
     @model_validator(mode="after")
     def sanitize(self):
         if isinstance(self.start_timestamp, str):
-            self.start_timestamp = datetime.strptime(self.start_timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
+            self.start_timestamp = datetime.strptime(
+                self.start_timestamp, "%Y-%m-%d %H:%M:%S"
+            ).astimezone(tz=timezone.utc)
         if isinstance(self.end_timestamp, str):
-            self.end_timestamp = datetime.strptime(self.end_timestamp, "%Y-%m-%d %H:%M:%S").astimezone(tz=timezone.utc)
+            self.end_timestamp = datetime.strptime(
+                self.end_timestamp, "%Y-%m-%d %H:%M:%S"
+            ).astimezone(tz=timezone.utc)
         return self
