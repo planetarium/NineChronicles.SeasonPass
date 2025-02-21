@@ -18,9 +18,9 @@ from worker.utils.mq import send_message
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
-SQS_URL = os.environ.get("WORLD_CLEAR_SQS_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
+WORLD_QUEUE_NAME = "world_clear"
 
 engine = create_engine(DB_URI)
 
@@ -79,7 +79,7 @@ def process_block(block_index: int):
                 }
             )
 
-    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, WORLD_QUEUE_NAME, block_index, action_data)
 
 
 def main():
