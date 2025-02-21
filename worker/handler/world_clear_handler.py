@@ -3,9 +3,8 @@ import os
 import sys
 from datetime import datetime
 
-from pika.adapters.blocking_connection import BlockingConnection
-from pika.connection import ConnectionParameters
 from sqlalchemy import create_engine, desc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from common import logger
@@ -17,6 +16,9 @@ from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
 from common.utils._graphql import get_last_cleared_stage
 from common.utils.season_pass import get_pass
+from worker.handler.courage_handler import DUPLICATED_MSG
+from worker.tracker.world_clear_tracker import WORLD_QUEUE_NAME
+from worker.utils.mq import get_connection
 from worker.utils.season_pass import verify_season_pass
 
 DB_URI = os.environ.get("DB_URI")
@@ -199,13 +201,10 @@ def handle(ch, method, properties, message_body):
             logger.info(
                 f"All {len(user_season_dict.values())} world clear for block {planet_id.name}:{body['block']} applied."
             )
-    except InterruptedError as e:
+    except IntegrityError as e:
         err_msg = str(e).split("\n")[0]
         detail = str(e).split("\n")[1]
-        if (
-            err_msg
-            == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_pass_planet_unique"'
-        ):
+        if err_msg == DUPLICATED_MSG:
             logger.warning(f"{err_msg} :: {detail}")
         else:
             raise e
@@ -216,13 +215,15 @@ def handle(ch, method, properties, message_body):
 
 
 def main():
-    connection = BlockingConnection(ConnectionParameters(host="localhost"))
+    connection = get_connection()
     channel = connection.channel()
 
-    channel.queue_declare(queue=SQS_URL)
-    channel.basic_consume(queue=SQS_URL, on_message_callback=handle, auto_ack=True)
+    channel.queue_declare(queue=WORLD_QUEUE_NAME)
+    channel.basic_consume(
+        queue=WORLD_QUEUE_NAME, on_message_callback=handle, auto_ack=True
+    )
 
-    print(" [*] Waiting for messages. To exit press CTRL+C")
+    print(f" [*] Waiting for {WORLD_QUEUE_NAME} messages. To exit press CTRL+C")
     channel.start_consuming()
 
 

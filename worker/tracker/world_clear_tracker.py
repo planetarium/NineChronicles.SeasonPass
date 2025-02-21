@@ -20,6 +20,7 @@ REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
+WORLD_QUEUE_NAME = "world_clear"
 
 engine = create_engine(DB_URI)
 
