@@ -18,6 +18,7 @@ from worker.handler.adventure_boss_handler import handle
 REGION_NAME = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
+ADV_QUEUE_NAME = "adv"
 
 DB_URI = os.environ.get("DB_URI")
 
