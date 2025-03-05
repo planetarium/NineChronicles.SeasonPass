@@ -59,6 +59,7 @@ jobs:
           POSTGRES_PASSWORD: f8bf4c09239
           POSTGRES_DB: season_pass_test
           DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
+          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
         run: |
           source $VENV
           pushd common
