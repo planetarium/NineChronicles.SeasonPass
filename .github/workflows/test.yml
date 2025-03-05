@@ -58,6 +58,7 @@ jobs:
           POSTGRES_USER: github_actions
           POSTGRES_PASSWORD: f8bf4c09239
           POSTGRES_DB: season_pass_test
+          DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
         run: |
           source $VENV
           pushd common
