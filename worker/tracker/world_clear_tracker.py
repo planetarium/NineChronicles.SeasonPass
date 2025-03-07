@@ -35,7 +35,9 @@ def process_block(block_index: int):
     resp = requests.post(
         GQL_URL,
         json={"query": nct_query},
-        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+        headers={
+            "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"
+        },
     )
     tx_data = resp.json()["data"]["transaction"]["ncTransactions"]
 
@@ -46,9 +48,13 @@ def process_block(block_index: int):
     resp = requests.post(
         GQL_URL,
         json={"query": tx_result_query},
-        headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+        headers={
+            "Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"
+        },
     )
-    tx_result_list = [x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]]
+    tx_result_list = [
+        x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]
+    ]
 
     action_data = defaultdict(list)
     agent_list = set()
@@ -62,13 +68,15 @@ def process_block(block_index: int):
 
             agent_list.add(tx["signer"].lower())
             action_json = ActionJson(type_id=type_id, **(action_raw["values"]))
-            action_data[action_json.type_id].append({
-                "tx_id": tx["id"],
-                "agent_addr": tx["signer"].lower(),
-                "avatar_addr": action_json.avatar_addr.lower(),
-                "world_id": action_json.worldId,
-                "stage_id": action_json.stageId,
-            })
+            action_data[action_json.type_id].append(
+                {
+                    "tx_id": tx["id"],
+                    "agent_addr": tx["signer"].lower(),
+                    "avatar_addr": action_json.avatar_addr.lower(),
+                    "world_id": action_json.worldId,
+                    "stage_id": action_json.stageId,
+                }
+            )
 
     # Directly call the handler
     event = {
@@ -79,7 +87,7 @@ def process_block(block_index: int):
                     "planet_id": CURRENT_PLANET.value.decode(),
                     "block": block_index,
                     "action_data": dict(action_data),
-                }
+                },
             }
         ]
     }
@@ -93,14 +101,15 @@ def main():
         # Get missing blocks
         start_block = int(os.environ.get("START_BLOCK_INDEX"))
         expected_all = set(range(start_block, get_block_tip()))
-        all_blocks = set(sess.scalars(
-            select(Block.index)
-            .where(
-                Block.planet_id == CURRENT_PLANET,
-                Block.pass_type == PassType.WORLD_CLEAR_PASS,
-                Block.index >= start_block,
-            )
-        ).fetchall())
+        all_blocks = set(
+            sess.scalars(
+                select(Block.index).where(
+                    Block.planet_id == CURRENT_PLANET,
+                    Block.pass_type == PassType.WORLD_CLEAR_PASS,
+                    Block.index >= start_block,
+                )
+            ).fetchall()
+        )
         missing_blocks = expected_all - all_blocks
         sess.close()
 

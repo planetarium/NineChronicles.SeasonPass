@@ -25,7 +25,9 @@ engine = create_engine(DB_URI)
 
 
 def process_block(block_index: int):
-    tx_data, tx_result_list = fetch_block_data(block_index, PassType.ADVENTURE_BOSS_PASS)
+    tx_data, tx_result_list = fetch_block_data(
+        block_index, PassType.ADVENTURE_BOSS_PASS
+    )
 
     action_data = defaultdict(list)
     for i, tx in enumerate(tx_data):
@@ -36,14 +38,18 @@ def process_block(block_index: int):
             action_raw = json.loads(action["json"].replace(r"\uFEFF", ""))
             type_id = action_raw["type_id"]
 
-            action_json = AdventureBossActionJson(type_id=type_id, **(action_raw["values"]))
-            action_data[action_json.type_id].append({
-                "tx_id": tx["id"],
-                "season_index": action_json.season_index,
-                "agent_addr": tx["signer"].lower(),
-                "avatar_addr": action_json.avatar_addr.lower(),
-                "count_base": action_json.count_base,
-            })
+            action_json = AdventureBossActionJson(
+                type_id=type_id, **(action_raw["values"])
+            )
+            action_data[action_json.type_id].append(
+                {
+                    "tx_id": tx["id"],
+                    "season_index": action_json.season_index,
+                    "agent_addr": tx["signer"].lower(),
+                    "avatar_addr": action_json.avatar_addr.lower(),
+                    "count_base": action_json.count_base,
+                }
+            )
 
     # Directly call the handler
     event = {
@@ -54,7 +60,7 @@ def process_block(block_index: int):
                     "planet_id": CURRENT_PLANET.value.decode(),
                     "block": block_index,
                     "action_data": dict(action_data),
-                }
+                },
             }
         ]
     }
@@ -67,15 +73,18 @@ def main():
         sess = scoped_session(sessionmaker(bind=engine))
         # Get missing blocks
         start_block = int(os.environ.get("START_BLOCK_INDEX"))
-        expected_all = set(range(start_block, get_block_tip()))  # Sloth needs 1 block to render actions: get tip-1
-        all_blocks = set(sess.scalars(
-            select(Block.index)
-            .where(
-                Block.planet_id == CURRENT_PLANET,
-                Block.index >= start_block,
-                Block.pass_type == PassType.ADVENTURE_BOSS_PASS
-            )
-        ).fetchall())
+        expected_all = set(
+            range(start_block, get_block_tip())
+        )  # Sloth needs 1 block to render actions: get tip-1
+        all_blocks = set(
+            sess.scalars(
+                select(Block.index).where(
+                    Block.planet_id == CURRENT_PLANET,
+                    Block.index >= start_block,
+                    Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
+                )
+            ).fetchall()
+        )
         missing_blocks = expected_all - all_blocks
         sess.close()
 
