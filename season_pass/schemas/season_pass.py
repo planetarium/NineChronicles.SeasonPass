@@ -1,7 +1,8 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel as BaseSchema, model_validator
+from pydantic import BaseModel as BaseSchema
+from pydantic import model_validator
 
 from common.enums import ActionType, PassType
 

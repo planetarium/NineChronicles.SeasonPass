@@ -8,7 +8,11 @@ from common.models.season_pass import Level
 from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import SeasonNotFoundError
-from season_pass.schemas.season_pass import LevelInfoSchema, SeasonPassSchema, ExpInfoSchema
+from season_pass.schemas.season_pass import (
+    ExpInfoSchema,
+    LevelInfoSchema,
+    SeasonPassSchema,
+)
 
 router = APIRouter(
     prefix="/season-pass",
@@ -40,34 +44,38 @@ def current_season(planet_id: str, pass_type: PassType, sess=Depends(session)):
                     "item": [
                         {
                             "id": x["ticker"].split("_")[-1],
-                            "amount": x["amount"] * reward_coef
+                            "amount": x["amount"] * reward_coef,
                         }
-                        for x in reward["normal"] if x["ticker"].startswith("Item_")
+                        for x in reward["normal"]
+                        if x["ticker"].startswith("Item_")
                     ],
                     "currency": [
                         {
                             "ticker": x["ticker"].split("__")[-1],
-                            "amount": x["amount"] * reward_coef
+                            "amount": x["amount"] * reward_coef,
                         }
-                        for x in reward["normal"] if x["ticker"].startswith("FAV__")
-                    ]
+                        for x in reward["normal"]
+                        if x["ticker"].startswith("FAV__")
+                    ],
                 },
                 "premium": {
                     "item": [
                         {
                             "id": x["ticker"].split("_")[-1],
-                            "amount": x["amount"] * reward_coef
+                            "amount": x["amount"] * reward_coef,
                         }
-                        for x in reward["premium"] if x["ticker"].startswith("Item_")
+                        for x in reward["premium"]
+                        if x["ticker"].startswith("Item_")
                     ],
                     "currency": [
                         {
                             "ticker": x["ticker"].split("__")[-1],
-                            "amount": x["amount"] * reward_coef
+                            "amount": x["amount"] * reward_coef,
                         }
-                        for x in reward["premium"] if x["ticker"].startswith("FAV__")
-                    ]
-                }
+                        for x in reward["premium"]
+                        if x["ticker"].startswith("FAV__")
+                    ],
+                },
             }
             for reward in curr_season.reward_list
         ],
@@ -78,10 +86,14 @@ def current_season(planet_id: str, pass_type: PassType, sess=Depends(session)):
 
 @router.get("/level", response_model=List[LevelInfoSchema])
 def level_info(pass_type: PassType, sess=Depends(session)):
-    return sess.scalars(select(Level).where(Level.pass_type == pass_type).order_by(Level.level)).fetchall()
+    return sess.scalars(
+        select(Level).where(Level.pass_type == pass_type).order_by(Level.level)
+    ).fetchall()
 
 
 @router.get("/exp", response_model=List[ExpInfoSchema])
 def exp_info(pass_type: PassType, season_index: int, sess=Depends(session)):
-    current_pass = get_pass(sess, pass_type=pass_type, season_index=season_index, include_exp=True)
+    current_pass = get_pass(
+        sess, pass_type=pass_type, season_index=season_index, include_exp=True
+    )
     return current_pass.exp_list

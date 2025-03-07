@@ -19,6 +19,7 @@ pycryptodome = "^3.19.0"
 hexbytes = "^1.2.1"
 bencodex = "^1.0.1"
 pyjwt = "^2.8.0"
+pre-commit = "^4.1.0"
 
 [tool.poetry.group.api.dependencies]
 fastapi = "^0.103.2"
@@ -43,3 +44,6 @@ httpx = "^0.27.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"

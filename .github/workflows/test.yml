@@ -58,6 +58,11 @@ jobs:
           POSTGRES_USER: github_actions
           POSTGRES_PASSWORD: f8bf4c09239
           POSTGRES_DB: season_pass_test
+          DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
+          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
+          JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+          REGION_NAME: us-east-2
+          SQS_URL: https://test-queue.us-east-2.amazonaws.com/000000000000/test-queue
         run: |
           source $VENV
           pushd common
@@ -74,6 +79,7 @@ jobs:
           # THOR_GQL_URL: https://thor-jwt.nine-chronicles.com/graphql
           DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
           HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
+          JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
         run: |
           source $VENV
           python -m pytest tests
