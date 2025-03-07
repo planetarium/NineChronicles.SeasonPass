@@ -65,7 +65,11 @@ jobs:
           SQS_URL: https://test-queue.us-east-2.amazonaws.com/000000000000/test-queue
         run: |
           source $VENV
+          pushd common
+          cp alembic.ini.example alembic.ini
+          sed -i "s/sqlalchemy.url = postgresql:\/\/\[ID\]:\[PW\]@\[HOST\]\/\[DATABASE\]/sqlalchemy.url = postgresql:\/\/${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost\/${POSTGRES_DB}/" alembic.ini
           alembic upgrade head
+          popd
 
       - name: Unit test
         env:
