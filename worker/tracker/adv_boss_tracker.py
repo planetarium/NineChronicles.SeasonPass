@@ -11,13 +11,12 @@ from common import logger
 from common.enums import PlanetID, PassType
 from common.models.action import Block
 from worker.schemas.action import AdventureBossActionJson
-from worker.utils.aws import send_sqs_message
 from worker.utils.gql import get_block_tip, fetch_block_data
+from worker.handler.adventure_boss_handler import handle
 
 # envs of tracker comes from .env.*** in EC2 instance
 REGION_NAME = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
-SQS_URL = os.environ.get("ADVENTURE_BOSS_SQS_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 
 DB_URI = os.environ.get("DB_URI")
@@ -46,7 +45,21 @@ def process_block(block_index: int):
                 "count_base": action_json.count_base,
             })
 
-    send_sqs_message(REGION_NAME, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    # Directly call the handler
+    event = {
+        "Records": [
+            {
+                "messageId": f"direct-call-{block_index}",
+                "body": {
+                    "planet_id": CURRENT_PLANET.value.decode(),
+                    "block": block_index,
+                    "action_data": dict(action_data),
+                }
+            }
+        ]
+    }
+    handle(event, None)
+    return action_data
 
 
 def main():
