@@ -11,7 +11,6 @@ from common.models.season_pass import Level
 from common.models.user import UserSeasonPass
 from common.utils.aws import fetch_secrets
 from common.utils.season_pass import get_pass
-from schemas.sqs import SQSMessage
 from common.utils._graphql import get_last_cleared_stage
 from utils.season_pass import verify_season_pass
 
@@ -41,7 +40,7 @@ def handle(event, context):
     }
     """
     sess = None
-    message = SQSMessage(Records=event.get("Records", []))
+    records = event.get("Records", [])
 
     try:
         sess = scoped_session(sessionmaker(bind=engine))
@@ -52,8 +51,8 @@ def handle(event, context):
             logger.warning(
                 f"There is no active {PassType.WORLD_CLEAR_PASS.name} at {datetime.now().strftime('%Y-%m-%d %H:%H:%S')}"
             )
-            for i, record in enumerate(message.Records):
-                body = record.body
+            for i, record in enumerate(records):
+                body = record["body"]
                 block_index = body["block"]
                 planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
                 if sess.scalar(select(Block).where(
@@ -75,8 +74,8 @@ def handle(event, context):
                                   .order_by(desc(Level.level))
                                   ).fetchall()
 
-        for i, record in enumerate(message.Records):
-            body = record.body
+        for i, record in enumerate(records):
+            body = record["body"]
             block_index = body["block"]
             planet_id = PlanetID(bytes(body["planet_id"], "utf-8"))
             if sess.scalar(select(Block).where(

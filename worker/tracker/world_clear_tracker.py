@@ -13,12 +13,11 @@ from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.utils.season_pass import create_jwt_token
 from worker.schemas.action import ActionJson
-from worker.utils.aws import send_sqs_message
 from worker.utils.gql import get_block_tip
+from worker.handler.world_clear_handler import handle
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
-SQS_URL = os.environ.get("WORLD_CLEAR_SQS_URL")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
 
@@ -71,7 +70,21 @@ def process_block(block_index: int):
                 "stage_id": action_json.stageId,
             })
 
-    send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    # Directly call the handler
+    event = {
+        "Records": [
+            {
+                "messageId": f"direct-call-{block_index}",
+                "body": {
+                    "planet_id": CURRENT_PLANET.value.decode(),
+                    "block": block_index,
+                    "action_data": dict(action_data),
+                }
+            }
+        ]
+    }
+    handle(event, None)
+    return action_data
 
 
 def main():
