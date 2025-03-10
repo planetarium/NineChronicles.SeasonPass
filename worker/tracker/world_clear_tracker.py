@@ -14,7 +14,6 @@ from common.models.action import Block
 from common.utils.season_pass import create_jwt_token
 from worker.schemas.action import ActionJson
 from worker.utils.gql import get_block_tip
-from worker.handler.world_clear_handler import handle
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")

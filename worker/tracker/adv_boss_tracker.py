@@ -12,7 +12,6 @@ from common.enums import PlanetID, PassType
 from common.models.action import Block
 from worker.schemas.action import AdventureBossActionJson
 from worker.utils.gql import get_block_tip, fetch_block_data
-from worker.handler.adventure_boss_handler import handle
 
 # envs of tracker comes from .env.*** in EC2 instance
 REGION_NAME = os.environ.get("REGION_NAME")
