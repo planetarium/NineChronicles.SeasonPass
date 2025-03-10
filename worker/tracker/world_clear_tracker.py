@@ -57,6 +57,7 @@ async def process_block(block_index: int):
 async def main():
     while True:
         sess = scoped_session(sessionmaker(bind=engine))
+        # Get missing blocks
         start_block = int(os.environ.get("START_BLOCK_INDEX"))
         expected_all = set(range(start_block, get_block_tip()))
         all_blocks = set(sess.scalars(
@@ -73,8 +74,7 @@ async def main():
         tasks = []
         for index in missing_blocks:
             if len(tasks) >= MAX_WORKERS:
-                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-                tasks = list(pending)
+                done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 for task in done:
                     try:
                         result = task.result()
