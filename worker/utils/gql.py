@@ -4,7 +4,6 @@ import json
 import os
 import time
 import asyncio
-import logging
 
 import bencodex
 import eth_utils
@@ -21,8 +20,6 @@ TARGET_ACTION_DICT = {
     PassType.ADVENTURE_BOSS_PASS: "(wanted.*)|(explore_adventure_boss.*)|(sweep_adventure_boss.*)",
     PassType.WORLD_CLEAR_PASS: "(hack_and_slash.*)"
 }
-
-logger = logging.getLogger(__name__)
 
 
 def checksum_encode(addr: bytes) -> str:  # Takes a 20-byte binary address as input
@@ -117,65 +114,37 @@ async def fetch_block_data_async(block_index: int, pass_type: PassType):
     """
     auth_header = {"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
     
-    try:
-        nct_query = f"""{{ transaction {{ ncTransactions (
-            startingBlockIndex: {block_index},
-            limit: 1,
-            actionType: "{TARGET_ACTION_DICT[pass_type]}"
-        ) {{ id signer actions {{ json }} }}
-        }} }}"""
-        
-        async with aiohttp.ClientSession() as session:
+    # Fetch Tx. and actions
+    nct_query = f"""{{ transaction {{ ncTransactions (
+        startingBlockIndex: {block_index},
+        limit: 1,
+        actionType: "{TARGET_ACTION_DICT[pass_type]}"
+    ) {{ id signer actions {{ json }} }}
+    }} }}"""
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            GQL_URL,
+            json={"query": nct_query},
+            headers=auth_header
+        ) as response:
+            resp_data = await response.json()
+            tx_data = resp_data["data"]["transaction"]["ncTransactions"]
+
+            tx_id_list = [x["id"] for x in tx_data]
+
+            # Fetch Tx. results
+            tx_result_query = f"""{{ transaction {{ transactionResults (txIds: {json.dumps(tx_id_list)}) {{ txStatus }} }} }}"""
+            
             async with session.post(
                 GQL_URL,
-                json={"query": nct_query},
+                json={"query": tx_result_query},
                 headers=auth_header
-            ) as response:
-                if response.status != 200:
-                    logger.error(f"GQL API error: HTTP {response.status} while fetching transactions for block {block_index}")
-                    return None, None
-                
-                resp_data = await response.json()
-                if not resp_data or 'data' not in resp_data or 'transaction' not in resp_data['data'] or 'ncTransactions' not in resp_data['data']['transaction']:
-                    logger.error(f"Invalid GQL response for transactions in block {block_index}: {resp_data}")
-                    return None, None
-                
-                tx_data = resp_data["data"]["transaction"]["ncTransactions"]
-                if not tx_data:
-                    logger.info(f"No transactions found for block {block_index}")
-                    return [], []
-
-                tx_id_list = [x["id"] for x in tx_data]
-
-                if not tx_id_list:
-                    logger.info(f"No transaction IDs found for block {block_index}")
-                    return [], []
-
-                tx_result_query = f"""{{ transaction {{ transactionResults (txIds: {json.dumps(tx_id_list)}) {{ txStatus }} }} }}"""
-                
-                async with session.post(
-                    GQL_URL,
-                    json={"query": tx_result_query},
-                    headers=auth_header
-                ) as result_response:
-                    if result_response.status != 200:
-                        logger.error(f"GQL API error: HTTP {result_response.status} while fetching transaction results for block {block_index}")
-                        return None, None
-                    
-                    resp_result = await result_response.json()
-                    if not resp_result or 'data' not in resp_result or 'transaction' not in resp_result['data'] or 'transactionResults' not in resp_result['data']['transaction']:
-                        logger.error(f"Invalid GQL response for transaction results in block {block_index}: {resp_result}")
-                        return None, None
-                    
-                    tx_result_list = [x["txStatus"] for x in resp_result["data"]["transaction"]["transactionResults"]]
+            ) as result_response:
+                resp_result = await result_response.json()
+                tx_result_list = [x["txStatus"] for x in resp_result["data"]["transaction"]["transactionResults"]]
     
-    except aiohttp.ClientError as e:
-        logger.error(f"Network error during GQL request for block {block_index}: {str(e)}")
-        return None, None
-    except Exception as e:
-        logger.error(f"Unexpected error during GQL request for block {block_index}: {str(e)}")
-        return None, None
-    
+    # Add delay after fetching data
     await asyncio.sleep(0.1)
     
     return tx_data, tx_result_list

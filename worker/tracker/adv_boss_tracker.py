@@ -29,16 +29,8 @@ engine = create_engine(DB_URI)
 
 async def process_block(block_index: int):
     tx_data, tx_result_list = await fetch_block_data_async(block_index, PassType.ADVENTURE_BOSS_PASS)
-    
-    if tx_data is None or tx_result_list is None:
-        logger.error(f"Failed to fetch data for block {block_index}. Skipping.")
-        return {}
-    
-    action_data = defaultdict(list)
-    if not tx_data:
-        logger.info(f"No transactions found in block {block_index}")
-        return action_data
 
+    action_data = defaultdict(list)
     for i, tx in enumerate(tx_data):
         if tx_result_list[i] != "SUCCESS":
             continue
@@ -56,10 +48,7 @@ async def process_block(block_index: int):
                 "count_base": action_json.count_base,
             })
 
-    if action_data:
-        send_sqs_message(REGION_NAME, CURRENT_PLANET, SQS_URL, block_index, action_data)
-        logger.info(f"Processed block {block_index} with {len(action_data)} action types")
-    
+    send_sqs_message(REGION_NAME, CURRENT_PLANET, SQS_URL, block_index, action_data)
     return action_data
 
 async def main():
@@ -79,32 +68,28 @@ async def main():
         sess.close()
 
         tasks = []
-        task_to_index = {}
         for index in missing_blocks:
             if len(tasks) >= MAX_WORKERS:
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 tasks = list(pending)
-                for completed_task in done:
-                    block_idx = task_to_index.get(completed_task, "unknown")
+                for task in done:
                     try:
-                        result = completed_task.result()
-                        logger.info(f"Block {block_idx} collected :: {result}")
+                        result = task.result()
+                        logger.info(f"Block {task.block_index} collected :: {result}")
                     except Exception as e:
-                        logger.error(f"Error occurred processing block {block_idx} :: {e}")
+                        logger.error(f"Error occurred processing block {task.block_index} :: {e}")
             
             task = asyncio.create_task(process_block(index))
-            task_to_index[task] = index
+            task.block_index = index
             tasks.append(task)
         
         if tasks:
-            remaining_tasks = {task: task_to_index[task] for task in tasks}
-            for completed_task in asyncio.as_completed(tasks):
-                block_idx = remaining_tasks.get(completed_task, "unknown")
+            for task in asyncio.as_completed(tasks):
                 try:
-                    result = await completed_task
-                    logger.info(f"Block {block_idx} collected :: {result}")
+                    result = await task
+                    logger.info(f"Block {task.block_index} collected :: {result}")
                 except Exception as e:
-                    logger.error(f"Error occurred processing block {block_idx} :: {e}")
+                    logger.error(f"Error occurred processing block {task.block_index} :: {e}")
         
         await asyncio.sleep(8)
 
