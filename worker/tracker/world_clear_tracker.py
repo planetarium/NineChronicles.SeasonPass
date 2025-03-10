@@ -29,9 +29,17 @@ engine = create_engine(DB_URI)
 
 async def process_block(block_index: int):
     tx_data, tx_result_list = await fetch_block_data_async(block_index, PassType.WORLD_CLEAR_PASS)
-
+    
+    if tx_data is None or tx_result_list is None:
+        logger.error(f"Failed to fetch data for block {block_index}. Skipping.")
+        return {}
+    
     action_data = defaultdict(list)
     agent_list = set()
+    if not tx_data:
+        logger.info(f"No transactions found in block {block_index}")
+        return action_data
+
     for i, tx in enumerate(tx_data):
         if tx_result_list[i] != "SUCCESS":
             continue
@@ -50,7 +58,10 @@ async def process_block(block_index: int):
                 "stage_id": action_json.stageId,
             })
 
-    send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    if action_data:
+        send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+        logger.info(f"Processed block {block_index} with {len(action_data)} action types and {len(agent_list)} agents")
+    
     return action_data
 
 

@@ -54,9 +54,18 @@ def validate_battle_token(token: str):
 
 async def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
     tx_data, tx_result_list = await fetch_block_data_async(block_index, pass_type)
-
+    
+    if tx_data is None or tx_result_list is None:
+        logger.error(f"Failed to fetch data for block {block_index}. Skipping.")
+        return {}
+    
     action_data = defaultdict(list)
     agent_list = set()
+    battle_count = 0
+    if not tx_data:
+        logger.info(f"No transactions found in block {block_index}")
+        return action_data
+
     for i, tx in enumerate(tx_data):
         if tx_result_list[i] != "SUCCESS":
             continue
@@ -80,12 +89,12 @@ async def process_block(block_index: int, pass_type: PassType, planet_id: Planet
 
                 try:
                     battle_id = validate_battle_token(action_json.m)
+                    battle_count += 1
                 except ValueError:
                     continue
 
                 sess = scoped_session(sessionmaker(bind=engine))
                 try:
-
                     battle_history = BattleHistory(
                         planet_id=planet_id,
                         battle_id=battle_id
@@ -105,7 +114,10 @@ async def process_block(block_index: int, pass_type: PassType, planet_id: Planet
                 "count_base": action_json.count_base,
             })
 
-    send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    if action_data:
+        send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+        logger.info(f"Processed block {block_index} with {len(action_data)} action types, {len(agent_list)} agents, and {battle_count} battles")
+    
     return action_data
 
 
@@ -123,28 +135,32 @@ async def main():
         sess.close()
 
         tasks = []
+        task_to_index = {}
         for index in missing_blocks:
             if len(tasks) >= MAX_WORKERS:
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 tasks = list(pending)
-                for task in done:
+                for completed_task in done:
+                    block_idx = task_to_index.get(completed_task, "unknown")
                     try:
-                        result = task.result()
-                        logger.info(f"Block {task.block_index} collected :: {result}")
+                        result = completed_task.result()
+                        logger.info(f"Block {block_idx} collected :: {result}")
                     except Exception as e:
-                        logger.error(f"Error occurred processing block {task.block_index} :: {e}")
+                        logger.error(f"Error occurred processing block {block_idx} :: {e}")
             
             task = asyncio.create_task(process_block(index, PassType.COURAGE_PASS, CURRENT_PLANET))
-            task.block_index = index
+            task_to_index[task] = index
             tasks.append(task)
         
         if tasks:
-            for task in asyncio.as_completed(tasks):
+            remaining_tasks = {task: task_to_index[task] for task in tasks}
+            for completed_task in asyncio.as_completed(tasks):
+                block_idx = remaining_tasks.get(completed_task, "unknown")
                 try:
-                    result = await task
-                    logger.info(f"Block {task.block_index} collected :: {result}")
+                    result = await completed_task
+                    logger.info(f"Block {block_idx} collected :: {result}")
                 except Exception as e:
-                    logger.error(f"Error occurred processing block {task.block_index} :: {e}")
+                    logger.error(f"Error occurred processing block {block_idx} :: {e}")
         
         await asyncio.sleep(8)
 
