@@ -70,7 +70,8 @@ async def main():
         tasks = []
         for index in missing_blocks:
             if len(tasks) >= MAX_WORKERS:
-                done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                tasks = list(pending)
                 for task in done:
                     try:
                         result = task.result()
