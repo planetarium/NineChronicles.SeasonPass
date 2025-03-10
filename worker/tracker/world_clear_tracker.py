@@ -56,6 +56,9 @@ def process_block(block_index: int):
         x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]
     ]
 
+    # Add a small sleep after GraphQL query
+    time.sleep(0.1)
+
     action_data = defaultdict(list)
     agent_list = set()
     for i, tx in enumerate(tx_data):
@@ -114,7 +117,7 @@ def main():
         sess.close()
 
         block_dict = {}
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             for index in missing_blocks:
                 block_dict[executor.submit(process_block, index)] = index
 
