@@ -2,6 +2,7 @@ import concurrent.futures
 import json
 import os
 import time
+import asyncio
 
 import jwt
 import base64
@@ -17,7 +18,7 @@ from common.models.action import Block
 from common.models.arena import BattleHistory
 from worker.schemas.action import ActionJson
 from worker.utils.aws import send_sqs_message
-from worker.utils.gql import get_block_tip, fetch_block_data
+from worker.utils.gql import get_block_tip, fetch_block_data_async
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
@@ -25,6 +26,7 @@ CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
 SQS_URL = os.environ.get("SQS_URL")
 ARENA_SERVICE_JWT_PUBLIC_KEY = os.environ.get("ARENA_SERVICE_JWT_PUBLIC_KEY")
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", "10"))
 
 public_key_pem = base64.b64decode(ARENA_SERVICE_JWT_PUBLIC_KEY).decode("utf-8")
 
@@ -50,8 +52,8 @@ def validate_battle_token(token: str):
         raise ValueError("Invalid token.")
 
 
-def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
-    tx_data, tx_result_list = fetch_block_data(block_index, pass_type)
+async def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
+    tx_data, tx_result_list = await fetch_block_data_async(block_index, pass_type)
 
     action_data = defaultdict(list)
     agent_list = set()
@@ -104,9 +106,10 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
             })
 
     send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    return action_data
 
 
-def main():
+async def main():
     while True:
         sess = scoped_session(sessionmaker(bind=engine))
         # Get missing blocks
@@ -117,25 +120,34 @@ def main():
             Block.pass_type == PassType.COURAGE_PASS,
             Block.index >= start_block,
         )).fetchall())
-        missing_blocks = expected_all - all_blocks
+        missing_blocks = list(expected_all - all_blocks)
+        sess.close()
 
-        block_dict = {}
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            for index in missing_blocks:
-                block_dict[executor.submit(process_block, index, PassType.COURAGE_PASS, CURRENT_PLANET)] = (index, PassType.COURAGE_PASS)
-
-            for future in concurrent.futures.as_completed(block_dict):
-                index = block_dict[future]
-                exc = future.exception()
-
-                if exc:
-                    logger.error(f"Error occurred processing block {index} :: {exc}")
-                else:
-                    result = future.result()
-                    logger.info(f"Block {index} collected :: {result}")
-        # wait for block time
-        time.sleep(8)
+        tasks = []
+        for index in missing_blocks:
+            if len(tasks) >= MAX_WORKERS:
+                done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    try:
+                        result = task.result()
+                        logger.info(f"Block {task.block_index} collected :: {result}")
+                    except Exception as e:
+                        logger.error(f"Error occurred processing block {task.block_index} :: {e}")
+            
+            task = asyncio.create_task(process_block(index, PassType.COURAGE_PASS, CURRENT_PLANET))
+            task.block_index = index
+            tasks.append(task)
+        
+        if tasks:
+            for task in asyncio.as_completed(tasks):
+                try:
+                    result = await task
+                    logger.info(f"Block {task.block_index} collected :: {result}")
+                except Exception as e:
+                    logger.error(f"Error occurred processing block {task.block_index} :: {e}")
+        
+        await asyncio.sleep(8)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

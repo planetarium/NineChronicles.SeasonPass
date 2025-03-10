@@ -2,10 +2,13 @@ import hashlib
 import hmac
 import json
 import os
+import time
+import asyncio
 
 import bencodex
 import eth_utils
 import requests
+import aiohttp
 
 from common.enums import PassType, PlanetID
 from common.utils._graphql import GQL_DICT
@@ -95,6 +98,55 @@ def fetch_block_data(block_index: int, pass_type: PassType):
         headers={"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
     )
     tx_result_list = [x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]]
+    return tx_data, tx_result_list
+
+
+async def fetch_block_data_async(block_index: int, pass_type: PassType):
+    """
+    Asynchronously fetch block data using aiohttp.
+    
+    Args:
+        block_index: The block index to fetch
+        pass_type: The type of pass to filter actions
+        
+    Returns:
+        Tuple of transaction data and transaction result list
+    """
+    auth_header = {"Authorization": f"Bearer {create_jwt_token(os.environ.get('HEADLESS_GQL_JWT_SECRET'))}"}
+    
+    # Fetch Tx. and actions
+    nct_query = f"""{{ transaction {{ ncTransactions (
+        startingBlockIndex: {block_index},
+        limit: 1,
+        actionType: "{TARGET_ACTION_DICT[pass_type]}"
+    ) {{ id signer actions {{ json }} }}
+    }} }}"""
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            GQL_URL,
+            json={"query": nct_query},
+            headers=auth_header
+        ) as response:
+            resp_data = await response.json()
+            tx_data = resp_data["data"]["transaction"]["ncTransactions"]
+
+            tx_id_list = [x["id"] for x in tx_data]
+
+            # Fetch Tx. results
+            tx_result_query = f"""{{ transaction {{ transactionResults (txIds: {json.dumps(tx_id_list)}) {{ txStatus }} }} }}"""
+            
+            async with session.post(
+                GQL_URL,
+                json={"query": tx_result_query},
+                headers=auth_header
+            ) as result_response:
+                resp_result = await result_response.json()
+                tx_result_list = [x["txStatus"] for x in resp_result["data"]["transaction"]["transactionResults"]]
+    
+    # Add delay after fetching data
+    await asyncio.sleep(0.1)
+    
     return tx_data, tx_result_list
 
 
