@@ -16,7 +16,7 @@ from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.models.arena import BattleHistory
 from worker.schemas.action import ActionJson
-from worker.utils.aws import send_sqs_message
+from worker.utils.mq import send_message
 from worker.utils.gql import get_block_tip, fetch_block_data
 
 REGION = os.environ.get("REGION_NAME")
@@ -104,7 +104,7 @@ def process_block(block_index: int, pass_type: PassType, planet_id: PlanetID):
                 "count_base": action_json.count_base,
             })
 
-    send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
 
 
 def main():

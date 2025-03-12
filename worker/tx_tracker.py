@@ -1,7 +1,6 @@
 import concurrent.futures
 import json
 import os
-import boto3
 from collections import defaultdict
 from typing import Optional, Tuple
 
@@ -15,6 +14,7 @@ from common.enums import PlanetID, TxStatus
 from common.models.user import Claim
 from common.utils._graphql import GQL
 from common.utils.aws import fetch_secrets
+from worker.utils.mq import send_message
 
 DB_URI = os.environ.get("DB_URI")
 db_password = fetch_secrets(os.environ.get("REGION_NAME"), os.environ.get("SECRET_ARN"))["password"]
@@ -25,7 +25,6 @@ BLOCK_LIMIT = 200
 engine = create_engine(DB_URI, pool_size=5, max_overflow=5)
 
 SQS_URL = os.environ.get("SQS_URL")
-sqs = boto3.client("sqs", region_name=os.environ.get("REGION_NAME"))
 
 
 def process(planet_id: PlanetID, tx_id: str) -> Tuple[str, Optional[TxStatus], Optional[str]]:
@@ -83,7 +82,12 @@ def track_tx(event, context):
                 "uuid": str(created_claim.uuid),
             }
 
-            sqs.send_message(QueueUrl=SQS_URL, MessageBody=json.dumps(msg))
+            send_message(
+                PlanetID(created_claim.planet_id.encode()),
+                SQS_URL,
+                0,  # block index is not relevant for claims
+                msg
+            )
         logger.info(f"Found created claim [{len(created_claim_list)}], re queuing.")
 
     futures = {}

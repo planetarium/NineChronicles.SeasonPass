@@ -11,7 +11,7 @@ from common import logger
 from common.enums import PlanetID, PassType
 from common.models.action import Block
 from worker.schemas.action import AdventureBossActionJson
-from worker.utils.aws import send_sqs_message
+from worker.utils.mq import send_message
 from worker.utils.gql import get_block_tip, fetch_block_data
 
 # envs of tracker comes from .env.*** in EC2 instance
@@ -50,7 +50,7 @@ def process_block(block_index: int):
                 "count_base": action_json.count_base,
             })
 
-    send_sqs_message(REGION_NAME, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
 
 
 def main():

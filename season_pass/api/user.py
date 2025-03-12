@@ -31,13 +31,12 @@ from season_pass.schemas.user import (
     UserSeasonPassSchema,
 )
 from season_pass.utils import verify_token
+from worker.utils.mq import send_message
 
 router = APIRouter(
     prefix="/user",
     tags=["User"],
 )
-
-sqs = boto3.client("sqs", region_name=settings.REGION_NAME)
 
 
 def get_default_usp(
@@ -304,10 +303,13 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         sess.commit()
         sess.refresh(claim)
 
-        resp = sqs.send_message(
-            QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid})
+        send_message(
+            PlanetID(claim.planet_id.encode()),
+            settings.SQS_URL,
+            0,  # block index is not relevant for claims
+            {"uuid": claim.uuid}
         )
-        logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
+        logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
     sess.add(target_usp)
     sess.commit()
@@ -421,10 +423,13 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
     # Send message to SQS
     if claim.reward_list and settings.SQS_URL:
-        resp = sqs.send_message(
-            QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid})
+        send_message(
+            PlanetID(claim.planet_id.encode()),
+            settings.SQS_URL,
+            0,  # block index is not relevant for claims
+            {"uuid": claim.uuid}
         )
-        logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
+        logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
     # Return result
     return ClaimResultSchema(
@@ -484,10 +489,13 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
     # Send message to SQS
     if claim.reward_list and settings.SQS_URL:
-        resp = sqs.send_message(
-            QueueUrl=settings.SQS_URL, MessageBody=json.dumps({"uuid": claim.uuid})
+        send_message(
+            PlanetID(claim.planet_id.encode()),
+            settings.SQS_URL,
+            0,  # block index is not relevant for claims
+            {"uuid": claim.uuid}
         )
-        logging.debug(f"Message [{resp['MessageId']}] sent to SQS")
+        logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
     # Return result
     return ClaimResultSchema(

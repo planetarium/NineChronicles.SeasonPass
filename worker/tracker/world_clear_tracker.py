@@ -13,7 +13,7 @@ from common.enums import PlanetID, PassType
 from common.models.action import Block
 from common.utils.season_pass import create_jwt_token
 from worker.schemas.action import ActionJson
-from worker.utils.aws import send_sqs_message
+from worker.utils.mq import send_message
 from worker.utils.gql import get_block_tip
 
 REGION = os.environ.get("REGION_NAME")
@@ -74,7 +74,7 @@ def process_block(block_index: int):
                 "stage_id": action_json.stageId,
             })
 
-    send_sqs_message(REGION, CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
 
 
 def main():
