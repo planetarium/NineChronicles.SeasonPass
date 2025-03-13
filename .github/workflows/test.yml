@@ -63,6 +63,7 @@ jobs:
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
           REGION_NAME: us-east-2
           SQS_URL: https://test-queue.us-east-2.amazonaws.com/000000000000/test-queue
+          MQ_HOST: localhost
         run: |
           source $VENV
           pushd common
