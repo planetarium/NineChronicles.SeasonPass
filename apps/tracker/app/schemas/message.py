@@ -1,11 +1,7 @@
-from dataclasses import asdict, dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class Message:
+class Message(BaseModel):
     planet_id: str
     block: int
     action_data: dict
-
-    def to_dict(self):
-        return asdict(self)

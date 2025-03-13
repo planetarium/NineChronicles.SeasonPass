@@ -59,13 +59,12 @@ def track_world_clear_actions(rmq: RabbitMQ, block_index: int):
         block=block_index,
     )
     rmq.publish(
-        exchange=config.planet_id.value,
         routing_key=WORLD_CLEAR_QUEUE_NAME,
         body=Message(
             planet_id=config.planet_id.decode(),
             block=block_index,
             action_data=action_data,
-        ).to_dict(),
+        ).model_dump(),
     )
 
 

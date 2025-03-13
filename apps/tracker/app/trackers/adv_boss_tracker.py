@@ -59,13 +59,12 @@ def track_adv_boss_actions(rmq: RabbitMQ, block_index: int):
         block=block_index,
     )
     rmq.publish(
-        exchange=config.planet_id.value,
         routing_key=ADVENTURE_BOSS_QUEUE_NAME,
         body=Message(
             planet_id=config.planet_id.decode(),
             block=block_index,
             action_data=action_data,
-        ).to_dict(),
+        ).model_dump(),
     )
 
 
@@ -95,20 +94,14 @@ def track_missing_blocks(rmq: RabbitMQ):
         planet_id=config.planet_id.decode(),
         start_block=start_block,
     )
-
-    block_dict = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        for index in missing_blocks:
-            block_dict[executor.submit(track_adv_boss_actions, rmq, index)] = index
-        for future in concurrent.futures.as_completed(block_dict):
-            index = block_dict[future]
-            exc = future.exception()
-            if exc:
-                logger.exception(
-                    "Error occurred processing block",
-                    tracker="adv_boss_tracker",
-                    exc=exc,
-                )
-            else:
-                result = future.result()
-                logger.info(f"Block {index} collected :: {result}")
+    for index in missing_blocks:
+        try:
+            result = track_adv_boss_actions(rmq, index)
+            logger.info(f"Block {index} collected :: {result}")
+        except Exception as exc:
+            logger.exception(
+                "Error occurred processing block",
+                tracker="adv_boss_tracker",
+                exc=exc,
+            )
+            raise exc
