@@ -1,4 +1,0 @@
-ADVENTURE_BOSS_QUEUE_NAME = "adv-boss"
-COURAGE_QUEUE_NAME = "courage"
-WORLD_CLEAR_QUEUE_NAME = "world-clear"
-CLAIM_QUEUE_NAME = "claim"

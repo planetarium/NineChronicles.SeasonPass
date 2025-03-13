@@ -6,7 +6,6 @@ from collections import defaultdict
 import jwt
 import structlog
 from app.config import config
-from app.constants import COURAGE_QUEUE_NAME
 from app.schemas.action import ActionJson
 from app.schemas.message import Message
 from app.utils.gql import fetch_block_data, get_block_tip
@@ -14,6 +13,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from shared.constants import COURAGE_QUEUE_NAME
 from shared.enums import PassType
 from shared.models.action import Block
 from shared.models.arena import BattleHistory
@@ -119,21 +119,26 @@ def track_courage_actions(rmq: RabbitMQ, block_index: int):
 
 def track_missing_blocks(rmq: RabbitMQ):
     sess = scoped_session(sessionmaker(bind=engine))
-    # Get missing blocks
-    start_block = config.start_block_index
-    expected_all = set(
-        range(start_block, get_block_tip(config.gql_url, config.headless_jwt_secret))
-    )
-    all_blocks = set(
-        sess.scalars(
-            select(Block.index).where(
-                Block.planet_id == config.planet_id,
-                Block.pass_type == PassType.COURAGE_PASS,
-                Block.index >= start_block,
-            )
-        ).fetchall()
-    )
-    missing_blocks = expected_all - all_blocks
+    try:
+        # Get missing blocks
+        start_block = config.start_block_index
+        expected_all = set(
+            range(start_block, get_block_tip(config.gql_url, config.headless_jwt_secret))
+        )
+        all_blocks = set(
+            sess.scalars(
+                select(Block.index).where(
+                    Block.planet_id == config.planet_id,
+                    Block.pass_type == PassType.COURAGE_PASS,
+                    Block.index >= start_block,
+                )
+            ).fetchall()
+        )
+        missing_blocks = expected_all - all_blocks
+    except Exception as e:
+        raise e
+    finally:
+        sess.close()
 
     logger.info(
         "Missing blocks",

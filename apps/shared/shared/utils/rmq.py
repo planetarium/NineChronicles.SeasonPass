@@ -32,22 +32,3 @@ class RabbitMQ:
             body=body,
         )
         connection.close()
-
-    # def consume(
-    #     self,
-    #     queue: str,
-    #     callback: Callable[
-    #         [BlockingChannel, Basic.Deliver, BasicProperties, bytes], None
-    #     ],
-    #     auto_ack: bool = False,
-    # ) -> None:
-    #     if not self.channel:
-    #         self.connect()
-
-    #     self.channel.basic_consume(
-    #         queue=queue, on_message_callback=callback, auto_ack=auto_ack
-    #     )
-    #     self.channel.start_consuming()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()

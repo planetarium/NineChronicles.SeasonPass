@@ -5,13 +5,13 @@ from collections import defaultdict
 
 import structlog
 from app.config import config
-from app.constants import ADVENTURE_BOSS_QUEUE_NAME
 from app.schemas.action import AdventureBossActionJson
 from app.schemas.message import Message
 from app.utils.gql import fetch_block_data, get_block_tip
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from shared.constants import ADVENTURE_BOSS_QUEUE_NAME
 from shared.enums import PassType
 from shared.models.action import Block
 from shared.utils.rmq import RabbitMQ
@@ -70,22 +70,26 @@ def track_adv_boss_actions(rmq: RabbitMQ, block_index: int):
 
 def track_missing_blocks(rmq: RabbitMQ):
     sess = scoped_session(sessionmaker(bind=engine))
-    # Get missing blocks
-    start_block = config.start_block_index
-    expected_all = set(
-        range(start_block, get_block_tip(config.gql_url, config.headless_jwt_secret))
-    )  # Sloth needs 1 block to render actions: get tip-1
-    all_blocks = set(
-        sess.scalars(
-            select(Block.index).where(
-                Block.planet_id == config.planet_id,
-                Block.index >= start_block,
-                Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
-            )
-        ).fetchall()
-    )
-    missing_blocks = expected_all - all_blocks
-    sess.close()
+    try:
+        # Get missing blocks
+        start_block = config.start_block_index
+        expected_all = set(
+            range(start_block, get_block_tip(config.gql_url, config.headless_jwt_secret))
+        )  # Sloth needs 1 block to render actions: get tip-1
+        all_blocks = set(
+            sess.scalars(
+                select(Block.index).where(
+                    Block.planet_id == config.planet_id,
+                    Block.index >= start_block,
+                    Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
+                )
+            ).fetchall()
+        )
+        missing_blocks = expected_all - all_blocks
+    except Exception as e:
+        raise e
+    finally:
+        sess.close()
 
     logger.info(
         "Missing blocks",
