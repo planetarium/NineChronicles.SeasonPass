@@ -81,6 +81,7 @@ jobs:
           DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
           HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
+          MQ_HOST: localhost
         run: |
           source $VENV
           python -m pytest tests
