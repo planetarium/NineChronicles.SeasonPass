@@ -3,7 +3,7 @@ import logging
 import os
 from collections import defaultdict
 
-from pika import BlockingConnection, ConnectionParameters
+from pika import BlockingConnection, URLParameters
 
 from common.enums import PlanetID
 
@@ -25,5 +25,5 @@ def send_message(planet: PlanetID, queue: str, index: int, action_data: defaultd
 
 
 def get_connection() -> BlockingConnection:
-    connection = BlockingConnection(ConnectionParameters(queue_host))
+    connection = BlockingConnection(URLParameters(queue_host))
     return connection
