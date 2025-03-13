@@ -7,7 +7,7 @@ from pika import BlockingConnection, ConnectionParameters
 
 from common.enums import PlanetID
 
-queue_host = os.environ["MQ_HOST"]
+queue_host = os.environ["SQS_URL"]
 
 
 def send_message(planet: PlanetID, queue: str, index: int, action_data: defaultdict):
