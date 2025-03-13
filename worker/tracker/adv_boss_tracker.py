@@ -17,7 +17,7 @@ from worker.utils.gql import get_block_tip, fetch_block_data
 # envs of tracker comes from .env.*** in EC2 instance
 REGION_NAME = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
-SQS_URL = os.environ.get("ADVENTURE_BOSS_SQS_URL")
+QUEUE_NAME = os.environ.get("ADVENTURE_BOSS_QUEUE_NAME")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 
 DB_URI = os.environ.get("DB_URI")
@@ -50,7 +50,7 @@ def process_block(block_index: int):
                 "count_base": action_json.count_base,
             })
 
-    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, QUEUE_NAME, block_index, action_data)
 
 
 def main():

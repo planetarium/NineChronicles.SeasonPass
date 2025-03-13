@@ -18,7 +18,7 @@ from worker.utils.gql import get_block_tip
 
 REGION = os.environ.get("REGION_NAME")
 GQL_URL = os.environ.get("GQL_URL")
-SQS_URL = os.environ.get("WORLD_CLEAR_SQS_URL")
+QUEUE_NAME = os.environ.get("WORLD_CLEAR_QUEUE_NAME")
 CURRENT_PLANET = PlanetID(os.environ.get("PLANET_ID").encode())
 DB_URI = os.environ.get("DB_URI")
 
@@ -74,7 +74,7 @@ def process_block(block_index: int):
                 "stage_id": action_json.stageId,
             })
 
-    send_message(CURRENT_PLANET, SQS_URL, block_index, action_data)
+    send_message(CURRENT_PLANET, QUEUE_NAME, block_index, action_data)
 
 
 def main():
