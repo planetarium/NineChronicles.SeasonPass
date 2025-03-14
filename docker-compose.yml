@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: season_pass_postgres
+    environment:
+      POSTGRES_USER: local_test
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: season_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - season_pass_postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: season_pass_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: local_test
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5672:5672"   
+      - "15672:15672" 
+    volumes:
+      - season_pass_rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+
+volumes:
+  season_pass_postgres_data:
+  season_pass_rabbitmq_data:
+
+networks:
+  app-network:
+    driver: bridge

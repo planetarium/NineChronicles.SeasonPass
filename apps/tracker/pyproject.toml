@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "tracker"
+version = "1.0.0"
+description = "Tracker service of Nine Chronicles"
+authors = ["Planetarium <engineering@planetariumhq.com>"]
+readme = "README.md"
+include = ["app/*"]
+exclude = [".env.sample", "tests/*"]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+structlog = "^25.2.0"
+pydantic-settings = "^2.8.1"
+shared = { path = "../shared" }
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.0,<7.2"
+pytest-mock = "^3.6.0,<3.10"
+pytest-cov = "^2.10.0,<3.0.0"
+
+[tool.poetry.group.type.dependencies]
+mypy = "^0.971"
+types-requests = "^2.29.1"
+types-PyYAML = "^6.0.12"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^2.17.0,<3.0.0"
+black = "^22.6.0"
+isort = "^5.0.6,<6.0.0"
+colorama = "^0.4.6"
+
+[tool.poetry.group.tool.dependencies]
+alembic = "^1.12.0"

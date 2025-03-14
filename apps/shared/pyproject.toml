@@ -1,0 +1,44 @@
+[tool.poetry]
+name = "shared"
+version = "1.0.0"
+description = "Shared library for season pass service"
+authors = ["Planetarium <engineering@planetariumhq.com>"]
+readme = "README.md"
+include = ["shared/*"]
+exclude = [".env.sample", "tests/*", "tool/*"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+sqlalchemy = "^2.0.22"
+psycopg2-binary = "^2.9.9"
+eth-utils = "^5.1.0"
+eth-account = "^0.13.4"
+pyasn1 = "^0.6.1"
+pycryptodome = "^3.19.0"
+hexbytes = "^1.2.1"
+bencodex = "^1.0.1"
+pyjwt = "^2.8.0"
+pika = "^1.3.2"
+gql = { extras = ["all"], version = "^3.4.1" }
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.0,<7.2"
+pytest-mock = "^3.6.0,<3.10"
+pytest-cov = "^2.10.0,<3.0.0"
+
+[tool.poetry.group.type.dependencies]
+mypy = "^0.971"
+types-requests = "^2.29.1"
+types-PyYAML = "^6.0.12"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^2.17.0,<3.0.0"
+black = "^22.6.0"
+isort = "^5.0.6,<6.0.0"
+
+[tool.poetry.group.tool.dependencies]
+alembic = "^1.12.0"
