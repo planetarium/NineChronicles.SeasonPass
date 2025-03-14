@@ -3,7 +3,6 @@ import os
 
 import uvicorn
 from fastapi import FastAPI
-from app.config import config
 from requests import ReadTimeout
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
@@ -16,6 +15,7 @@ from starlette.status import (
 )
 
 from app import api
+from app.config import config
 from app.exceptions import (
     InvalidSeasonError,
     NotPremiumError,
@@ -32,7 +32,7 @@ app = FastAPI(
     title="Nine Chronicles Season Pass Service",
     description="",
     version=__VERSION__,
-    debug=config.DEBUG,
+    debug=config.debug,
 )
 
 
@@ -79,15 +79,15 @@ app.include_router(api.router)
 
 if __name__ == "__main__":
     # 기본값 설정
-    workers = config.WORKERS
-    timeout_keep_alive = config.TIMEOUT_KEEP_ALIVE
-    host = config.HOST
-    port = config.PORT
+    workers = config.workers
+    timeout_keep_alive = config.timeout_keep_alive
+    host = config.host
+    port = config.port
 
     # uvicorn 서버 실행
     uvicorn.run(
-        "app.app:app",
-        reload=config.DEBUG,
+        "main:app",
+        reload=config.debug,
         host=host,
         port=port,
         workers=workers,

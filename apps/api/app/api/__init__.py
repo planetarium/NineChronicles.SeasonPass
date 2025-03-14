@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 from fastapi import APIRouter, Depends
-from shared import SEASONPASS_ADDRESS
+from shared.constants import SEASONPASS_ADDRESS
 from shared.enums import PassType, PlanetID, TxStatus
 from shared.models.action import Block
 from shared.models.user import Claim

@@ -3,9 +3,10 @@ from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema
 from pydantic import Field, model_validator
-from season_pass.schemas.season_pass import ClaimSchema, SimpleSeasonPassSchema
-from season_pass.settings import stage
 from shared.enums import PassType, PlanetID
+
+from app.config import config
+from app.schemas.season_pass import ClaimSchema, SimpleSeasonPassSchema
 
 
 class UserSeasonPassSchema(BaseSchema):
@@ -33,7 +34,7 @@ class UserSeasonPassSchema(BaseSchema):
 
 class UpgradeRequestSchema(BaseSchema):
     planet_id: PlanetID | str = (
-        PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
+        PlanetID.ODIN if config.stage == "mainnet" else PlanetID.ODIN_INTERNAL
     )
     agent_addr: str
     avatar_addr: str
@@ -66,7 +67,7 @@ class UpgradeRequestSchema(BaseSchema):
 
 class ClaimRequestSchema(BaseSchema):
     planet_id: PlanetID | str = (
-        PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
+        PlanetID.ODIN if config.stage == "mainnet" else PlanetID.ODIN_INTERNAL
     )
     agent_addr: str
     avatar_addr: str

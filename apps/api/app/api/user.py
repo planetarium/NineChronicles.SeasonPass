@@ -10,11 +10,12 @@ from shared.constants import CLAIM_QUEUE_NAME
 from shared.enums import PassType, PlanetID, TxStatus
 from shared.models.season_pass import SeasonPass
 from shared.models.user import Claim, UserSeasonPass
-from shared.utils._graphql import get_last_cleared_stage
+from shared.utils._graphql import GQLClient
 from shared.utils.season_pass import get_level, get_max_level, get_pass
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
+from app.config import config
 from app.dependencies import rmq, session
 from app.exceptions import (
     InvalidSeasonError,
@@ -46,7 +47,11 @@ def get_default_usp(
 ) -> UserSeasonPass:
     match season_pass.pass_type:
         case PassType.WORLD_CLEAR_PASS:
-            _, cleared_stage = get_last_cleared_stage(planet_id, avatar_addr, timeout=1)
+            gql_client = GQLClient(config.converted_gql_url_map, config.jwt_secret)
+            _, cleared_stage = gql_client.get_last_cleared_stage(
+                planet_id, avatar_addr, timeout=1
+            )
+
             usp = UserSeasonPass(
                 planet_id=planet_id,
                 agent_addr=agent_addr,

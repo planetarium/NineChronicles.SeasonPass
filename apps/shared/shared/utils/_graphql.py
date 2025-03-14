@@ -14,8 +14,8 @@ from shared.enums import PlanetID
 
 
 class GQLClient:
-    def __init__(self, gql_url: str, jwt_secret: str = None):
-        self._url = gql_url
+    def __init__(self, gql_url_map: Dict[PlanetID, str], jwt_secret: str = None):
+        self.gql_url_map = gql_url_map
         self.client = None
         self.ds = None
         self.__jwt_secret = jwt_secret
@@ -39,7 +39,7 @@ class GQLClient:
 
     def reset(self, planet_id: PlanetID):
         transport = RequestsHTTPTransport(
-            url=self._url[planet_id],
+            url=self.gql_url_map[planet_id],
             verify=True,
             retries=2,
             headers=self.__create_header(),

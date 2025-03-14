@@ -17,9 +17,15 @@ class Settings(BaseSettings):
     port: int = 8000
     workers: int = 1
     timeout_keep_alive: int = 5
-    odin_gql_url: str = "https://odin-rpc.nine-chronicles.com/graphql"
-    heimdall_gql_url: str = "https://heimdall-rpc.nine-chronicles.com/graphql"
-    thor_gql_url: str = "https://thor-rpc.nine-chronicles.com/graphql"
+    gql_url_map: dict[str, str] = {
+        "0x000000000000": "https://odin-rpc.nine-chronicles.com/graphql",
+        "0x000000000001": "https://heimdall-rpc.nine-chronicles.com/graphql",
+    }
+
+    @property
+    def converted_gql_url_map(self) -> dict[PlanetID, str]:
+        return {PlanetID(k.encode()): v for k, v in self.gql_url_map.items()}
+
     model_config = SettingsConfigDict(env_file=(".env"), env_prefix="API_")
 
 

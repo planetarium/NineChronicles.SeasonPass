@@ -1,18 +1,18 @@
 from datetime import datetime
 
 import structlog
-from app.config import config
-from app.schemas.message import TrackerMessage
-from app.utils.season_pass import verify_season_pass
-from sqlalchemy import create_engine, desc, select
-from sqlalchemy.orm import scoped_session, sessionmaker
-
 from shared.enums import PassType, PlanetID
 from shared.models.action import Block
 from shared.models.season_pass import Level
 from shared.models.user import UserSeasonPass
 from shared.utils._graphql import GQLClient
 from shared.utils.season_pass import get_pass
+from sqlalchemy import create_engine, desc, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+
+from app.config import config
+from app.schemas.message import TrackerMessage
+from app.utils.season_pass import verify_season_pass
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn))
@@ -124,11 +124,11 @@ def consume_world_clear_message(body: str):
                         continue
                     else:  # HAS new stage
                         client = GQLClient(
-                            config.gql_url_map[planet_id.decode()],
+                            config.converted_gql_url_map,
                             config.headless_jwt_secret,
                         )
                         cleared_world, target_data.exp = client.get_last_cleared_stage(
-                            action["avatar_addr"]
+                            planet_id, action["avatar_addr"]
                         )
 
                     for level in level_list:

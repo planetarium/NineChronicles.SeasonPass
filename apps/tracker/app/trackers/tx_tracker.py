@@ -5,14 +5,14 @@ from collections import defaultdict
 from typing import Optional, Tuple
 
 import structlog
-from app.config import config
 from gql.dsl import DSLQuery, dsl_gql
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import scoped_session, sessionmaker
-
 from shared.enums import PlanetID, TxStatus
 from shared.models.user import Claim
 from shared.utils._graphql import GQLClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+
+from app.config import config
 
 logger = structlog.get_logger(__name__)
 
@@ -24,7 +24,7 @@ engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
 def process(
     planet_id: PlanetID, tx_id: str
 ) -> Tuple[str, Optional[TxStatus], Optional[str]]:
-    client = GQLClient(config.gql_url, config.headless_jwt_secret)
+    client = GQLClient({planet_id: config.gql_url}, config.headless_jwt_secret)
     client.reset(planet_id)
     query = dsl_gql(
         DSLQuery(
