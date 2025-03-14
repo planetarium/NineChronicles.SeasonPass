@@ -1,21 +1,25 @@
 FROM python:3.11-slim
 
-ARG POETRY_VERSION=1.6.1
+ARG POETRY_VERSION=1.8
 
-RUN apt update
-RUN apt install -y postgresql-client vim
+RUN apt update && apt install -y \
+    postgresql-client \
+    vim \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set up poetry
+ENV POETRY_VIRTUALENVS_CREATE=false
+ENV POETRY_VIRTUALENVS_IN_PROJECT=false
+
 RUN pip install -U pip "poetry==${POETRY_VERSION}"
-RUN poetry config virtualenvs.create false
+RUN poetry config virtualenvs.create false --local
 
-COPY ./worker /app/NineChronicles.SeasonPass/worker
-COPY ./common /app/NineChronicles.SeasonPass/common
-COPY ./season_pass /app/NineChronicles.SeasonPass/season_pass
-COPY pyproject.toml /app/NineChronicles.SeasonPass
-COPY poetry.lock /app/NineChronicles.SeasonPass
-COPY block_tracker.service /etc/systemd/system/block_tracker.service
-COPY alembic.ini /app/NineChronicles.SeasonPass
+COPY ./apps/shared /app/apps/shared
+WORKDIR /app/apps/shared
 
-WORKDIR /app/NineChronicles.SeasonPass
+COPY ./apps/consumer /app/apps/consumer
+WORKDIR /app/apps/consumer
+
 RUN poetry install --no-root
+
+CMD ["python", "app.py"]

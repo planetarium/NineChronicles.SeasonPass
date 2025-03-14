@@ -26,6 +26,58 @@ services:
       - season_pass_rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app-network
+      
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.Api
+    container_name: season_pass_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.api
+    environment:
+      - API_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - API_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - app-network
+
+  tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile.Tracker
+    container_name: season_pass_tracker
+    env_file:
+      - .env.tracker
+    environment:
+      - TRACKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - TRACKER_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - app-network
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.Consumer
+    container_name: season_pass_consumer
+    env_file:
+      - .env.consumer
+    environment:
+      - CONSUMER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - CONSUMER_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - app-network
 
 volumes:
   season_pass_postgres_data:
