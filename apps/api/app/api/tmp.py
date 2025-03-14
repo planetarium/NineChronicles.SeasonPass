@@ -1,9 +1,4 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import desc, select
-
-from common.models.season_pass import Level
-from common.models.user import UserSeasonPass
-from common.utils.season_pass import get_pass
 from season_pass.dependencies import session
 from season_pass.exceptions import SeasonNotFoundError, UserNotFoundError
 from season_pass.schemas.season_pass import SeasonPassSchema
@@ -14,6 +9,10 @@ from season_pass.schemas.tmp import (
     SeasonChangeRequestSchema,
 )
 from season_pass.schemas.user import UserSeasonPassSchema
+from shared.models.season_pass import Level
+from shared.models.user import UserSeasonPass
+from shared.utils.season_pass import get_pass
+from sqlalchemy import desc, select
 
 router = APIRouter(
     prefix="/tmp",
@@ -66,9 +65,7 @@ def set_premium(request: PremiumRequestSchema, sess=Depends(session)):
         )
     )
     if not target_user:
-        raise UserNotFoundError(
-            f"User {request.avatar_addr} not found. Register first."
-        )
+        raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
 
     target_user.is_premium = request.is_premium
     target_user.is_premium_plus = request.is_premium_plus
@@ -97,9 +94,7 @@ def add_exp(request: ExpRequestSchema, sess=Depends(session)):
         )
     )
     if not target_user:
-        raise UserNotFoundError(
-            f"User {request.avatar_addr} not found. Register first."
-        )
+        raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
     target_user.exp += request.exp
     for lvl in sess.scalars(
         select(Level)
@@ -132,9 +127,7 @@ def reset(request: RegisterRequestSchema, sess=Depends(session)):
         )
     )
     if not target_user:
-        raise UserNotFoundError(
-            f"User {request.avatar_addr} not found. Register first."
-        )
+        raise UserNotFoundError(f"User {request.avatar_addr} not found. Register first.")
 
     target_user.level = 0
     target_user.exp = 0

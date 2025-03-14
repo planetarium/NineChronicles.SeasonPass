@@ -3,10 +3,9 @@ from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema
 from pydantic import Field, model_validator
-
-from common.enums import PassType, PlanetID
 from season_pass.schemas.season_pass import ClaimSchema, SimpleSeasonPassSchema
 from season_pass.settings import stage
+from shared.enums import PassType, PlanetID
 
 
 class UserSeasonPassSchema(BaseSchema):

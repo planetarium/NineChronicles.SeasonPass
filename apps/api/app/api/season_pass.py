@@ -1,18 +1,14 @@
 from typing import List
 
 from fastapi import APIRouter, Depends
+from shared.enums import PassType, PlanetID
+from shared.models.season_pass import Level
+from shared.utils.season_pass import get_pass
 from sqlalchemy import select
 
-from common.enums import PassType, PlanetID
-from common.models.season_pass import Level
-from common.utils.season_pass import get_pass
-from season_pass.dependencies import session
-from season_pass.exceptions import SeasonNotFoundError
-from season_pass.schemas.season_pass import (
-    ExpInfoSchema,
-    LevelInfoSchema,
-    SeasonPassSchema,
-)
+from app.dependencies import session
+from app.exceptions import SeasonNotFoundError
+from app.schemas.season_pass import ExpInfoSchema, LevelInfoSchema, SeasonPassSchema
 
 router = APIRouter(
     prefix="/season-pass",

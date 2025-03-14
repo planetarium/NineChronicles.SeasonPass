@@ -5,33 +5,31 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import uuid4
 
-import boto3
 from fastapi import APIRouter, Depends
+from shared.constants import CLAIM_QUEUE_NAME
+from shared.enums import PassType, PlanetID, TxStatus
+from shared.models.season_pass import SeasonPass
+from shared.models.user import Claim, UserSeasonPass
+from shared.utils._graphql import get_last_cleared_stage
+from shared.utils.season_pass import get_level, get_max_level, get_pass
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from common.enums import PassType, PlanetID, TxStatus
-from common.models.season_pass import SeasonPass
-from common.models.user import Claim, UserSeasonPass
-from common.utils._graphql import get_last_cleared_stage
-from common.utils.season_pass import get_level, get_max_level, get_pass
-from season_pass import settings
-from season_pass.dependencies import session
-from season_pass.exceptions import (
+from app.dependencies import rmq, session
+from app.exceptions import (
     InvalidSeasonError,
     InvalidUpgradeRequestError,
     NotPremiumError,
     SeasonNotFoundError,
     ServerOverloadError,
 )
-from season_pass.schemas.user import (
+from app.schemas.user import (
     ClaimRequestSchema,
     ClaimResultSchema,
     UpgradeRequestSchema,
     UserSeasonPassSchema,
 )
-from season_pass.utils import verify_token
-from worker.utils.rmq import send_message
+from app.utils import verify_token
 
 router = APIRouter(
     prefix="/user",
@@ -190,7 +188,9 @@ def all_user_status(
     response_model=UserSeasonPassSchema,
     dependencies=[Depends(verify_token)],
 )
-def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
+def upgrade_season_pass(
+    request: UpgradeRequestSchema, sess=Depends(session), rmq=Depends(rmq)
+):
     """
     # Upgrade SeasonPass status to premium or premium plus
     ---
@@ -303,11 +303,9 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         sess.commit()
         sess.refresh(claim)
 
-        send_message(
-            PlanetID(claim.planet_id.encode()),
-            settings.SQS_URL,
-            0,  # block index is not relevant for claims
-            {"uuid": claim.uuid}
+        rmq.publish(
+            routing_key=CLAIM_QUEUE_NAME,
+            body={"uuid": claim.uuid},
         )
         logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
@@ -369,7 +367,7 @@ def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> 
 
 
 @router.post("/claim", response_model=ClaimResultSchema)
-def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
+def claim_reward(request: ClaimRequestSchema, sess=Depends(session), rmq=Depends(rmq)):
     if request.force:
         target_pass = get_pass(sess, request.pass_type, request.season_index)
         if not target_pass:
@@ -408,9 +406,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     inprogress_claim_count = sess.scalar(
         select(func.count()).where(
             Claim.reward_list != [],
-            or_(
-                Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID
-            ),
+            or_(Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID),
         )
     )
 
@@ -422,12 +418,10 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     sess.refresh(user_season)
 
     # Send message to SQS
-    if claim.reward_list and settings.SQS_URL:
-        send_message(
-            PlanetID(claim.planet_id.encode()),
-            settings.SQS_URL,
-            0,  # block index is not relevant for claims
-            {"uuid": claim.uuid}
+    if claim.reward_list:
+        rmq.publish(
+            routing_key=CLAIM_QUEUE_NAME,
+            body={"uuid": claim.uuid},
         )
         logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
@@ -439,7 +433,9 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
 
 @router.post("/claim-prev", response_model=ClaimResultSchema)
-def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
+def claim_prev_reward(
+    request: ClaimRequestSchema, sess=Depends(session), rmq=Depends(rmq)
+):
     # Validation
     if request.pass_type == PassType.WORLD_CLEAR_PASS:
         raise InvalidSeasonError(
@@ -488,12 +484,10 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
     sess.refresh(user_season)
 
     # Send message to SQS
-    if claim.reward_list and settings.SQS_URL:
-        send_message(
-            PlanetID(claim.planet_id.encode()),
-            settings.SQS_URL,
-            0,  # block index is not relevant for claims
-            {"uuid": claim.uuid}
+    if claim.reward_list:
+        rmq.publish(
+            routing_key=CLAIM_QUEUE_NAME,
+            body={"uuid": claim.uuid},
         )
         logging.debug(f"Message for claim {claim.uuid} sent to queue")
 

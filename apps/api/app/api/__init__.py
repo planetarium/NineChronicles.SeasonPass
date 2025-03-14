@@ -4,25 +4,26 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 from fastapi import APIRouter, Depends
+from shared import SEASONPASS_ADDRESS
+from shared.enums import PassType, PlanetID, TxStatus
+from shared.models.action import Block
+from shared.models.user import Claim
+from shared.utils.season_pass import create_jwt_token
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
-from common import SEASONPASS_ADDRESS
-from common.enums import PassType, PlanetID, TxStatus
-from common.models.action import Block
-from common.models.user import Claim
-from common.utils.season_pass import create_jwt_token
-from season_pass import settings
-from season_pass.api import season_pass, tmp, user
-from season_pass.dependencies import session
+from app.config import config
+from app.dependencies import session
+
+from . import season_pass, tmp, user
 
 __all__ = [
     season_pass,
     user,
 ]
 
-if os.environ.get("STAGE") != "mainnet":
+if config.stage != "mainnet":
     __all__.append(tmp)
 
 router = APIRouter(
@@ -39,7 +40,7 @@ def get_tip(url) -> int:
         url,
         json={"query": "{ nodeStatus { tip { index } } }"},
         headers={
-            "Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"
+            "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
         },
         timeout=2,
     )
@@ -63,15 +64,15 @@ def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
 
 @router.get("/check-nonce")
 def check_nonce(planet: str, sess=Depends(session)):
-    is_mainnet = os.environ.get("STAGE", "development") == "mainnet"
+    is_mainnet = config.stage == "mainnet"
     if planet.lower() == "odin":
-        url = os.environ.get("ODIN_GQL_URL")
+        url = config.odin_gql_url
         planet_id = PlanetID.ODIN if is_mainnet else PlanetID.ODIN_INTERNAL
     elif planet.lower() == "heimdall":
-        url = os.environ.get("HEIMDALL_GQL_URL")
+        url = config.heimdall_gql_url
         planet_id = PlanetID.HEIMDALL if is_mainnet else PlanetID.HEIMDALL_INTERNAL
     elif planet.lower() == "thor":
-        url = os.environ.get("THOR_GQL_URL")
+        url = config.thor_gql_url
         planet_id = PlanetID.THOR if is_mainnet else PlanetID.THOR_INTERNAL
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
@@ -80,7 +81,7 @@ def check_nonce(planet: str, sess=Depends(session)):
         url,
         json={"query": f'query {{ nextTxNonce(address: "{SEASONPASS_ADDRESS}") }}'},
         headers={
-            "Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"
+            "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
         },
     )
     result = resp.json()
@@ -105,27 +106,22 @@ def check_nonce(planet: str, sess=Depends(session)):
 
 @router.get("/block-status")
 def block_status(sess=Depends(session)):
-    stage = os.environ.get("STAGE", "development")
+    stage = config.stage
     result = {}
 
     odin_planet = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
-    odin_tip = get_tip(os.environ.get("ODIN_GQL_URL"))
+    odin_tip = get_tip(config.odin_gql_url)
     odin_blocks = get_db_tip(sess, odin_planet)
     result[odin_planet.name] = {k.value: odin_tip - v for k, v in odin_blocks.items()}
 
     heimdall_planet = (
         PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL
     )
-    heimdall_tip = get_tip(os.environ.get("HEIMDALL_GQL_URL"))
+    heimdall_tip = get_tip(config.heimdall_gql_url)
     heimdall_blocks = get_db_tip(sess, heimdall_planet)
     result[heimdall_planet.name] = {
         k.value: heimdall_tip - v for k, v in heimdall_blocks.items()
     }
-
-    thor_planet = PlanetID.THOR if stage == "mainnet" else PlanetID.THOR_INTERNAL
-    thor_tip = get_tip(os.environ.get("THOR_GQL_URL"))
-    thor_blocks = get_db_tip(sess, thor_planet)
-    result[thor_planet.name] = {k.value: thor_tip - v for k, v in thor_blocks.items()}
 
     err = False
     for planet, report in result.items():
@@ -159,9 +155,7 @@ def invalid_claim(sess: Session = Depends(session)):
 def failure_claim(sess: Session = Depends(session)):
     now = datetime.now(tz=timezone.utc)
     failure_claim_list = sess.scalars(
-        select(Claim).where(
-            Claim.reward_list != [], Claim.tx_status == TxStatus.FAILURE
-        )
+        select(Claim).where(Claim.reward_list != [], Claim.tx_status == TxStatus.FAILURE)
     ).fetchall()
     if failure_claim_list:
         return JSONResponse(
@@ -174,11 +168,11 @@ def failure_claim(sess: Session = Depends(session)):
 @router.get("/balance/{planet}")
 def balance(planet: str):
     if planet.lower() == "odin":
-        url = os.environ.get("ODIN_GQL_URL")
+        url = config.odin_gql_url
     elif planet.lower() == "heimdall":
-        url = os.environ.get("HEIMDALL_GQL_URL")
+        url = config.heimdall_gql_url
     elif planet.lower() == "thor":
-        url = os.environ.get("THOR_GQL_URL")
+        url = config.thor_gql_url
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
     resp = requests.post(
@@ -204,7 +198,7 @@ def balance(planet: str):
         }}"""
         },
         headers={
-            "Authorization": f"Bearer {create_jwt_token(settings.HEADLESS_GQL_JWT_SECRET)}"
+            "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
         },
     )
     data = resp.json()["data"]["stateQuery"]

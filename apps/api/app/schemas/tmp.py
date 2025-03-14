@@ -3,8 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel as BaseSchema
 from pydantic import model_validator
-
-from common.enums import PassType, PlanetID
+from shared.enums import PassType, PlanetID
 
 
 class RegisterRequestSchema(BaseSchema):

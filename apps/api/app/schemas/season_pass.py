@@ -3,8 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema
 from pydantic import model_validator
-
-from common.enums import ActionType, PassType
+from shared.enums import ActionType, PassType
 
 
 class ItemInfoSchema(BaseSchema):

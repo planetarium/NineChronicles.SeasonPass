@@ -6,7 +6,7 @@ import jwt
 from fastapi import Header, HTTPException
 from jwt import ExpiredSignatureError
 
-from season_pass import settings
+from app.config import config
 
 
 def verify_token(authorization: Annotated[str, Header()]):
@@ -53,7 +53,7 @@ def verify_token(authorization: Annotated[str, Header()]):
         if prefix != "Bearer":
             raise Exception("Invalid token type. Use `Bearer [TOKEN]`.")
         token_data = jwt.decode(
-            body, settings.JWT_TOKEN_SECRET, audience="SeasonPass", algorithms=["HS256"]
+            body, config.headless_jwt_secret, audience="SeasonPass", algorithms=["HS256"]
         )
         if (
             datetime.fromtimestamp(token_data["iat"], tz=timezone.utc)

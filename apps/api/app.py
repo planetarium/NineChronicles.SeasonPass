@@ -3,7 +3,7 @@ import os
 
 import uvicorn
 from fastapi import FastAPI
-from mangum import Mangum
+from app.config import config
 from requests import ReadTimeout
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
@@ -15,8 +15,8 @@ from starlette.status import (
     HTTP_503_SERVICE_UNAVAILABLE,
 )
 
-from season_pass import api, settings
-from season_pass.exceptions import (
+from app import api
+from app.exceptions import (
     InvalidSeasonError,
     NotPremiumError,
     SeasonNotFoundError,
@@ -26,13 +26,13 @@ from season_pass.exceptions import (
 
 __VERSION__ = "0.3.1"
 
-stage = os.environ.get("STAGE", "local")
+stage = config.stage
 
 app = FastAPI(
     title="Nine Chronicles Season Pass Service",
     description="",
     version=__VERSION__,
-    debug=settings.DEBUG,
+    debug=config.DEBUG,
 )
 
 
@@ -75,21 +75,19 @@ def robots():
 
 
 app.include_router(api.router)
-# app.mount("/_app", StaticFiles(directory="iap/frontend/build/_app"), name="static")
 
-handler = Mangum(app)
 
 if __name__ == "__main__":
     # 기본값 설정
-    workers = int(os.environ.get("API_WORKERS", 1))
-    timeout_keep_alive = int(os.environ.get("API_TIMEOUT_KEEP_ALIVE", 5))
-    host = os.environ.get("API_DEFAULT_HOST", "127.0.0.1")
-    port = int(os.environ.get("API_DEFAULT_PORT", 8000))
+    workers = config.WORKERS
+    timeout_keep_alive = config.TIMEOUT_KEEP_ALIVE
+    host = config.HOST
+    port = config.PORT
 
     # uvicorn 서버 실행
     uvicorn.run(
-        "season_pass.main:app",
-        reload=settings.DEBUG,
+        "app.app:app",
+        reload=config.DEBUG,
         host=host,
         port=port,
         workers=workers,

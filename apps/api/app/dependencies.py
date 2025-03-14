@@ -1,9 +1,10 @@
+from shared.utils.rmq import RabbitMQ
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from season_pass import settings
+from app.config import config
 
-engine = create_engine(settings.DB_URI, echo=settings.DB_ECHO)
+engine = create_engine(str(config.pg_dsn), echo=config.db_echo)
 
 
 def session():
@@ -12,3 +13,8 @@ def session():
         yield sess
     finally:
         sess.close()
+
+
+def rmq():
+    rmq = RabbitMQ(config.rmq_url)
+    yield rmq
