@@ -66,6 +66,10 @@ def track_tx(event, context):
         select(Claim).where(Claim.tx_status.in_((TxStatus.STAGED, TxStatus.INVALID,)))
         .order_by(Claim.id).limit(BLOCK_LIMIT)
     ).fetchall()
+    if len(claim_list) == 0:
+        logger.info("No claims to track status.")
+        return
+
     result = defaultdict(list)
 
     now = datetime.now(tz=timezone.utc)
