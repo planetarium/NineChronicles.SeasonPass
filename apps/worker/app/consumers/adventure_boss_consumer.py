@@ -223,7 +223,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
         )
         sess.commit()
         logger.info(
-            f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{body['block']} applied."
+            f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{message.block} applied."
         )
     except InterruptedError as e:
         sess.rollback()
