@@ -80,11 +80,11 @@ services:
   celery-worker:
     build:
       context: .
-      dockerfile: Dockerfile.Consumer
+      dockerfile: Dockerfile.Worker
     container_name: season_pass_celery_worker
     command: celery -A app.celery_app worker --loglevel=info
     env_file:
-      - .env.consumer
+      - .env.worker
     environment:
       - WORKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
       - WORKER_REDIS_DSN=redis://redis:6379/0
@@ -101,13 +101,13 @@ services:
   celery-flower:
     build:
       context: .
-      dockerfile: Dockerfile.Consumer
+      dockerfile: Dockerfile.Worker
     container_name: season_pass_celery_flower
     command: celery -A app.celery_app flower --port=5555
     ports:
       - "5555:5555"
     env_file:
-      - .env.consumer
+      - .env.worker
     environment:
       - WORKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
       - WORKER_REDIS_DSN=redis://redis:6379/0

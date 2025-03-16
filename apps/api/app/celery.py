@@ -8,14 +8,12 @@ from app.config import config
 
 logger = structlog.get_logger(__name__)
 
-# Celery client for sending tasks to the worker
 celery_app = Celery(
     "season_pass_worker",
     broker=str(config.celery_broker_url),
     backend=config.celery_result_backend,
 )
 
-# Configure Celery client
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],

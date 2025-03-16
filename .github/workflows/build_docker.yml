@@ -14,8 +14,8 @@ jobs:
             dockerfile: Dockerfile.Api
           - repo: planetariumhq/season-pass-tracker
             dockerfile: Dockerfile.Tracker
-          - repo: planetariumhq/season-pass-consumer
-            dockerfile: Dockerfile.Consumer
+          - repo: planetariumhq/season-pass-worker
+            dockerfile: Dockerfile.Worker
     steps:
       -
         name: Checkout

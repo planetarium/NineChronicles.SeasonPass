@@ -17,14 +17,9 @@ RUN poetry config virtualenvs.create false --local
 COPY ./apps/shared /app/apps/shared
 WORKDIR /app/apps/shared
 
-COPY ./apps/consumer /app/apps/consumer
-WORKDIR /app/apps/consumer
+COPY ./apps/worker /app/apps/worker
+WORKDIR /app/apps/worker
 
 RUN poetry install --no-root
 
-# Create entrypoint script to make it easier to run different commands
-COPY ./scripts/entrypoint-consumer.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
 CMD ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
