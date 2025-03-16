@@ -5,20 +5,20 @@ from shared.enums import PassType, PlanetID
 from shared.models.action import Block
 from shared.models.season_pass import Level
 from shared.models.user import UserSeasonPass
+from shared.schemas.message import TrackerMessage
 from shared.utils._graphql import GQLClient
 from shared.utils.season_pass import get_pass
 from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from app.config import config
-from app.schemas.message import TrackerMessage
 from app.utils.season_pass import verify_season_pass
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn))
 
 
-def consume_world_clear_message(body: str):
+def consume_world_clear_message(message: TrackerMessage):
     """
     Receive action data from tracker and give world clear pass exp. to avatar
 
@@ -36,7 +36,6 @@ def consume_world_clear_message(body: str):
         }
     }
     """
-    message = TrackerMessage.model_validate(body)
     sess = scoped_session(sessionmaker(bind=engine))
 
     try:

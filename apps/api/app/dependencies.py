@@ -1,4 +1,3 @@
-from shared.utils.rmq import RabbitMQ
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
@@ -13,8 +12,3 @@ def session():
         yield sess
     finally:
         sess.close()
-
-
-def rmq():
-    rmq = RabbitMQ(config.rmq_url)
-    yield rmq

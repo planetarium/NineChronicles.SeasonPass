@@ -15,6 +15,7 @@ from starlette.status import (
 )
 
 from app import api
+from app.celery import celery_app
 from app.config import config
 from app.exceptions import (
     InvalidSeasonError,
@@ -76,15 +77,12 @@ def robots():
 
 app.include_router(api.router)
 
-
 if __name__ == "__main__":
-    # 기본값 설정
     workers = config.workers
     timeout_keep_alive = config.timeout_keep_alive
     host = config.host
     port = config.port
 
-    # uvicorn 서버 실행
     uvicorn.run(
         "main:app",
         reload=config.debug,

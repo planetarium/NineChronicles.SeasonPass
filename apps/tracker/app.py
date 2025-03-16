@@ -2,9 +2,10 @@ import signal
 import sys
 import threading
 import time
-from typing import Callable, Optional
+from typing import Callable
 
 import structlog
+
 from app.config import config
 from app.trackers.adv_boss_tracker import (
     track_missing_blocks as track_adv_boss_missing_blocks,
@@ -17,21 +18,16 @@ from app.trackers.world_clear_tracker import (
     track_missing_blocks as track_world_clear_missing_blocks,
 )
 
-from shared.utils.rmq import RabbitMQ
-
 logger = structlog.get_logger(__name__)
 running = True
 
 
-def runner(name: str, func: Callable, interval: int, rmq: Optional[RabbitMQ] = None):
+def runner(name: str, func: Callable, interval: int):
     logger.info(f"Starting {name} tracker")
 
     while running:
         try:
-            if rmq:
-                func(rmq)
-            else:
-                func()
+            func()
             logger.info(f"{name} tracker completed cycle")
         except Exception as e:
             logger.error(f"Error in {name} tracker", exc_info=e)
@@ -51,22 +47,20 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    rmq = RabbitMQ(str(config.amqp_dsn))
-
     trackers = [
         (
             "AdventureBossTracker",
-            lambda: track_adv_boss_missing_blocks(rmq),
+            lambda: track_adv_boss_missing_blocks(),
             8,
         ),
         (
             "CourageTracker",
-            lambda: track_courage_missing_blocks(rmq),
+            lambda: track_courage_missing_blocks(),
             8,
         ),
         (
             "WorldClearTracker",
-            lambda: track_world_clear_missing_blocks(rmq),
+            lambda: track_world_clear_missing_blocks(),
             8,
         ),
         ("TxTracker", track_tx, 4),

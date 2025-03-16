@@ -2,18 +2,18 @@ from collections import defaultdict
 from datetime import datetime
 
 import structlog
-from app.config import config
-from app.schemas.message import TrackerMessage
-from app.utils.exp import apply_exp
-from app.utils.gql import get_explore_floor
-from app.utils.season_pass import apply_exp, fetch_adv_boss_history, verify_season_pass
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import scoped_session, sessionmaker
-
 from shared.enums import ActionType, PassType, PlanetID
 from shared.models.action import AdventureBossHistory, Block
 from shared.models.season_pass import Level
+from shared.schemas.message import TrackerMessage
 from shared.utils.season_pass import get_pass
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import scoped_session, sessionmaker
+
+from app.config import config
+from app.utils.exp import apply_exp
+from app.utils.gql import get_explore_floor
+from app.utils.season_pass import apply_exp, fetch_adv_boss_history, verify_season_pass
 
 AP_PER_ACTION = 2
 logger = structlog.get_logger(__name__)
@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn))
 
 
-def consume_adventure_boss_message(body: str):
+def consume_adventure_boss_message(message: TrackerMessage):
     """
     Receive action data from adv_boss_tracker and give adv.boss exp. to avatar.
 
@@ -48,7 +48,6 @@ def consume_adventure_boss_message(body: str):
     }
     """
 
-    message = TrackerMessage.model_validate(body)
     sess = scoped_session(sessionmaker(bind=engine))
 
     try:

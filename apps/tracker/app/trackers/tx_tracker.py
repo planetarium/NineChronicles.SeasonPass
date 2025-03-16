@@ -24,7 +24,7 @@ engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
 def process(
     planet_id: PlanetID, tx_id: str
 ) -> Tuple[str, Optional[TxStatus], Optional[str]]:
-    client = GQLClient({planet_id: config.gql_url}, config.headless_jwt_secret)
+    client = GQLClient(config.converted_gql_url_map, config.headless_jwt_secret)
     client.reset(planet_id)
     query = dsl_gql(
         DSLQuery(

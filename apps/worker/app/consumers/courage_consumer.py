@@ -3,19 +3,19 @@ from typing import Dict, List
 
 import requests
 import structlog
-from app.config import config
-from app.schemas.message import TrackerMessage
-from app.utils.season_pass import apply_exp, verify_season_pass
-from app.utils.stake import StakeAPCoef
-from sqlalchemy import create_engine, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import scoped_session, sessionmaker
-
 from shared.enums import ActionType, PassType, PlanetID
 from shared.models.action import ActionHistory, Block
 from shared.models.season_pass import Level
 from shared.models.user import UserSeasonPass
+from shared.schemas.message import TrackerMessage
 from shared.utils.season_pass import create_jwt_token, get_pass
+from sqlalchemy import create_engine, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import scoped_session, sessionmaker
+
+from app.config import config
+from app.utils.season_pass import apply_exp, verify_season_pass
+from app.utils.stake import StakeAPCoef
 
 AP_PER_ADVENTURE = 5
 
@@ -87,7 +87,7 @@ def handle_sweep(
         )
 
 
-def consume_courage_message(body: str):
+def consume_courage_message(message: TrackerMessage):
     """
     Receive action data from block_tracker and give brave exp. to avatar.
 
@@ -116,7 +116,6 @@ def consume_courage_message(body: str):
         }
     }
     """
-    message = TrackerMessage.model_validate(body)
     sess = scoped_session(sessionmaker(bind=engine))
 
     try:

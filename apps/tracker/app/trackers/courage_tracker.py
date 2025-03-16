@@ -5,19 +5,18 @@ from collections import defaultdict
 
 import jwt
 import structlog
-from app.config import config
-from app.schemas.action import ActionJson
-from app.schemas.message import Message
-from app.utils.gql import fetch_block_data, get_block_tip
+from shared.enums import PassType
+from shared.models.action import Block
+from shared.models.arena import BattleHistory
+from shared.schemas.message import TrackerMessage
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from shared.constants import COURAGE_QUEUE_NAME
-from shared.enums import PassType
-from shared.models.action import Block
-from shared.models.arena import BattleHistory
-from shared.utils.rmq import RabbitMQ
+from app.celery import send_to_worker
+from app.config import config
+from app.schemas.action import ActionJson
+from app.utils.gql import fetch_block_data, get_block_tip
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn))
@@ -43,7 +42,7 @@ def validate_battle_token(token: str):
         raise ValueError("Invalid token.")
 
 
-def track_courage_actions(rmq: RabbitMQ, block_index: int):
+def track_courage_actions(block_index: int):
     tx_data, tx_result_list = fetch_block_data(
         config.gql_url, block_index, PassType.COURAGE_PASS, config.headless_jwt_secret
     )
@@ -101,23 +100,20 @@ def track_courage_actions(rmq: RabbitMQ, block_index: int):
             )
 
     logger.info(
-        f"Publish to {COURAGE_QUEUE_NAME}",
-        tracker="courage_tracker",
-        publish_count=len(action_data),
+        f"Sending task to Celery worker: season_pass.process_courage",
         planet_id=config.planet_id.decode(),
         block=block_index,
+        action_count=len(action_data),
     )
-    rmq.publish(
-        routing_key=COURAGE_QUEUE_NAME,
-        body=Message(
-            planet_id=config.planet_id.decode(),
-            block=block_index,
-            action_data=action_data,
-        ).model_dump(),
-    )
+    message = TrackerMessage(
+        planet_id=config.planet_id.decode(),
+        block=block_index,
+        action_data=action_data,
+    ).model_dump()
+    send_to_worker("season_pass.process_courage", message)
 
 
-def track_missing_blocks(rmq: RabbitMQ):
+def track_missing_blocks():
     sess = scoped_session(sessionmaker(bind=engine))
     try:
         # Get missing blocks
@@ -151,7 +147,7 @@ def track_missing_blocks(rmq: RabbitMQ):
     block_dict = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         for index in missing_blocks:
-            block_dict[executor.submit(track_courage_actions, rmq, index)] = (
+            block_dict[executor.submit(track_courage_actions, index)] = (
                 index,
                 PassType.COURAGE_PASS,
             )

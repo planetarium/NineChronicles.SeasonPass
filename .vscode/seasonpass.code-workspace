@@ -5,8 +5,8 @@
             "path": "../"
         },
         {
-            "name": "consumer",
-            "path": "../apps/consumer"
+            "name": "worker",
+            "path": "../apps/worker"
         },
         {
             "name": "api",

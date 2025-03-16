@@ -7,8 +7,9 @@ from shared.enums import PlanetID
 
 
 class Settings(BaseSettings):
-    pg_dsn: PostgresDsn = "postgresql://local_test:password@127.0.0.1:5432/season_pass"
-    amqp_dsn: AmqpDsn = "amqp://local_test:password@127.0.0.1:5672/"
+    pg_dsn: str = "postgresql://local_test:password@127.0.0.1:5432/season_pass"
+    celery_broker_url: str = "pyamqp://local_test:password@127.0.0.1:5672/"
+    celery_result_backend: str = "redis://127.0.0.1:6379/0"
     headless_jwt_secret: Optional[str] = None
     db_echo: bool = False
     stage: str = "development"

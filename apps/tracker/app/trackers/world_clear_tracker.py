@@ -4,23 +4,22 @@ import time
 from collections import defaultdict
 
 import structlog
-from app.config import config
-from app.schemas.action import ActionJson
-from app.schemas.message import Message
-from app.utils.gql import fetch_block_data, get_block_tip
+from shared.enums import PassType
+from shared.models.action import Block
+from shared.schemas.message import TrackerMessage
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from shared.constants import WORLD_CLEAR_QUEUE_NAME
-from shared.enums import PassType
-from shared.models.action import Block
-from shared.utils.rmq import RabbitMQ
+from app.celery import send_to_worker
+from app.config import config
+from app.schemas.action import ActionJson
+from app.utils.gql import fetch_block_data, get_block_tip
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn))
 
 
-def track_world_clear_actions(rmq: RabbitMQ, block_index: int):
+def track_world_clear_actions(block_index: int):
     tx_data, tx_result_list = fetch_block_data(
         config.gql_url,
         block_index,
@@ -52,23 +51,20 @@ def track_world_clear_actions(rmq: RabbitMQ, block_index: int):
             )
 
     logger.info(
-        f"Publish to {WORLD_CLEAR_QUEUE_NAME}",
-        tracker="world_clear_tracker",
-        publish_count=len(action_data),
+        f"Sending task to Celery worker: season_pass.process_world_clear",
         planet_id=config.planet_id.decode(),
         block=block_index,
+        action_count=len(action_data),
     )
-    rmq.publish(
-        routing_key=WORLD_CLEAR_QUEUE_NAME,
-        body=Message(
-            planet_id=config.planet_id.decode(),
-            block=block_index,
-            action_data=action_data,
-        ).model_dump(),
-    )
+    message = TrackerMessage(
+        planet_id=config.planet_id.decode(),
+        block=block_index,
+        action_data=action_data,
+    ).model_dump()
+    send_to_worker("season_pass.process_world_clear", message)
 
 
-def track_missing_blocks(rmq: RabbitMQ):
+def track_missing_blocks():
     sess = scoped_session(sessionmaker(bind=engine))
     try:
         # Get missing blocks
@@ -102,7 +98,7 @@ def track_missing_blocks(rmq: RabbitMQ):
     block_dict = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         for index in missing_blocks:
-            block_dict[executor.submit(track_world_clear_actions, rmq, index)] = index
+            block_dict[executor.submit(track_world_clear_actions, index)] = index
         for future in concurrent.futures.as_completed(block_dict):
             index = block_dict[future]
             exc = future.exception()

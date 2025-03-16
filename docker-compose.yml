@@ -27,6 +27,16 @@ services:
     networks:
       - app-network
       
+  redis:
+    image: redis:latest
+    container_name: season_pass_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - season_pass_redis_data:/data
+    networks:
+      - app-network
+      
   api:
     build:
       context: .
@@ -41,9 +51,11 @@ services:
       - API_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      - API_REDIS_DSN=redis://redis:6379/0
     depends_on:
       - postgres
       - rabbitmq
+      - redis
     networks:
       - app-network
 
@@ -57,31 +69,59 @@ services:
     environment:
       - TRACKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
       - TRACKER_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
+      - TRACKER_REDIS_DSN=redis://redis:6379/0
     depends_on:
       - postgres
       - rabbitmq
+      - redis
     networks:
       - app-network
 
-  consumer:
+  celery-worker:
     build:
       context: .
       dockerfile: Dockerfile.Consumer
-    container_name: season_pass_consumer
+    container_name: season_pass_celery_worker
+    command: celery -A app.celery_app worker --loglevel=info
     env_file:
       - .env.consumer
     environment:
-      - CONSUMER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
-      - CONSUMER_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
+      - WORKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - WORKER_REDIS_DSN=redis://redis:6379/0
+      - WORKER_BROKER_URL=pyamqp://local_test:password@rabbitmq:5672/
+      - WORKER_RESULT_BACKEND=redis://redis:6379/0
+      - C_FORCE_ROOT=true
     depends_on:
       - postgres
       - rabbitmq
+      - redis
+    networks:
+      - app-network
+
+  celery-flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.Consumer
+    container_name: season_pass_celery_flower
+    command: celery -A app.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env.consumer
+    environment:
+      - WORKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - WORKER_REDIS_DSN=redis://redis:6379/0
+      - WORKER_BROKER_URL=pyamqp://local_test:password@rabbitmq:5672/
+      - WORKER_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - celery-worker
     networks:
       - app-network
 
 volumes:
   season_pass_postgres_data:
   season_pass_rabbitmq_data:
+  season_pass_redis_data:
 
 networks:
   app-network:

@@ -4,19 +4,19 @@ import json
 import structlog
 from shared.enums import TxStatus
 from shared.models.user import Claim
+from shared.schemas.message import ClaimMessage
 from shared.utils._graphql import GQLClient
 from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from app.config import config
-from app.schemas.message import ClaimMessage
 from app.utils.aws import Account, fetch_kms_key_id
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
 
 
-def consume_claim_message(body: str):
+def consume_claim_message(message: ClaimMessage):
     """
     # SeasonPass claim handler
 
@@ -26,7 +26,6 @@ def consume_claim_message(body: str):
     To create brand-new Tx, you should erase former nonce before send new message.
     """
 
-    message = ClaimMessage.model_validate(body)
     sess = scoped_session(sessionmaker(bind=engine))
     account = Account(fetch_kms_key_id(config.stage, config.region_name))
     gql = GQLClient(config.converted_gql_url_map, config.headless_jwt_secret)

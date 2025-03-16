@@ -16,6 +16,7 @@ build-backend = "poetry.core.masonry.api"
 python = "^3.11"
 structlog = "^25.2.0"
 pydantic-settings = "^2.8.1"
+celery = "^5.4"
 shared = { path = "../shared" }
 
 [tool.poetry.group.test.dependencies]

@@ -6,17 +6,18 @@ from typing import List
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends
-from shared.constants import CLAIM_QUEUE_NAME
 from shared.enums import PassType, PlanetID, TxStatus
 from shared.models.season_pass import SeasonPass
 from shared.models.user import Claim, UserSeasonPass
+from shared.schemas.message import ClaimMessage
 from shared.utils._graphql import GQLClient
 from shared.utils.season_pass import get_level, get_max_level, get_pass
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
+from app.celery import send_to_worker
 from app.config import config
-from app.dependencies import rmq, session
+from app.dependencies import session
 from app.exceptions import (
     InvalidSeasonError,
     InvalidUpgradeRequestError,
@@ -193,9 +194,7 @@ def all_user_status(
     response_model=UserSeasonPassSchema,
     dependencies=[Depends(verify_token)],
 )
-def upgrade_season_pass(
-    request: UpgradeRequestSchema, sess=Depends(session), rmq=Depends(rmq)
-):
+def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
     """
     # Upgrade SeasonPass status to premium or premium plus
     ---
@@ -308,11 +307,12 @@ def upgrade_season_pass(
         sess.commit()
         sess.refresh(claim)
 
-        rmq.publish(
-            routing_key=CLAIM_QUEUE_NAME,
-            body={"uuid": claim.uuid},
+        # Send task to Celery worker
+        claim_message = ClaimMessage(uuid=claim.uuid)
+        task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+        logging.debug(
+            f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
         )
-        logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
     sess.add(target_usp)
     sess.commit()
@@ -372,7 +372,7 @@ def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> 
 
 
 @router.post("/claim", response_model=ClaimResultSchema)
-def claim_reward(request: ClaimRequestSchema, sess=Depends(session), rmq=Depends(rmq)):
+def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     if request.force:
         target_pass = get_pass(sess, request.pass_type, request.season_index)
         if not target_pass:
@@ -422,13 +422,12 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session), rmq=Depends
     sess.commit()
     sess.refresh(user_season)
 
-    # Send message to SQS
     if claim.reward_list:
-        rmq.publish(
-            routing_key=CLAIM_QUEUE_NAME,
-            body={"uuid": claim.uuid},
+        claim_message = ClaimMessage(uuid=claim.uuid)
+        task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+        logging.debug(
+            f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
         )
-        logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
     # Return result
     return ClaimResultSchema(
@@ -438,9 +437,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session), rmq=Depends
 
 
 @router.post("/claim-prev", response_model=ClaimResultSchema)
-def claim_prev_reward(
-    request: ClaimRequestSchema, sess=Depends(session), rmq=Depends(rmq)
-):
+def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
     # Validation
     if request.pass_type == PassType.WORLD_CLEAR_PASS:
         raise InvalidSeasonError(
@@ -488,13 +485,12 @@ def claim_prev_reward(
     sess.commit()
     sess.refresh(user_season)
 
-    # Send message to SQS
     if claim.reward_list:
-        rmq.publish(
-            routing_key=CLAIM_QUEUE_NAME,
-            body={"uuid": claim.uuid},
+        claim_message = ClaimMessage(uuid=claim.uuid)
+        task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+        logging.debug(
+            f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
         )
-        logging.debug(f"Message for claim {claim.uuid} sent to queue")
 
     # Return result
     return ClaimResultSchema(

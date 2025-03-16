@@ -22,4 +22,9 @@ WORKDIR /app/apps/consumer
 
 RUN poetry install --no-root
 
-CMD ["python", "app.py"]
+# Create entrypoint script to make it easier to run different commands
+COPY ./scripts/entrypoint-consumer.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
