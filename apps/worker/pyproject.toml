@@ -18,9 +18,8 @@ structlog = "^25.2.0"
 boto3 = "^1.28.65"
 pydantic-settings = "^2.8.1"
 shared = { path = "../shared" }
-celery = "^5.4"
+celery = { extras = ["redis"], version = "^5.4" }
 flower = "^2.0.1"
-redis = "^5.0.1"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.0,<7.2"
