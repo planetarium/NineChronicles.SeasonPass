@@ -106,7 +106,7 @@ class ActionJson:
             return 1
         elif "sweep" in self.type_id:
             # !!! WARNING: This returns used AP, not play count !!!
-            return self.actionPoint + self.apStoneCount * AP_PER_STONE
+            return int(self.actionPoint) + int(self.apStoneCount) * AP_PER_STONE
         elif "event" in self.type_id:
             return 1
         else:  # hack_and_slash
