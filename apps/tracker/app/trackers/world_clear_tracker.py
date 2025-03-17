@@ -45,8 +45,12 @@ def track_world_clear_actions(block_index: int):
                     "tx_id": tx["id"],
                     "agent_addr": tx["signer"].lower(),
                     "avatar_addr": action_json.avatar_addr.lower(),
-                    "world_id": action_json.worldId,
-                    "stage_id": action_json.stageId,
+                    "world_id": (
+                        action_json.worldId if int(action_json.worldId) > 0 else 0
+                    ),
+                    "stage_id": (
+                        action_json.stageId if int(action_json.stageId) > 0 else 0
+                    ),
                 }
             )
 
