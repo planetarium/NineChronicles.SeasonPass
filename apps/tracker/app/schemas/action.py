@@ -1,5 +1,6 @@
-from dataclasses import dataclass
 from typing import List, Optional
+
+from pydantic.v1.dataclasses import dataclass
 
 AP_PER_STONE = 120
 
@@ -106,7 +107,7 @@ class ActionJson:
             return 1
         elif "sweep" in self.type_id:
             # !!! WARNING: This returns used AP, not play count !!!
-            return int(self.actionPoint) + int(self.apStoneCount) * AP_PER_STONE
+            return self.actionPoint + self.apStoneCount * AP_PER_STONE
         elif "event" in self.type_id:
             return 1
         else:  # hack_and_slash

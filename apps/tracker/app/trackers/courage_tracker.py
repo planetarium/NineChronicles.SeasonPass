@@ -95,7 +95,7 @@ def track_courage_actions(block_index: int):
                     "tx_id": tx["id"],
                     "agent_addr": tx["signer"].lower(),
                     "avatar_addr": action_json.avatar_addr.lower(),
-                    "count_base": int(action_json.count_base),
+                    "count_base": action_json.count_base,
                 }
             )
 
