@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from app.config import config
-from app.utils.aws import Account, fetch_kms_key_id
+from app.utils.aws import Account
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
