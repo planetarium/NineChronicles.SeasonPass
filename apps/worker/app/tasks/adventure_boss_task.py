@@ -15,6 +15,8 @@ logger = structlog.get_logger(__name__)
     max_retries=3,
     default_retry_delay=30,
     acks_late=True,
+    priority=1,
+    queue="tracker_queue",
 )
 def process_adventure_boss(self, message: Dict[str, Any]) -> str:
     """

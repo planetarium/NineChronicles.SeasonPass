@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         "0x000000000001": "https://heimdall-rpc.nine-chronicles.com/graphql",
     }
     region_name: str = "us-east-2"
+    kms_key_id: str
     stage: str = "development"
     headless_jwt_secret: Optional[str] = None
 

@@ -15,6 +15,8 @@ logger = structlog.get_logger(__name__)
     max_retries=3,
     default_retry_delay=30,
     acks_late=True,
+    priority=0,
+    queue="claim_queue",
 )
 def process_claim(self, message: Dict[str, Any]) -> str:
     """

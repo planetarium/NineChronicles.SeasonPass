@@ -27,9 +27,7 @@ def consume_claim_message(message: ClaimMessage):
     """
 
     sess = scoped_session(sessionmaker(bind=engine))
-    account = Account(
-        fetch_kms_key_id(config.stage, config.region_name), config.region_name
-    )
+    account = Account(config.kms_key_id, config.region_name)
     gql = GQLClient(config.converted_gql_url_map, config.headless_jwt_secret)
 
     try:

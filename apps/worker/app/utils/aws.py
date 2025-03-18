@@ -5,7 +5,6 @@ from base64 import b64decode
 from typing import Optional, Tuple
 
 import boto3
-from app.utils.gql import derive_address
 from botocore.exceptions import ClientError
 from Crypto.Hash import keccak
 from eth_account import Account as EthAccount
@@ -13,19 +12,9 @@ from eth_utils import to_checksum_address
 from pyasn1.codec.der.decoder import decode as der_decode
 from pyasn1.codec.der.encoder import encode as der_encode
 from pyasn1.type.univ import Integer, SequenceOf
-
 from shared.utils._crypto import ECDSASignatureRecord, SPKIRecord
 
-
-def fetch_kms_key_id(stage: str, region: str) -> Optional[str]:
-    client = boto3.client("ssm", region_name=region)
-    try:
-        return client.get_parameter(
-            Name=f"{stage}_9c_SEASON_PASS_KMS_KEY_ID", WithDecryption=True
-        )["Parameter"]["Value"]
-    except Exception as e:
-        logging.error(e)
-        return None
+from app.utils.gql import derive_address
 
 
 class Account:
