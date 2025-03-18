@@ -187,13 +187,13 @@ class GQLClient:
         return True, "", result["stageTransaction"]
 
     def get_last_cleared_stage(
-        self, avatar_addr: str, timeout: int = None
+        self, planet_id: PlanetID, avatar_addr: str, timeout: int = None
     ) -> Tuple[int, int]:
         query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{ 
         worldInformation {{ lastClearedStage {{ worldId stageId }} }} 
         }} }} }}"""
         resp = requests.post(
-            self._url,
+            self.gql_url_map[planet_id],
             json={"query": query},
             headers={"Authorization": f"Bearer {self.__create_token()}"},
             timeout=timeout,
