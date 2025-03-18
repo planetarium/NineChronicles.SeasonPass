@@ -12,14 +12,12 @@ claim_queue = Queue(
     "claim_queue",
     exchange=task_exchange,
     routing_key="claim_tasks",
-    queue_arguments={"x-max-priority": 10},
 )
 
 tracker_queue = Queue(
     "tracker_queue",
     exchange=task_exchange,
     routing_key="tracker_tasks",
-    queue_arguments={"x-max-priority": 10},
 )
 
 app = Celery(
@@ -36,15 +34,12 @@ app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
-    # Priority configuration
     task_queues=(claim_queue, tracker_queue),
     task_default_queue="tracker_queue",
     task_default_exchange="tasks",
     task_default_routing_key="tracker_tasks",
-    # Ensure messages are durable
     task_create_missing_queues=True,
     task_default_delivery_mode="persistent",
-    # Queue configuration for workers
     worker_direct=True,
 )
 
