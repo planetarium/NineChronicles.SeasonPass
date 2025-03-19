@@ -53,7 +53,7 @@ def verify_token(authorization: Annotated[str, Header()]):
         if prefix != "Bearer":
             raise Exception("Invalid token type. Use `Bearer [TOKEN]`.")
         token_data = jwt.decode(
-            body, config.headless_jwt_secret, audience="SeasonPass", algorithms=["HS256"]
+            body, config.jwt_secret, audience="SeasonPass", algorithms=["HS256"]
         )
         if (
             datetime.fromtimestamp(token_data["iat"], tz=timezone.utc)

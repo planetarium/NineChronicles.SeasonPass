@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     pg_dsn: str = "postgresql://local_test:password@127.0.0.1:5432/season_pass"
     celery_broker_url: str = "pyamqp://local_test:password@127.0.0.1:5672/"
     celery_result_backend: str = "redis://127.0.0.1:6379/0"
+    jwt_secret: str
     headless_jwt_secret: Optional[str] = None
     db_echo: bool = False
     stage: str = "development"
