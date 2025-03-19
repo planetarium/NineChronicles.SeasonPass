@@ -10,9 +10,7 @@ class Settings(BaseSettings):
     pg_dsn: PostgresDsn = "postgresql://local_test:password@127.0.0.1:5432/season_pass"
     celery_broker_url: str = "pyamqp://local_test:password@127.0.0.1:5672/"
     celery_result_backend: str = "redis://127.0.0.1:6379/0"
-    gql_url: str = "https://odin-rpc.nine-chronicles.com/graphql"
     headless_jwt_secret: Optional[str] = None
-    planet_str: str = "0x000000000000"
     start_block_index: int
     arena_service_jwt_public_key: str
     gql_url_map: dict[str, str] = {
@@ -23,10 +21,6 @@ class Settings(BaseSettings):
     @property
     def converted_gql_url_map(self) -> dict[PlanetID, str]:
         return {PlanetID(k.encode()): v for k, v in self.gql_url_map.items()}
-
-    @property
-    def planet_id(self) -> PlanetID:
-        return PlanetID(self.planet_str.encode())
 
     @property
     def arena_service_jwt_public_key_pem(self) -> str:

@@ -89,5 +89,5 @@ def main():
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting trackers for planet: {config.planet_id.decode()}")
+    logger.info(f"Starting trackers")
     main()
