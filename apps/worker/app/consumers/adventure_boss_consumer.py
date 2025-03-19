@@ -152,7 +152,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
                         # Get current floor data from chain
                         # NOTE: Do not save this to DB because this can make confusion to explore action
                         current_floor = get_explore_floor(
-                            config.gql_url_map[planet_id],
+                            config.gql_url_map[planet_id.decode()],
                             block_index,
                             action["season_index"],
                             action["avatar_addr"],
@@ -173,7 +173,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
                 # Get floor data before explore
                 for action in action_data:
                     current_floor = get_explore_floor(
-                        config.gql_url_map[planet_id],
+                        config.gql_url_map[planet_id.decode()],
                         block_index,
                         action["season_index"],
                         action["avatar_addr"],
@@ -190,7 +190,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
                     else:
                         # FIXME: 이렇게 하면 상태를 엄청 많이 가져와야 하는데 지금 이거 말고는 어떻게 할 수 있는 방법이 없다...
                         current_floor = get_explore_floor(
-                            config.gql_url_map[planet_id],
+                            config.gql_url_map[planet_id.decode()],
                             block_index,
                             action["season_index"],
                             action["avatar_addr"],
