@@ -69,7 +69,7 @@ def track_missing_blocks():
         sess = scoped_session(sessionmaker(bind=engine))
         try:
             # Get missing blocks
-            start_block = config.start_block_index
+            start_block = config.start_block_index_map[planet_id]
             expected_all = set(
                 range(start_block, get_block_tip(gql_url, config.headless_jwt_secret))
             )  # Sloth needs 1 block to render actions: get tip-1
