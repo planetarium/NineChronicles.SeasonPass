@@ -1,7 +1,7 @@
 import base64
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import AmqpDsn, PostgresDsn
+from pydantic import AmqpDsn, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from shared.enums import PlanetID
 
@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         "0x000000000000": 13796504,
         "0x000000000001": 5320341,
     }
+    enabled_trackers: List[str] = ["AdventureBossTracker", "CourageTracker", "WorldClearTracker", "TxTracker"]
 
     @property
     def converted_gql_url_map(self) -> dict[PlanetID, str]:

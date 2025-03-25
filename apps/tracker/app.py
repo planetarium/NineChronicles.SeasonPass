@@ -47,24 +47,32 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    trackers = [
-        (
-            "AdventureBossTracker",
+    all_trackers = {
+        "AdventureBossTracker": (
             lambda: track_adv_boss_missing_blocks(),
             8,
         ),
-        (
-            "CourageTracker",
+        "CourageTracker": (
             lambda: track_courage_missing_blocks(),
             8,
         ),
-        (
-            "WorldClearTracker",
+        "WorldClearTracker": (
             lambda: track_world_clear_missing_blocks(),
             8,
         ),
-        ("TxTracker", track_tx, 4),
-    ]
+        "TxTracker": (track_tx, 4),
+    }
+
+    enabled_tracker_names = config.enabled_trackers
+    logger.info(f"Enabled trackers: {', '.join(enabled_tracker_names)}")
+    
+    trackers = []
+    for name in enabled_tracker_names:
+        if name in all_trackers:
+            func, interval = all_trackers[name]
+            trackers.append((name, func, interval))
+        else:
+            logger.warning(f"Unknown tracker '{name}' specified in config, skipping")
 
     threads = []
     for name, func, interval in trackers:
