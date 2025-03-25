@@ -79,7 +79,7 @@ def track_missing_blocks():
                         Block.planet_id == planet_id.encode(),
                         Block.index >= start_block,
                         Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
-                    )
+                    ).limit(10)
                 ).fetchall()
             )
             missing_blocks = expected_all - all_blocks

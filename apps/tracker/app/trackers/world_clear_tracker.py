@@ -79,7 +79,7 @@ def track_missing_blocks():
                         Block.planet_id == planet_id.encode(),
                         Block.pass_type == PassType.WORLD_CLEAR_PASS,
                         Block.index >= start_block,
-                    )
+                    ).limit(10)
                 ).fetchall()
             )
             missing_blocks = expected_all - all_blocks
