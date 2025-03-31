@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+ARG POETRY_VERSION=1.8
+
+RUN apt update && apt install -y \
+    postgresql-client \
+    vim \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV POETRY_VIRTUALENVS_CREATE=false
+ENV POETRY_VIRTUALENVS_IN_PROJECT=false
+
+RUN pip install -U pip "poetry==${POETRY_VERSION}"
+RUN poetry config virtualenvs.create false --local
+
+COPY ./apps/shared /app/apps/shared
+WORKDIR /app/apps/shared
+
+COPY ./apps/worker /app/apps/worker
+WORKDIR /app/apps/worker
+
+RUN poetry install --no-root
+
+CMD ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]

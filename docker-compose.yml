@@ -1,0 +1,150 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: season_pass_postgres
+    environment:
+      POSTGRES_USER: local_test
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: season_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - season_pass_postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: season_pass_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: local_test
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5672:5672"   
+      - "15672:15672" 
+    volumes:
+      - season_pass_rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+      
+  redis:
+    image: redis:latest
+    container_name: season_pass_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - season_pass_redis_data:/data
+    networks:
+      - app-network
+      
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.Api
+    container_name: season_pass_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.api
+    environment:
+      - API_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - API_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_REDIS_DSN=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - app-network
+
+  tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile.Tracker
+    container_name: season_pass_tracker
+    env_file:
+      - .env.tracker
+    environment:
+      - TRACKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - TRACKER_AMQP_DSN=amqp://local_test:password@rabbitmq:5672/
+      - TRACKER_REDIS_DSN=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - app-network
+
+  celery-claim-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.Worker
+    container_name: season_pass_celery_claim_worker
+    command: celery -A app.celery_app worker --loglevel=info -Q claim_queue --concurrency=1 -n claim_worker@%h
+    env_file:
+      - .env.worker
+    environment:
+      - WORKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - WORKER_REDIS_DSN=redis://redis:6379/0
+      - WORKER_BROKER_URL=pyamqp://local_test:password@rabbitmq:5672/
+      - WORKER_RESULT_BACKEND=redis://redis:6379/0
+      - C_FORCE_ROOT=true
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - app-network
+
+  celery-tracker-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.Worker
+    container_name: season_pass_celery_tracker_worker
+    command: celery -A app.celery_app worker --loglevel=info -Q tracker_queue -n tracker_worker@%h
+    env_file:
+      - .env.worker
+    environment:
+      - WORKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - WORKER_REDIS_DSN=redis://redis:6379/0
+      - WORKER_BROKER_URL=pyamqp://local_test:password@rabbitmq:5672/
+      - WORKER_RESULT_BACKEND=redis://redis:6379/0
+      - C_FORCE_ROOT=true
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - app-network
+
+  celery-flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.Worker
+    container_name: season_pass_celery_flower
+    command: celery -A app.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env.worker
+    environment:
+      - WORKER_PG_DSN=postgresql://local_test:password@postgres:5432/season_pass
+      - WORKER_REDIS_DSN=redis://redis:6379/0
+      - WORKER_BROKER_URL=pyamqp://local_test:password@rabbitmq:5672/
+      - WORKER_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - celery-tracker-worker
+      - celery-claim-worker
+    networks:
+      - app-network
+
+volumes:
+  season_pass_postgres_data:
+  season_pass_rabbitmq_data:
+  season_pass_redis_data:
+
+networks:
+  app-network:
+    driver: bridge
