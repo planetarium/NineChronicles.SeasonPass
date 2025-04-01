@@ -324,8 +324,6 @@ def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> 
     available_rewards = user_season.available_rewards(sess)
     max_level, repeat_exp = get_max_level(sess, target_pass.pass_type)
     reward_coef = 1
-    if user_season.planet_id in (PlanetID.THOR, PlanetID.THOR_INTERNAL):
-        reward_coef = 5
 
     reward_dict = {x["level"]: x for x in target_pass.reward_list}
     target_reward_dict = defaultdict(int)

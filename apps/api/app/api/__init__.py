@@ -71,9 +71,6 @@ def check_nonce(planet: str, sess=Depends(session)):
     elif planet.lower() == "heimdall":
         planet_id = PlanetID.HEIMDALL if is_mainnet else PlanetID.HEIMDALL_INTERNAL
         url = config.converted_gql_url_map[planet_id]
-    elif planet.lower() == "thor":
-        planet_id = PlanetID.THOR if is_mainnet else PlanetID.THOR_INTERNAL
-        url = config.converted_gql_url_map[planet_id]
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
 

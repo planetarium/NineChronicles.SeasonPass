@@ -77,7 +77,6 @@ jobs:
           STAGE: test
           ODIN_GQL_URL: https://odin-jwt.nine-chronicles.com/graphql
           HEIMDALL_GQL_URL: https://heimdall-jwt.nine-chronicles.com/graphql
-          # THOR_GQL_URL: https://thor-jwt.nine-chronicles.com/graphql
           DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
           HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
           JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}

@@ -15,7 +15,7 @@ tc = TestClient(app)
 @pytest.mark.usefixtures("sess")
 @pytest.mark.parametrize(
     "planet_id",
-    [PlanetID.ODIN_INTERNAL, PlanetID.HEIMDALL_INTERNAL, PlanetID.THOR_INTERNAL],
+    [PlanetID.ODIN_INTERNAL, PlanetID.HEIMDALL_INTERNAL],
 )
 @pytest.mark.parametrize(
     "pass_type",
