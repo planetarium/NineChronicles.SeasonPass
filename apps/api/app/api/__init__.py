@@ -107,14 +107,14 @@ def block_status(sess=Depends(session)):
     result = {}
 
     odin_planet = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
-    odin_tip = get_tip(config.odin_gql_url)
+    odin_tip = get_tip(config.converted_gql_url_map[odin_planet])
     odin_blocks = get_db_tip(sess, odin_planet)
     result[odin_planet.name] = {k.value: odin_tip - v for k, v in odin_blocks.items()}
 
     heimdall_planet = (
         PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL
     )
-    heimdall_tip = get_tip(config.heimdall_gql_url)
+    heimdall_tip = get_tip(config.converted_gql_url_map[heimdall_planet])
     heimdall_blocks = get_db_tip(sess, heimdall_planet)
     result[heimdall_planet.name] = {
         k.value: heimdall_tip - v for k, v in heimdall_blocks.items()
