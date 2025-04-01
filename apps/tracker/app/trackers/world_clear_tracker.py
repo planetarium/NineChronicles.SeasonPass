@@ -12,6 +12,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from app.celery import send_to_worker
 from app.config import config
+from app.consumers.world_clear_consumer import consume_world_clear_message
 from app.schemas.action import ActionJson
 from app.utils.gql import fetch_block_data, get_block_tip
 
@@ -60,8 +61,8 @@ def track_world_clear_actions(planet_id: str, gql_url: str, block_index: int):
         planet_id=planet_id,
         block=block_index,
         action_data=action_data,
-    ).model_dump()
-    send_to_worker("season_pass.process_world_clear", message)
+    )
+    consume_world_clear_message(message)
 
 
 def track_missing_blocks():
@@ -75,11 +76,13 @@ def track_missing_blocks():
             )
             all_blocks = set(
                 sess.scalars(
-                    select(Block.index).where(
+                    select(Block.index)
+                    .where(
                         Block.planet_id == planet_id.encode(),
                         Block.pass_type == PassType.WORLD_CLEAR_PASS,
                         Block.index >= start_block,
-                    ).limit(10)
+                    )
+                    .limit(10)
                 ).fetchall()
             )
             missing_blocks = expected_all - all_blocks
