@@ -44,7 +44,7 @@ def log_incoming_url(request: Request, call_next):
 
 
 @app.exception_handler(Exception)
-def handle_exceptions(e: Exception):
+def handle_exceptions(request: Request, e: Exception):
     logging.error(e)
     if type(e) in (SeasonNotFoundError, UserNotFoundError):
         status_code = HTTP_404_NOT_FOUND
@@ -57,7 +57,7 @@ def handle_exceptions(e: Exception):
     else:
         status_code = HTTP_500_INTERNAL_SERVER_ERROR
 
-    return JSONResponse(status_code=status_code, content=e)
+    return JSONResponse(status_code=status_code, content=str(e))
 
 
 @app.get("/ping", tags=["Default"])
