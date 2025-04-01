@@ -20,7 +20,13 @@ class Settings(BaseSettings):
         "0x000000000000": 13796504,
         "0x000000000001": 5320341,
     }
-    enabled_trackers: List[str] = ["AdventureBossTracker", "CourageTracker", "WorldClearTracker", "TxTracker"]
+    enabled_trackers: List[str] = [
+        "AdventureBossTracker",
+        "CourageTracker",
+        "WorldClearTracker",
+        "TxTracker",
+    ]
+    enabled_planets: List[str] = ["0x000000000000", "0x000000000001"]
 
     @property
     def converted_gql_url_map(self) -> dict[PlanetID, str]:

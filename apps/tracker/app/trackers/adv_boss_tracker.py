@@ -67,6 +67,9 @@ def track_adv_boss_actions(planet_id: str, gql_url: str, block_index: int):
 
 def track_missing_blocks():
     for planet_id, gql_url in config.gql_url_map.items():
+        if planet_id not in config.enabled_planets:
+            continue
+
         sess = scoped_session(sessionmaker(bind=engine))
         try:
             # Get missing blocks
