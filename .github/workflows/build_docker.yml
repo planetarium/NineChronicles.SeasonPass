@@ -1,41 +1,49 @@
-name: Build and push NineChronicles.SeasonPass Block Tracker Docker image
+name: Build Docker Images
 
 on:
   push:
-  workflow_call:
-    secrets:
-      DOCKER_USERNAME:
-        required: true
-      DOCKER_ACCESS_TOKEN:
-        required: true
+  workflow_dispatch:
 
 jobs:
-  publish_docker_image:
+  buildx:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        docker:
+          - repo: planetariumhq/season-pass-api
+            dockerfile: Dockerfile.Api
+          - repo: planetariumhq/season-pass-tracker
+            dockerfile: Dockerfile.Tracker
+          - repo: planetariumhq/season-pass-worker
+            dockerfile: Dockerfile.Worker
     steps:
-      - uses: actions/checkout@v3
-
-      - # Add support for more platforms with QEMU (optional)
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        # Add support for more platforms with QEMU (optional)
         # https://github.com/docker/setup-qemu-action
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
+      -
+        name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           platforms: linux/arm/v8,linux/amd64
-
-      - name: Login to DockerHub
+      -
+        name: Login to Docker Hub
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
-
-      - name: Build and push Docker image
-        id: docker_build
+      -
+        name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: .
           push: true
-          tags: planetariumhq/season-pass:git-${{ github.sha }}
-          platforms: linux/arm64, linux/amd64
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ matrix.docker.repo }}:git-${{ github.sha }}
+          file: ${{ matrix.docker.dockerfile }}
+        env:
+          BUILDKIT_PROGRESS: "plain"

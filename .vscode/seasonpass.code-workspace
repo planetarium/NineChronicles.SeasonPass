@@ -1,0 +1,37 @@
+{
+    "folders": [
+        {
+            "name": "root",
+            "path": "../"
+        },
+        {
+            "name": "worker",
+            "path": "../apps/worker"
+        },
+        {
+            "name": "api",
+            "path": "../apps/api"
+        },
+        {
+            "name": "tracker",
+            "path": "../apps/tracker"
+        },
+        {
+            "name": "shared",
+            "path": "../apps/shared"
+        },
+    ],
+    "settings": {
+        "[python]": {
+            "editor.defaultFormatter": "ms-python.black-formatter",
+            "editor.formatOnSave": true,
+            "editor.codeActionsOnSave": {
+                "source.organizeImports": "explicit"
+            },
+        },
+        "isort.args": [
+            "--profile",
+            "black"
+        ],
+    }
+}
