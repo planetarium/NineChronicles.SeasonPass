@@ -66,14 +66,11 @@ def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
 def check_nonce(planet: str, sess=Depends(session)):
     is_mainnet = config.stage == "mainnet"
     if planet.lower() == "odin":
-        url = config.odin_gql_url
         planet_id = PlanetID.ODIN if is_mainnet else PlanetID.ODIN_INTERNAL
+        url = config.converted_gql_url_map[planet_id]
     elif planet.lower() == "heimdall":
-        url = config.heimdall_gql_url
         planet_id = PlanetID.HEIMDALL if is_mainnet else PlanetID.HEIMDALL_INTERNAL
-    elif planet.lower() == "thor":
-        url = config.thor_gql_url
-        planet_id = PlanetID.THOR if is_mainnet else PlanetID.THOR_INTERNAL
+        url = config.converted_gql_url_map[planet_id]
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
 
@@ -168,11 +165,9 @@ def failure_claim(sess: Session = Depends(session)):
 @router.get("/balance/{planet}")
 def balance(planet: str):
     if planet.lower() == "odin":
-        url = config.odin_gql_url
+        url = config.converted_gql_url_map[PlanetID.ODIN]
     elif planet.lower() == "heimdall":
-        url = config.heimdall_gql_url
-    elif planet.lower() == "thor":
-        url = config.thor_gql_url
+        url = config.converted_gql_url_map[PlanetID.HEIMDALL]
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
     resp = requests.post(

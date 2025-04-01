@@ -23,7 +23,7 @@ def current_season(planet_id: str, pass_type: PassType, sess=Depends(session)):
     if not curr_season:
         raise SeasonNotFoundError("No active season pass for today")
 
-    reward_coef = 5 if planet_id in (PlanetID.THOR, PlanetID.THOR_INTERNAL) else 1
+    reward_coef = 1
 
     return SeasonPassSchema(
         id=curr_season.id,
