@@ -47,7 +47,6 @@ def track_courage_actions(planet_id: str, gql_url: str, block_index: int):
     tx_data, tx_result_list = fetch_block_data(
         gql_url, block_index, PassType.COURAGE_PASS, config.headless_jwt_secret
     )
-    time.sleep(0.2)
 
     action_data = defaultdict(list)
     agent_list = set()
@@ -134,7 +133,6 @@ def track_missing_blocks():
                         Block.pass_type == PassType.COURAGE_PASS,
                         Block.index >= start_block,
                     )
-                    .limit(10)
                 ).fetchall()
             )
             missing_blocks = expected_all - all_blocks

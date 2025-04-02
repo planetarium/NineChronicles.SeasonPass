@@ -27,7 +27,6 @@ def track_world_clear_actions(planet_id: str, gql_url: str, block_index: int):
         PassType.WORLD_CLEAR_PASS,
         config.headless_jwt_secret,
     )
-    time.sleep(0.2)
 
     action_data = defaultdict(list)
     agent_list = set()
@@ -85,7 +84,6 @@ def track_missing_blocks():
                         Block.pass_type == PassType.WORLD_CLEAR_PASS,
                         Block.index >= start_block,
                     )
-                    .limit(10)
                 ).fetchall()
             )
             missing_blocks = expected_all - all_blocks

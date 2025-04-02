@@ -27,7 +27,6 @@ def track_adv_boss_actions(planet_id: str, gql_url: str, block_index: int):
         PassType.ADVENTURE_BOSS_PASS,
         config.headless_jwt_secret,
     )
-    time.sleep(0.2)
 
     action_data = defaultdict(list)
     for i, tx in enumerate(tx_data):
@@ -85,7 +84,6 @@ def track_missing_blocks():
                         Block.index >= start_block,
                         Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
                     )
-                    .limit(10)
                 ).fetchall()
             )
             missing_blocks = expected_all - all_blocks
