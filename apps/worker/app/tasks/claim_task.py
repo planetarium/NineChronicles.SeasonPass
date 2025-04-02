@@ -12,8 +12,8 @@ logger = structlog.get_logger(__name__)
 @app.task(
     name="season_pass.process_claim",
     bind=True,
-    max_retries=3,
-    default_retry_delay=30,
+    max_retries=30,
+    default_retry_delay=60,
     acks_late=True,
     priority=0,
     queue="claim_queue",
