@@ -14,12 +14,6 @@ claim_queue = Queue(
     routing_key="claim_tasks",
 )
 
-tracker_queue = Queue(
-    "tracker_queue",
-    exchange=task_exchange,
-    routing_key="tracker_tasks",
-)
-
 app = Celery(
     "season_pass_worker", broker=config.broker_url, backend=config.result_backend
 )
@@ -34,10 +28,10 @@ app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
-    task_queues=(claim_queue, tracker_queue),
-    task_default_queue="tracker_queue",
+    task_queues=(claim_queue),
+    task_default_queue="claim_queue",
     task_default_exchange="tasks",
-    task_default_routing_key="tracker_tasks",
+    task_default_routing_key="claim_tasks",
     task_create_missing_queues=True,
     task_default_delivery_mode="persistent",
     worker_direct=True,
