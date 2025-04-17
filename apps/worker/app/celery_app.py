@@ -28,7 +28,7 @@ app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
-    task_queues=(claim_queue),
+    task_queues=(claim_queue,),
     task_default_queue="claim_queue",
     task_default_exchange="tasks",
     task_default_routing_key="claim_tasks",
