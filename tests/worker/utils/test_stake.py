@@ -1,9 +1,9 @@
 import os
 
 import pytest
+from worker.utils.stake import StakeAPCoef
 
 from season_pass import settings
-from worker.utils.stake import StakeAPCoef
 
 
 @pytest.mark.parametrize(

@@ -6,11 +6,10 @@ from typing import List
 import alembic.command
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
-
 from common.enums import PassType
 from common.models.season_pass import Level
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 TEST_AGENT_ADDR = "0x49d5fceb955800b2c532d6319e803c7d80f817af"
 TEST_AVATAR_ADDR = "0xc8ca85ae399de5c4dcad39e8a13cfa7cbceff066"
