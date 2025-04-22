@@ -1,16 +1,16 @@
 # Receive message from SQS and send season pass reward
+import hashlib
 import json
 
 import structlog
+from app.config import config
+from app.utils.aws import Account
 from shared.enums import TxStatus
 from shared.models.user import Claim
 from shared.schemas.message import ClaimMessage
 from shared.utils._graphql import GQLClient
 from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
-
-from app.config import config
-from app.utils.aws import Account
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
@@ -92,7 +92,9 @@ def consume_claim_message(message: ClaimMessage):
         )
         signature = account.sign_tx(unsigned_tx)
         signed_tx = gql.sign(claim.planet_id, unsigned_tx, signature)
+        tx_id = hashlib.sha256(signed_tx).hexdigest()
         claim.tx = signed_tx.hex()
+        claim.tx_id = tx_id
         sess.add(claim)
         target_claim_list.append(claim)
         if use_nonce:
@@ -100,13 +102,12 @@ def consume_claim_message(message: ClaimMessage):
         sess.commit()
 
         for claim in target_claim_list:
-            success, msg, tx_id = gql.stage(claim.planet_id, bytes.fromhex(claim.tx))
+            success, msg, _ = gql.stage(claim.planet_id, bytes.fromhex(claim.tx))
             if not success:
                 message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
                 logger.error(message)
                 raise Exception(message)
             claim.tx_status = TxStatus.STAGED
-            claim.tx_id = tx_id
             sess.add(claim)
             sess.commit()
     finally:
