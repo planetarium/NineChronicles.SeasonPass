@@ -1,7 +1,7 @@
 import pytest
-
 from common.enums import PlanetID
 from common.utils._graphql import GQL
+
 from season_pass import settings
 
 

@@ -2,16 +2,15 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from conftest import TEST_AGENT_ADDR, TEST_AVATAR_ADDR, add_test_data
-from fastapi.testclient import TestClient
-from sqlalchemy import select
-
 from common.enums import PassType, PlanetID
 from common.models.season_pass import SeasonPass
 from common.models.user import Claim, UserSeasonPass
+from conftest import TEST_AGENT_ADDR, TEST_AVATAR_ADDR, add_test_data
+from fastapi.testclient import TestClient
 from season_pass.exceptions import InvalidSeasonError, NotPremiumError
 from season_pass.main import app
 from season_pass.schemas.user import ClaimResultSchema, UserSeasonPassSchema
+from sqlalchemy import select
 
 tc = TestClient(app)
 

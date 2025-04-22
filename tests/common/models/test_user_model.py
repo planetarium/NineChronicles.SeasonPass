@@ -1,11 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from conftest import TEST_AGENT_ADDR, TEST_AVATAR_ADDR, add_test_data
-
 from common.enums import PassType, PlanetID
 from common.models.season_pass import SeasonPass
 from common.models.user import UserSeasonPass
+from conftest import TEST_AGENT_ADDR, TEST_AVATAR_ADDR, add_test_data
 
 
 @pytest.mark.usefixtures("sess")
