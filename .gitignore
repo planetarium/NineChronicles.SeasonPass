@@ -173,3 +173,13 @@ credential.pickle
 .idea/
 
 **/.python-version
+
+# VS Code
+.vscode/
+**/.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
