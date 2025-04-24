@@ -1,8 +1,17 @@
 import logging
-import os
 
 import uvicorn
+from app import api
+from app.config import config
+from app.exceptions import (
+    InvalidSeasonError,
+    NotPremiumError,
+    SeasonNotFoundError,
+    ServerOverloadError,
+    UserNotFoundError,
+)
 from fastapi import FastAPI
+from fastapi.security import HTTPBearer
 from requests import ReadTimeout
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
@@ -14,20 +23,11 @@ from starlette.status import (
     HTTP_503_SERVICE_UNAVAILABLE,
 )
 
-from app import api
-from app.celery import celery_app
-from app.config import config
-from app.exceptions import (
-    InvalidSeasonError,
-    NotPremiumError,
-    SeasonNotFoundError,
-    ServerOverloadError,
-    UserNotFoundError,
-)
-
 __VERSION__ = "0.3.1"
 
 stage = config.stage
+
+security = HTTPBearer()
 
 app = FastAPI(
     title="Nine Chronicles Season Pass Service",
