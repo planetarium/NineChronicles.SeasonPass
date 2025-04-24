@@ -1,7 +1,5 @@
-import base64
 from typing import Optional
 
-from pydantic import AmqpDsn, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from shared.enums import PlanetID
 
@@ -10,7 +8,7 @@ class Settings(BaseSettings):
     pg_dsn: str = "postgresql://local_test:password@127.0.0.1:5432/season_pass"
     celery_broker_url: str = "pyamqp://local_test:password@127.0.0.1:5672/"
     celery_result_backend: str = "redis://127.0.0.1:6379/0"
-    jwt_secret: str
+    jwt_secret: str = "default_secret_key"
     headless_jwt_secret: Optional[str] = None
     db_echo: bool = False
     stage: str = "development"
@@ -28,7 +26,9 @@ class Settings(BaseSettings):
     def converted_gql_url_map(self) -> dict[PlanetID, str]:
         return {PlanetID(k.encode()): v for k, v in self.gql_url_map.items()}
 
-    model_config = SettingsConfigDict(env_file=(".env"), env_prefix="API_")
+    model_config = SettingsConfigDict(
+        env_file=(".env"), env_prefix="API_", validate_default=True
+    )
 
 
 config = Settings()

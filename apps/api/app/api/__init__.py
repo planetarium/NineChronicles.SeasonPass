@@ -1,8 +1,9 @@
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 
 import requests
+from app.config import config
+from app.dependencies import session
 from fastapi import APIRouter, Depends
 from shared.constants import SEASONPASS_ADDRESS
 from shared.enums import PassType, PlanetID, TxStatus
@@ -13,14 +14,12 @@ from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
-from app.config import config
-from app.dependencies import session
-
-from . import season_pass, tmp, user
+from . import admin, season_pass, tmp, user
 
 __all__ = [
     season_pass,
     user,
+    admin,
 ]
 
 if config.stage != "mainnet":
@@ -152,7 +151,9 @@ def invalid_claim(sess: Session = Depends(session)):
 def failure_claim(sess: Session = Depends(session)):
     now = datetime.now(tz=timezone.utc)
     failure_claim_list = sess.scalars(
-        select(Claim).where(Claim.reward_list != [], Claim.tx_status == TxStatus.FAILURE)
+        select(Claim).where(
+            Claim.reward_list != [], Claim.tx_status == TxStatus.FAILURE
+        )
     ).fetchall()
     if failure_claim_list:
         return JSONResponse(
