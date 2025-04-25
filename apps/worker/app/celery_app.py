@@ -1,8 +1,7 @@
 import structlog
+from app.config import config
 from celery import Celery
 from kombu import Exchange, Queue
-
-from app.config import config
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +34,13 @@ app.conf.update(
     task_create_missing_queues=True,
     task_default_delivery_mode="persistent",
     worker_direct=True,
+    beat_schedule={
+        "retry-stage-every-5-minutes": {
+            "task": "season_pass.process_retry_stage",
+            "schedule": 300.0,
+            "options": {"queue": "claim_queue"},
+        },
+    },
 )
 
 app.autodiscover_tasks(["app.tasks"])
