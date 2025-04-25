@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
+from app.celery import send_to_worker
 from app.dependencies import session
 from app.utils import verify_token
 from fastapi import APIRouter, Depends, Query, Security
@@ -93,3 +94,10 @@ def get_claims(
     ]
 
     return PaginatedClaimResponse(total=total_count, items=items)
+
+
+@router.post("/retry-stage")
+def trigger_retry_stage():
+    """스테이징 실패한 트랜잭션들을 재시도하는 태스크를 트리거합니다."""
+    task_id = send_to_worker("season_pass.process_retry_stage", message={})
+    return {"task_id": task_id, "status": "Task triggered successfully"}
