@@ -1,10 +1,8 @@
-import json
 from typing import Any, Dict
 
 import structlog
-from celery import Celery
-
 from app.config import config
+from celery import Celery
 
 logger = structlog.get_logger(__name__)
 
@@ -38,7 +36,10 @@ def send_to_worker(task_name: str, message: Dict[str, Any]) -> str:
         logger.info(f"Sending task to Celery worker: {task_name}", message=message)
 
         queue = None
-        if task_name == "season_pass.process_claim":
+        if task_name in [
+            "season_pass.process_claim",
+            "season_pass.process_retry_stage",
+        ]:
             queue = "claim_queue"
         elif task_name in [
             "season_pass.process_adventure_boss",
