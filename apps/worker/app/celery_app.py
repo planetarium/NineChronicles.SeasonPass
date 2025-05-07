@@ -40,6 +40,11 @@ app.conf.update(
             "schedule": 300.0,
             "options": {"queue": "claim_queue"},
         },
+        "retry-claim-every-5-minutes": {
+            "task": "season_pass.process_retry_claim",
+            "schedule": 300.0,
+            "options": {"queue": "claim_queue"},
+        },
     },
 )
 
