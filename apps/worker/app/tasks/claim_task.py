@@ -75,13 +75,15 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
             )
             .order_by(Claim.created_at.asc())
             .limit(100)
+            .all()
         )
+
         if not claim_ids:
             logger.info("No claim to retry")
             return
 
         for claim_id in claim_ids:
-            claim_message = ClaimMessage(uuid=claim_id)
+            claim_message = ClaimMessage(uuid=claim_id[0])
             consume_claim_message(claim_message)
     except Exception as e:
         logger.error("Error processing retry claim", exc_info=e)
