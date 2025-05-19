@@ -38,6 +38,7 @@ def send_to_worker(task_name: str, message: Dict[str, Any]) -> str:
         queue = None
         if task_name in [
             "season_pass.process_claim",
+            "season_pass.process_retry_claim",
             "season_pass.process_retry_stage",
         ]:
             queue = "claim_queue"
