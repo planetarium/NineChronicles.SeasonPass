@@ -154,7 +154,7 @@ def consume_courage_message(message: TrackerMessage):
             if "random_buff" in type_id or "raid_reward" in type_id:
                 continue
 
-            if "raid" in type_id:
+            if "raid7" == type_id:
                 apply_exp(
                     sess,
                     planet_id,
@@ -166,7 +166,7 @@ def consume_courage_message(message: TrackerMessage):
                     action_data,
                 )
                 logger.info(f"{len(action_data)} Raid applied.")
-            elif "battle" in type_id:
+            elif "battle" == type_id:
                 apply_exp(
                     sess,
                     planet_id,
@@ -178,7 +178,7 @@ def consume_courage_message(message: TrackerMessage):
                     action_data,
                 )
                 logger.info(f"{len(action_data)} Arena applied.")
-            elif "sweep" in type_id:
+            elif "hack_and_slash_sweep10" == type_id:
                 handle_sweep(
                     sess,
                     planet_id,
@@ -189,7 +189,7 @@ def consume_courage_message(message: TrackerMessage):
                     action_data,
                 )
                 logger.info(f"{len(action_data)} Sweep applied.")
-            elif "event_dungeon" in type_id:
+            elif "event_dungeon_battle6" == type_id:
                 apply_exp(
                     sess,
                     planet_id,
