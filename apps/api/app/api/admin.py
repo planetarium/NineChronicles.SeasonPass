@@ -76,8 +76,7 @@ class PaginatedPremiumUserResponse(BaseModel):
 router = APIRouter(
     prefix="/admin",
     tags=["Admin"],
-    # dependencies=[Depends(verify_token), Security(security)],  # 모든 admin 엔드포인트에 인증 필요
-    dependencies=[],  # 모든 admin 엔드포인트에 인증 필요
+    dependencies=[Depends(verify_token), Security(security)],  # 모든 admin 엔드포인트에 인증 필요
 )
 
 
