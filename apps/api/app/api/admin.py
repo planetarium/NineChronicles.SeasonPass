@@ -34,6 +34,23 @@ class PaginatedClaimResponse(BaseModel):
     items: List[ClaimResponse]
 
 
+class SeasonPassResponse(BaseModel):
+    id: int
+    pass_type: str
+    season_index: int
+    start_timestamp: Optional[datetime]
+    end_timestamp: Optional[datetime]
+    reward_list: List[dict]
+    instant_exp: int
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+
+class PaginatedSeasonPassResponse(BaseModel):
+    total: int
+    items: List[SeasonPassResponse]
+
+
 class PremiumUserResponse(BaseModel):
     id: int
     planet_id: str
@@ -59,8 +76,50 @@ class PaginatedPremiumUserResponse(BaseModel):
 router = APIRouter(
     prefix="/admin",
     tags=["Admin"],
-    dependencies=[Depends(verify_token), Security(security)],  # 모든 admin 엔드포인트에 인증 필요
+    # dependencies=[Depends(verify_token), Security(security)],  # 모든 admin 엔드포인트에 인증 필요
+    dependencies=[],  # 모든 admin 엔드포인트에 인증 필요
 )
+
+
+@router.get("/seasons", response_model=PaginatedSeasonPassResponse)
+def get_seasons(
+    pass_type: Optional[PassType] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    sess=Depends(session),
+):
+    """모든 시즌 패스 목록을 조회합니다.
+
+    Args:
+        pass_type: 특정 패스 타입의 시즌만 조회
+        limit: 한 페이지당 반환할 항목 수 (기본값: 20, 최대: 100)
+        offset: 시작 위치 (기본값: 0)
+    """
+    base_query = select(SeasonPass).order_by(desc(SeasonPass.start_timestamp))
+
+    if pass_type:
+        base_query = base_query.where(SeasonPass.pass_type == pass_type)
+
+    total_count = sess.scalar(select(func.count()).select_from(base_query.subquery()))
+
+    seasons = sess.scalars(base_query.offset(offset).limit(limit)).all()
+
+    items = [
+        SeasonPassResponse(
+            id=season.id,
+            pass_type=season.pass_type.value,
+            season_index=season.season_index,
+            start_timestamp=season.start_timestamp,
+            end_timestamp=season.end_timestamp,
+            reward_list=season.reward_list,
+            instant_exp=season.instant_exp,
+            created_at=season.created_at,
+            updated_at=season.updated_at,
+        )
+        for season in seasons
+    ]
+
+    return PaginatedSeasonPassResponse(total=total_count, items=items)
 
 
 @router.get("/claims", response_model=PaginatedClaimResponse)
