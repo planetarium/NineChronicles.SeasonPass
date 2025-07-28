@@ -1,18 +1,17 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, Security
-from fastapi.security import HTTPBearer
-from pydantic import BaseModel
-from shared.enums import PassType, PlanetID, TxStatus
-from shared.models.season_pass import SeasonPass
-from shared.models.user import Claim, UserSeasonPass
-from shared.utils.season_pass import get_pass
-from sqlalchemy import desc, func, select
-
 from app.celery import send_to_worker
 from app.dependencies import session
 from app.utils import verify_token
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi.security import HTTPBearer
+from pydantic import BaseModel
+from shared.enums import ActionType, PassType, TxStatus
+from shared.models.season_pass import Exp, SeasonPass
+from shared.models.user import Claim, UserSeasonPass
+from shared.utils.season_pass import get_pass
+from sqlalchemy import desc, func, select
 
 security = HTTPBearer()
 
@@ -71,6 +70,46 @@ class PremiumUserResponse(BaseModel):
 class PaginatedPremiumUserResponse(BaseModel):
     total: int
     items: List[PremiumUserResponse]
+
+
+# 새로운 CRUD 스키마들
+class CreateExpSchema(BaseModel):
+    action_type: ActionType
+    exp: int
+
+
+class CreateSeasonPassSchema(BaseModel):
+    pass_type: PassType
+    season_index: int
+    start_timestamp: Optional[datetime] = None
+    end_timestamp: Optional[datetime] = None
+    reward_list: List[dict] = []
+    instant_exp: int = 0
+    exp_list: List[CreateExpSchema] = []
+
+
+class UpdateSeasonPassSchema(BaseModel):
+    start_timestamp: Optional[datetime] = None
+    end_timestamp: Optional[datetime] = None
+    reward_list: Optional[List[dict]] = None
+    instant_exp: Optional[int] = None
+    exp_list: Optional[List[CreateExpSchema]] = None
+
+
+class SeasonPassDetailSchema(BaseModel):
+    id: int
+    pass_type: PassType
+    season_index: int
+    start_timestamp: Optional[datetime] = None
+    end_timestamp: Optional[datetime] = None
+    reward_list: List[dict] = []
+    instant_exp: int = 0
+    exp_list: List[dict] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 router = APIRouter(
@@ -202,7 +241,9 @@ def get_premium_users(
     if pass_type and season_index:
         target_season = get_pass(sess, pass_type, season_index)
         if target_season:
-            base_query = base_query.where(UserSeasonPass.season_pass_id == target_season.id)
+            base_query = base_query.where(
+                UserSeasonPass.season_pass_id == target_season.id
+            )
     elif pass_type:
         season_query = select(SeasonPass.id).where(SeasonPass.pass_type == pass_type)
         if season_index:
@@ -222,18 +263,24 @@ def get_premium_users(
     items = []
     for user in users:
         season_pass = sess.get(SeasonPass, user.season_pass_id)
-        season_info = {
-            "id": season_pass.id,
-            "pass_type": season_pass.pass_type.value,
-            "season_index": season_pass.season_index,
-            "start_timestamp": season_pass.start_timestamp,
-            "end_timestamp": season_pass.end_timestamp,
-        } if season_pass else {}
+        season_info = (
+            {
+                "id": season_pass.id,
+                "pass_type": season_pass.pass_type.value,
+                "season_index": season_pass.season_index,
+                "start_timestamp": season_pass.start_timestamp,
+                "end_timestamp": season_pass.end_timestamp,
+            }
+            if season_pass
+            else {}
+        )
 
         items.append(
             PremiumUserResponse(
                 id=user.id,
-                planet_id=user.planet_id.decode() if isinstance(user.planet_id, bytes) else str(user.planet_id),
+                planet_id=user.planet_id.decode()
+                if isinstance(user.planet_id, bytes)
+                else str(user.planet_id),
                 agent_addr=user.agent_addr,
                 avatar_addr=user.avatar_addr,
                 season_pass_id=user.season_pass_id,
@@ -257,3 +304,239 @@ def trigger_retry_stage():
     """스테이징 실패한 트랜잭션들을 재시도하는 태스크를 트리거합니다."""
     task_id = send_to_worker("season_pass.process_retry_stage", message={})
     return {"task_id": task_id, "status": "Task triggered successfully"}
+
+
+# 새로운 시즌패스 CRUD 엔드포인트들
+@router.get("/season-passes", response_model=List[SeasonPassDetailSchema])
+def get_season_passes(
+    pass_type: Optional[PassType] = None,
+    season_index: Optional[int] = None,
+    sess=Depends(session),
+):
+    """시즌패스 목록을 조회합니다.
+
+    Args:
+        pass_type: 특정 패스 타입만 조회
+        season_index: 특정 시즌 인덱스만 조회
+    """
+    query = select(SeasonPass).order_by(desc(SeasonPass.id))
+
+    if pass_type:
+        query = query.where(SeasonPass.pass_type == pass_type)
+
+    if season_index is not None:
+        query = query.where(SeasonPass.season_index == season_index)
+
+    season_passes = sess.scalars(query).all()
+
+    result = []
+    for season_pass in season_passes:
+        # exp_list를 딕셔너리로 변환
+        exp_list = [
+            {
+                "id": exp.id,
+                "season_pass_id": exp.season_pass_id,
+                "action_type": exp.action_type.value,
+                "exp": exp.exp,
+                "created_at": exp.created_at,
+                "updated_at": exp.updated_at,
+            }
+            for exp in season_pass.exp_list
+        ]
+
+        result.append(
+            SeasonPassDetailSchema(
+                id=season_pass.id,
+                pass_type=season_pass.pass_type,
+                season_index=season_pass.season_index,
+                start_timestamp=season_pass.start_timestamp,
+                end_timestamp=season_pass.end_timestamp,
+                reward_list=season_pass.reward_list,
+                instant_exp=season_pass.instant_exp,
+                exp_list=exp_list,
+                created_at=season_pass.created_at,
+                updated_at=season_pass.updated_at,
+            )
+        )
+
+    return result
+
+
+@router.get("/season-passes/{season_pass_id}", response_model=SeasonPassDetailSchema)
+def get_season_pass(season_pass_id: int, sess=Depends(session)):
+    """특정 시즌패스를 조회합니다."""
+    season_pass = sess.get(SeasonPass, season_pass_id)
+    if not season_pass:
+        raise HTTPException(status_code=404, detail="Season pass not found")
+
+    # exp_list를 딕셔너리로 변환
+    exp_list = [
+        {
+            "id": exp.id,
+            "season_pass_id": exp.season_pass_id,
+            "action_type": exp.action_type.value,
+            "exp": exp.exp,
+            "created_at": exp.created_at,
+            "updated_at": exp.updated_at,
+        }
+        for exp in season_pass.exp_list
+    ]
+
+    return SeasonPassDetailSchema(
+        id=season_pass.id,
+        pass_type=season_pass.pass_type,
+        season_index=season_pass.season_index,
+        start_timestamp=season_pass.start_timestamp,
+        end_timestamp=season_pass.end_timestamp,
+        reward_list=season_pass.reward_list,
+        instant_exp=season_pass.instant_exp,
+        exp_list=exp_list,
+        created_at=season_pass.created_at,
+        updated_at=season_pass.updated_at,
+    )
+
+
+@router.post("/season-passes", response_model=SeasonPassDetailSchema)
+def create_season_pass(
+    season_pass_data: CreateSeasonPassSchema,
+    sess=Depends(session),
+):
+    """새로운 시즌패스를 생성합니다."""
+    # 기존 시즌패스가 있는지 확인 (pass_type + season_index 조합)
+    existing = sess.scalar(
+        select(SeasonPass).where(
+            SeasonPass.pass_type == season_pass_data.pass_type,
+            SeasonPass.season_index == season_pass_data.season_index,
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Season pass already exists for {season_pass_data.pass_type}:{season_pass_data.season_index}",
+        )
+
+    # 시즌패스 생성
+    season_pass = SeasonPass(
+        pass_type=season_pass_data.pass_type,
+        season_index=season_pass_data.season_index,
+        start_timestamp=season_pass_data.start_timestamp,
+        end_timestamp=season_pass_data.end_timestamp,
+        reward_list=season_pass_data.reward_list,
+        instant_exp=season_pass_data.instant_exp,
+    )
+    sess.add(season_pass)
+    sess.flush()  # ID 생성을 위해 flush
+
+    # Exp 데이터 생성
+    for exp_data in season_pass_data.exp_list:
+        exp = Exp(
+            season_pass_id=season_pass.id,
+            action_type=exp_data.action_type,
+            exp=exp_data.exp,
+        )
+        sess.add(exp)
+
+    sess.commit()
+    sess.refresh(season_pass)
+
+    # exp_list를 딕셔너리로 변환
+    exp_list = [
+        {
+            "id": exp.id,
+            "season_pass_id": exp.season_pass_id,
+            "action_type": exp.action_type.value,
+            "exp": exp.exp,
+            "created_at": exp.created_at,
+            "updated_at": exp.updated_at,
+        }
+        for exp in season_pass.exp_list
+    ]
+
+    return SeasonPassDetailSchema(
+        id=season_pass.id,
+        pass_type=season_pass.pass_type,
+        season_index=season_pass.season_index,
+        start_timestamp=season_pass.start_timestamp,
+        end_timestamp=season_pass.end_timestamp,
+        reward_list=season_pass.reward_list,
+        instant_exp=season_pass.instant_exp,
+        exp_list=exp_list,
+        created_at=season_pass.created_at,
+        updated_at=season_pass.updated_at,
+    )
+
+
+@router.put("/season-passes/{season_pass_id}", response_model=SeasonPassDetailSchema)
+def update_season_pass(
+    season_pass_id: int,
+    season_pass_data: CreateSeasonPassSchema,
+    sess=Depends(session),
+):
+    """시즌패스를 수정합니다."""
+    season_pass = sess.get(SeasonPass, season_pass_id)
+    if not season_pass:
+        raise HTTPException(status_code=404, detail="Season pass not found")
+
+    # 시즌패스 정보 업데이트
+    season_pass.pass_type = season_pass_data.pass_type
+    season_pass.season_index = season_pass_data.season_index
+    season_pass.start_timestamp = season_pass_data.start_timestamp
+    season_pass.end_timestamp = season_pass_data.end_timestamp
+    season_pass.reward_list = season_pass_data.reward_list
+    season_pass.instant_exp = season_pass_data.instant_exp
+
+    # 기존 Exp 데이터 삭제
+    sess.query(Exp).where(Exp.season_pass_id == season_pass_id).delete()
+
+    # Exp 데이터 생성
+    for exp_data in season_pass_data.exp_list:
+        exp = Exp(
+            season_pass_id=season_pass_id,
+            action_type=exp_data.action_type,
+            exp=exp_data.exp,
+        )
+        sess.add(exp)
+
+    sess.commit()
+    sess.refresh(season_pass)
+
+    # exp_list를 딕셔너리로 변환
+    exp_list = [
+        {
+            "id": exp.id,
+            "season_pass_id": exp.season_pass_id,
+            "action_type": exp.action_type.value,
+            "exp": exp.exp,
+            "created_at": exp.created_at,
+            "updated_at": exp.updated_at,
+        }
+        for exp in season_pass.exp_list
+    ]
+
+    return SeasonPassDetailSchema(
+        id=season_pass.id,
+        pass_type=season_pass.pass_type,
+        season_index=season_pass.season_index,
+        start_timestamp=season_pass.start_timestamp,
+        end_timestamp=season_pass.end_timestamp,
+        reward_list=season_pass.reward_list,
+        instant_exp=season_pass.instant_exp,
+        exp_list=exp_list,
+        created_at=season_pass.created_at,
+        updated_at=season_pass.updated_at,
+    )
+
+
+@router.delete("/season-passes/{season_pass_id}")
+def delete_season_pass(season_pass_id: int, sess=Depends(session)):
+    """시즌패스를 삭제합니다."""
+    season_pass = sess.get(SeasonPass, season_pass_id)
+    if not season_pass:
+        raise HTTPException(status_code=404, detail="Season pass not found")
+
+    # 관련 Exp 데이터도 함께 삭제
+    sess.query(Exp).where(Exp.season_pass_id == season_pass_id).delete()
+    sess.delete(season_pass)
+    sess.commit()
+
+    return {"message": "Season pass deleted successfully"}

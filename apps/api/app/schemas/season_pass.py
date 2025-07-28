@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel as BaseSchema
@@ -55,22 +55,16 @@ class SimpleSeasonPassSchema(BaseSchema):
         from_attributes = True
 
 
-class SeasonPassSchema(SimpleSeasonPassSchema):
-    start_date: Optional[date]
-    end_date: Optional[date]
+class SeasonPassSchema(BaseSchema):
+    id: int
+    pass_type: str
+    season_index: int
     start_timestamp: Optional[datetime]
     end_timestamp: Optional[datetime]
     reward_list: List[RewardSchema]
-    repeat_last_reward: bool
-
-
-class NewSeasonPassSchema(BaseSchema):
-    id: int
-    start_date: date
-    end_date: date
-    start_timestamp: datetime
-    end_timestamp: datetime
-    reward_list: List[NewRewardSchema]
+    instant_exp: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class LevelInfoSchema(BaseSchema):
@@ -82,5 +76,41 @@ class ExpInfoSchema(BaseSchema):
     action_type: ActionType
     exp: int
 
+
+class SeasonPassDetailSchema(BaseSchema):
+    id: int
+    pass_type: PassType
+    season_index: int
+    start_timestamp: Optional[datetime] = None
+    end_timestamp: Optional[datetime] = None
+    reward_list: List[RewardSchema] = []
+    instant_exp: int = 0
+    exp_list: List[dict] = []
+    created_at: datetime
+    updated_at: datetime
+
     class Config:
         from_attributes = True
+
+
+class CreateExpSchema(BaseSchema):
+    action_type: ActionType
+    exp: int
+
+
+class CreateSeasonPassSchema(BaseSchema):
+    pass_type: PassType
+    season_index: int
+    start_timestamp: Optional[datetime] = None
+    end_timestamp: Optional[datetime] = None
+    reward_list: List[RewardSchema] = []
+    instant_exp: int = 0
+    exp_list: List[CreateExpSchema] = []
+
+
+class UpdateSeasonPassSchema(BaseSchema):
+    start_timestamp: Optional[datetime] = None
+    end_timestamp: Optional[datetime] = None
+    reward_list: Optional[List[RewardSchema]] = None
+    instant_exp: Optional[int] = None
+    exp_list: Optional[List[CreateExpSchema]] = None
