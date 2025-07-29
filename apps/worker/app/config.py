@@ -1,7 +1,5 @@
-import base64
 from typing import Optional
 
-from pydantic import AmqpDsn, PostgresDsn, RedisDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from shared.enums import PlanetID
 
@@ -23,7 +21,9 @@ class Settings(BaseSettings):
     def converted_gql_url_map(self) -> dict[PlanetID, str]:
         return {PlanetID(k.encode()): v for k, v in self.gql_url_map.items()}
 
-    model_config = SettingsConfigDict(env_file=(".env"), env_prefix="WORKER_")
+    model_config = SettingsConfigDict(
+        env_file=(".env", "test.env"), env_prefix="WORKER_"
+    )
 
 
 config = Settings()
