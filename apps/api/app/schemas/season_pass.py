@@ -59,9 +59,12 @@ class SeasonPassSchema(BaseSchema):
     id: int
     pass_type: str
     season_index: int
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     start_timestamp: Optional[datetime]
     end_timestamp: Optional[datetime]
     reward_list: List[RewardSchema]
+    repeat_last_reward: bool = True
     instant_exp: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

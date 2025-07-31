@@ -410,6 +410,75 @@ def test_get_season_pass_success(client, valid_token, test_session):
     assert data["pass_type"] == PassType.ADVENTURE_BOSS_PASS.value
     assert data["season_index"] == 2
 
+    # 새로운 스키마 필드들 확인
+    assert "start_date" in data
+    assert "end_date" in data
+    assert "repeat_last_reward" in data
+    # Adventure Boss Pass는 repeat_last_reward가 True여야 함
+    assert data["repeat_last_reward"] == True
+
+
+def test_world_clear_pass_repeat_last_reward(client, valid_token, test_session):
+    """World Clear Pass의 repeat_last_reward 동작 확인"""
+    # World Clear Pass 생성
+    season_pass_data = {
+        "pass_type": PassType.WORLD_CLEAR_PASS.value,
+        "season_index": 4,
+        "reward_list": [],
+        "instant_exp": 100,
+        "exp_list": [],
+    }
+
+    create_response = client.post(
+        "/api/admin/season-passes",
+        headers={"Authorization": f"Bearer {valid_token}"},
+        json=season_pass_data,
+    )
+    assert create_response.status_code == 200
+    created_data = create_response.json()
+
+    # 생성된 시즌패스 조회
+    response = client.get(
+        f"/api/admin/season-passes/{created_data['id']}",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # World Clear Pass는 repeat_last_reward가 False여야 함
+    assert data["repeat_last_reward"] == False
+
+
+def test_courage_pass_repeat_last_reward(client, valid_token, test_session):
+    """Courage Pass의 repeat_last_reward 동작 확인"""
+    # Courage Pass 생성
+    season_pass_data = {
+        "pass_type": PassType.COURAGE_PASS.value,
+        "season_index": 5,
+        "reward_list": [],
+        "instant_exp": 200,
+        "exp_list": [],
+    }
+
+    create_response = client.post(
+        "/api/admin/season-passes",
+        headers={"Authorization": f"Bearer {valid_token}"},
+        json=season_pass_data,
+    )
+    assert create_response.status_code == 200
+    created_data = create_response.json()
+
+    # 생성된 시즌패스 조회
+    response = client.get(
+        f"/api/admin/season-passes/{created_data['id']}",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Courage Pass는 repeat_last_reward가 True여야 함
+    assert data["repeat_last_reward"] == True
+
 
 def test_get_season_pass_not_found(client, valid_token, test_session):
     """존재하지 않는 시즌패스 조회 테스트"""

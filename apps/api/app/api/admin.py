@@ -100,9 +100,12 @@ class SeasonPassDetailSchema(BaseModel):
     id: int
     pass_type: PassType
     season_index: int
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     start_timestamp: Optional[datetime] = None
     end_timestamp: Optional[datetime] = None
     reward_list: List[dict] = []
+    repeat_last_reward: bool = True
     instant_exp: int = 0
     exp_list: List[dict] = []
     created_at: Optional[datetime] = None
@@ -349,9 +352,12 @@ def get_season_passes(
                 id=season_pass.id,
                 pass_type=season_pass.pass_type,
                 season_index=season_pass.season_index,
+                start_date=season_pass.start_date,
+                end_date=season_pass.end_date,
                 start_timestamp=season_pass.start_timestamp,
                 end_timestamp=season_pass.end_timestamp,
                 reward_list=season_pass.reward_list,
+                repeat_last_reward=season_pass.pass_type != PassType.WORLD_CLEAR_PASS,
                 instant_exp=season_pass.instant_exp,
                 exp_list=exp_list,
                 created_at=season_pass.created_at,
@@ -386,9 +392,12 @@ def get_season_pass(season_pass_id: int, sess=Depends(session)):
         id=season_pass.id,
         pass_type=season_pass.pass_type,
         season_index=season_pass.season_index,
+        start_date=season_pass.start_date,
+        end_date=season_pass.end_date,
         start_timestamp=season_pass.start_timestamp,
         end_timestamp=season_pass.end_timestamp,
         reward_list=season_pass.reward_list,
+        repeat_last_reward=season_pass.pass_type != PassType.WORLD_CLEAR_PASS,
         instant_exp=season_pass.instant_exp,
         exp_list=exp_list,
         created_at=season_pass.created_at,
@@ -517,9 +526,12 @@ def update_season_pass(
         id=season_pass.id,
         pass_type=season_pass.pass_type,
         season_index=season_pass.season_index,
+        start_date=season_pass.start_date,
+        end_date=season_pass.end_date,
         start_timestamp=season_pass.start_timestamp,
         end_timestamp=season_pass.end_timestamp,
         reward_list=season_pass.reward_list,
+        repeat_last_reward=season_pass.pass_type != PassType.WORLD_CLEAR_PASS,
         instant_exp=season_pass.instant_exp,
         exp_list=exp_list,
         created_at=season_pass.created_at,
