@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from app.celery import send_to_worker
 from app.dependencies import session
+from app.schemas.admin import BurnAssetRequest, BurnAssetResponse
 from app.utils import verify_token
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from fastapi.security import HTTPBearer
@@ -552,3 +553,38 @@ def delete_season_pass(season_pass_id: int, sess=Depends(session)):
     sess.commit()
 
     return {"message": "Season pass deleted successfully"}
+
+
+@router.post("/burn-asset", response_model=BurnAssetResponse)
+def burn_asset(burn_request: BurnAssetRequest):
+    """어드민이 burn asset 액션을 서명하고 스테이징합니다.
+
+    Args:
+        burn_request: Burn asset 요청 데이터
+            - ticker: 통화 티커 (예: "NCG", "CRYSTAL")
+            - amount: 소각할 양
+            - memo: 메모 (선택사항)
+            - planet_id: 플래닛 ID (기본값: ODIN)
+    """
+    try:
+        # Worker에 burn asset task 전송 (Account에서 주소 가져옴)
+        task_id = send_to_worker(
+            "season_pass.process_burn_asset",
+            message={
+                "ticker": burn_request.ticker,
+                "amount": str(burn_request.amount),
+                "memo": burn_request.memo,
+                "planet_id": burn_request.planet_id,
+            },
+        )
+
+        return BurnAssetResponse(
+            task_id=task_id,
+            status="success",
+            message="Burn asset task triggered successfully",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to trigger burn asset task: {str(e)}"
+        )
