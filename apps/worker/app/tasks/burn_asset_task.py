@@ -6,9 +6,9 @@ import structlog
 from app.celery_app import app
 from app.config import config
 from app.utils.aws import Account
-from app.utils.gql import GQLClient
 from shared.enums import PlanetID
 from shared.models.user import Claim
+from shared.utils._graphql import GQLClient
 from shared.utils.transaction import create_burn_asset_unsigned_tx, create_signed_tx
 from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
