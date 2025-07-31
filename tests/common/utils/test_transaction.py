@@ -6,6 +6,8 @@ from shared.enums import PlanetID
 from shared.utils.actions import Address, ClaimItems, FungibleAssetValue
 from shared.utils.transaction import (
     append_signature_to_unsigned_tx,
+    create_claim_items_unsigned_tx,
+    create_signed_tx,
     create_unsigned_tx,
     get_genesis_block_hash,
 )
@@ -228,3 +230,89 @@ def test_get_genesis_block_hash_invalid_planet():
     """잘못된 planet_id에 대한 예외 테스트"""
     with pytest.raises(ValueError, match="Invalid planet id"):
         get_genesis_block_hash("INVALID_PLANET")
+
+
+# 새로운 함수들에 대한 테스트
+def test_create_claim_items_unsigned_tx():
+    """create_claim_items_unsigned_tx 함수 테스트"""
+    claim_data = [{"ticker": "Item_NT_500000", "amount": 1, "decimal_places": 0}]
+
+    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0)
+    memo = '{"season_pass": {"n": [1], "p": [], "t": "claim"}}'
+
+    result = create_claim_items_unsigned_tx(
+        planet_id=PlanetID.ODIN,
+        public_key="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        address="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+        nonce=1,
+        avatar_addr="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+        claim_data=claim_data,
+        memo=memo,
+        timestamp=timestamp,
+    )
+
+    # 결과가 bytes인지 확인
+    assert isinstance(result, bytes)
+
+    # bencodex로 디코딩하여 구조 확인
+    decoded = bencodex.loads(result)
+
+    # 필수 필드들이 있는지 확인
+    assert b"a" in decoded  # action
+    assert b"g" in decoded  # genesis block hash
+    assert b"l" in decoded  # gas limit
+    assert b"m" in decoded  # max gas price
+    assert b"n" in decoded  # nonce
+    assert b"p" in decoded  # public key
+    assert b"s" in decoded  # signer
+    assert b"t" in decoded  # timestamp
+    assert b"u" in decoded  # updated addresses
+
+    # claim_items 액션인지 확인
+    action = decoded[b"a"][0]
+    assert action["type_id"] == "claim_items"
+
+
+def test_create_signed_tx():
+    """create_signed_tx 함수 테스트"""
+    # 테스트용 unsigned transaction 생성
+    unsigned_tx_data = {
+        b"a": [{"type_id": "test", "values": {}}],
+        b"g": b"test_genesis_hash",
+        b"l": 1,
+        b"m": [{"ticker": "Mead", "amount": 1000}],
+        b"n": 1,
+        b"p": b"test_public_key",
+        b"s": b"test_signer",
+        b"t": "2023-01-01T12:00:00.000000Z",
+        b"u": [],
+    }
+    unsigned_tx = bencodex.dumps(unsigned_tx_data)
+    signature = b"test_signature"
+
+    result = create_signed_tx(unsigned_tx, signature)
+
+    # 결과가 bytes인지 확인
+    assert isinstance(result, bytes)
+
+    # bencodex로 디코딩하여 서명이 추가되었는지 확인
+    decoded = bencodex.loads(result)
+
+    # 서명이 추가되었는지 확인 (대문자 S)
+    assert b"S" in decoded
+    assert decoded[b"S"] == signature
+
+
+def test_create_claim_items_unsigned_tx_empty_claim_data():
+    """빈 claim_data에 대한 예외 테스트"""
+    with pytest.raises(ValueError, match="Nothing to claim"):
+        create_claim_items_unsigned_tx(
+            planet_id=PlanetID.ODIN,
+            public_key="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            address="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+            nonce=1,
+            avatar_addr="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+            claim_data=[],
+            memo="test",
+            timestamp=datetime.datetime(2023, 1, 1, 12, 0, 0),
+        )

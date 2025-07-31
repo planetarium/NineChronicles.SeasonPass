@@ -1,8 +1,9 @@
 import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import bencodex
 from shared.enums import PlanetID
+from shared.utils.actions import Address, ClaimItems, FungibleAssetValue
 
 
 def create_unsigned_tx(
@@ -63,8 +64,72 @@ def get_genesis_block_hash(planet_id: PlanetID) -> bytes:
             "729fa26958648a35b53e8e3905d11ec53b1b4929bf5f499884aed7df616f5913"
         ),
     }
-
     if planet_id not in switcher:
         raise ValueError("Invalid planet id")
-
     return switcher[planet_id]
+
+
+def create_claim_items_unsigned_tx(
+    planet_id: PlanetID,
+    public_key: str,
+    address: str,
+    nonce: int,
+    avatar_addr: str,
+    claim_data: List[Dict[str, Any]],
+    memo: str,
+    timestamp: datetime.datetime,
+) -> bytes:
+    """
+    claim_items 액션을 위한 unsigned transaction을 생성합니다.
+    GQL 의존성을 제거하고 로컬에서 생성합니다.
+    """
+    if not claim_data:
+        raise ValueError("Nothing to claim")
+
+    # claim_data를 ClaimItems 형식으로 변환
+    claim_items_data = []
+    for item in claim_data:
+        # FungibleAssetValue 객체 생성
+        fungible_asset_value = FungibleAssetValue.from_raw_data(
+            ticker=item["ticker"],
+            decimal_places=item.get("decimal_places", 0),
+            minters=None,
+            amount=item["amount"],
+        )
+
+        claim_items_data.append(
+            {
+                "avatarAddress": Address(avatar_addr),  # Address 객체로 변환
+                "fungibleAssetValues": [
+                    fungible_asset_value
+                ],  # FungibleAssetValue 객체로 변환
+            }
+        )
+
+    # ClaimItems 객체 생성
+    claim_items = ClaimItems(
+        claim_data=claim_items_data,
+        memo=memo,
+        _id="ae6d745a6dc911f0a9005210846b4679",  # 고정된 ID 사용
+    )
+
+    # plain_value 생성
+    plain_value = claim_items.plain_value
+
+    # unsigned transaction 생성
+    return create_unsigned_tx(
+        planet_id=planet_id,
+        public_key=public_key,
+        address=address,
+        nonce=nonce,
+        plain_value=plain_value,
+        timestamp=timestamp,
+    )
+
+
+def create_signed_tx(unsigned_tx: bytes, signature: bytes) -> bytes:
+    """
+    unsigned transaction에 서명을 추가하여 signed transaction을 생성합니다.
+    GQL 의존성을 제거하고 로컬에서 생성합니다.
+    """
+    return append_signature_to_unsigned_tx(unsigned_tx, signature)
