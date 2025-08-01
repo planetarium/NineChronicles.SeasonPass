@@ -35,19 +35,7 @@ def send_to_worker(task_name: str, message: Dict[str, Any]) -> str:
     try:
         logger.info(f"Sending task to Celery worker: {task_name}", message=message)
 
-        queue = None
-        if task_name in [
-            "season_pass.process_claim",
-            "season_pass.process_retry_claim",
-            "season_pass.process_retry_stage",
-        ]:
-            queue = "claim_queue"
-        elif task_name in [
-            "season_pass.process_adventure_boss",
-            "season_pass.process_courage",
-            "season_pass.process_world_clear",
-        ]:
-            queue = "tracker_queue"
+        queue = "claim_queue"
 
         task = celery_app.send_task(task_name, args=[message], queue=queue)
         logger.info(
