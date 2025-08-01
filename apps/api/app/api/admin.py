@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from app.celery import send_to_worker
 from app.dependencies import session
+from app.schemas.admin import BurnAssetRequest, BurnAssetResponse
 from app.utils import verify_token
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from fastapi.security import HTTPBearer
@@ -100,9 +101,12 @@ class SeasonPassDetailSchema(BaseModel):
     id: int
     pass_type: PassType
     season_index: int
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     start_timestamp: Optional[datetime] = None
     end_timestamp: Optional[datetime] = None
     reward_list: List[dict] = []
+    repeat_last_reward: bool = True
     instant_exp: int = 0
     exp_list: List[dict] = []
     created_at: Optional[datetime] = None
@@ -349,9 +353,12 @@ def get_season_passes(
                 id=season_pass.id,
                 pass_type=season_pass.pass_type,
                 season_index=season_pass.season_index,
+                start_date=season_pass.start_date,
+                end_date=season_pass.end_date,
                 start_timestamp=season_pass.start_timestamp,
                 end_timestamp=season_pass.end_timestamp,
                 reward_list=season_pass.reward_list,
+                repeat_last_reward=season_pass.pass_type != PassType.WORLD_CLEAR_PASS,
                 instant_exp=season_pass.instant_exp,
                 exp_list=exp_list,
                 created_at=season_pass.created_at,
@@ -386,9 +393,12 @@ def get_season_pass(season_pass_id: int, sess=Depends(session)):
         id=season_pass.id,
         pass_type=season_pass.pass_type,
         season_index=season_pass.season_index,
+        start_date=season_pass.start_date,
+        end_date=season_pass.end_date,
         start_timestamp=season_pass.start_timestamp,
         end_timestamp=season_pass.end_timestamp,
         reward_list=season_pass.reward_list,
+        repeat_last_reward=season_pass.pass_type != PassType.WORLD_CLEAR_PASS,
         instant_exp=season_pass.instant_exp,
         exp_list=exp_list,
         created_at=season_pass.created_at,
@@ -517,9 +527,12 @@ def update_season_pass(
         id=season_pass.id,
         pass_type=season_pass.pass_type,
         season_index=season_pass.season_index,
+        start_date=season_pass.start_date,
+        end_date=season_pass.end_date,
         start_timestamp=season_pass.start_timestamp,
         end_timestamp=season_pass.end_timestamp,
         reward_list=season_pass.reward_list,
+        repeat_last_reward=season_pass.pass_type != PassType.WORLD_CLEAR_PASS,
         instant_exp=season_pass.instant_exp,
         exp_list=exp_list,
         created_at=season_pass.created_at,
@@ -540,3 +553,38 @@ def delete_season_pass(season_pass_id: int, sess=Depends(session)):
     sess.commit()
 
     return {"message": "Season pass deleted successfully"}
+
+
+@router.post("/burn-asset", response_model=BurnAssetResponse)
+def burn_asset(burn_request: BurnAssetRequest):
+    """어드민이 burn asset 액션을 서명하고 스테이징합니다.
+
+    Args:
+        burn_request: Burn asset 요청 데이터
+            - ticker: 통화 티커 (예: "NCG", "CRYSTAL")
+            - amount: 소각할 양
+            - memo: 메모 (선택사항)
+            - planet_id: 플래닛 ID (기본값: ODIN)
+    """
+    try:
+        # Worker에 burn asset task 전송 (Account에서 주소 가져옴)
+        task_id = send_to_worker(
+            "season_pass.process_burn_asset",
+            message={
+                "ticker": burn_request.ticker,
+                "amount": str(burn_request.amount),
+                "memo": burn_request.memo,
+                "planet_id": burn_request.planet_id,
+            },
+        )
+
+        return BurnAssetResponse(
+            task_id=task_id,
+            status="success",
+            message="Burn asset task triggered successfully",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to trigger burn asset task: {str(e)}"
+        )

@@ -6,8 +6,8 @@ from typing import List
 import alembic.command
 import pytest
 from alembic.config import Config
-from common.enums import PassType
-from common.models.season_pass import Level
+from shared.enums import PassType
+from shared.models.season_pass import Level
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 

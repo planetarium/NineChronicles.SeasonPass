@@ -9,6 +9,7 @@ from shared.enums import TxStatus
 from shared.models.user import Claim
 from shared.schemas.message import ClaimMessage
 from shared.utils._graphql import GQLClient
+from shared.utils.transaction import create_claim_items_unsigned_tx, create_signed_tx
 from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
@@ -72,26 +73,36 @@ def consume_claim_message(message: ClaimMessage):
             claim.nonce = nonce
             use_nonce = True
         claim.tx_status = TxStatus.CREATED
-        unsigned_tx = gql.create_action(
-            claim.planet_id,
-            "claim_items",
-            pubkey=account.pubkey,
+
+        # GQL 의존성 제거: 로컬에서 unsigned transaction 생성
+        memo = json.dumps(
+            {
+                "season_pass": {
+                    "n": claim.normal_levels,
+                    "p": claim.premium_levels,
+                    "t": "claim",
+                    "tp": claim.season_pass.pass_type.value,
+                }
+            }
+        )
+
+        unsigned_tx = create_claim_items_unsigned_tx(
+            planet_id=claim.planet_id,
+            public_key=account.pubkey.hex(),
+            address=account.address,
             nonce=claim.nonce,
             avatar_addr=claim.avatar_addr,
             claim_data=claim.reward_list,
-            memo=json.dumps(
-                {
-                    "season_pass": {
-                        "n": claim.normal_levels,
-                        "p": claim.premium_levels,
-                        "t": "claim",
-                        "tp": claim.season_pass.pass_type.value,
-                    }
-                }
-            ),
+            memo=memo,
+            timestamp=claim.created_at,
         )
+
+        # AWS KMS로 서명 생성
         signature = account.sign_tx(unsigned_tx)
-        signed_tx = gql.sign(claim.planet_id, unsigned_tx, signature)
+
+        # GQL 의존성 제거: 로컬에서 signed transaction 생성
+        signed_tx = create_signed_tx(unsigned_tx, signature)
+
         tx_id = hashlib.sha256(signed_tx).hexdigest()
         claim.tx = signed_tx.hex()
         claim.tx_id = tx_id
