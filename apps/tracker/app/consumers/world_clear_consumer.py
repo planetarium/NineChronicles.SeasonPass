@@ -46,37 +46,40 @@ def consume_world_clear_message(message: TrackerMessage):
             include_exp=True,
         )
 
+        block_index = message.block
+        planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
+        
+        existing_block = sess.scalar(
+            select(Block).where(
+                Block.planet_id == planet_id,
+                Block.pass_type == PassType.WORLD_CLEAR_PASS,
+            )
+        )
+
         # Skip blocks before season starts
         if current_pass is None:
             logger.warning(
                 f"There is no active {PassType.WORLD_CLEAR_PASS.name} at {datetime.now().strftime('%Y-%m-%d %H:%H:%S')}"
             )
 
-            block_index = message.block
-            planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-            if sess.scalar(
-                select(Block).where(
-                    Block.planet_id == planet_id,
-                    Block.pass_type == PassType.WORLD_CLEAR_PASS,
-                    Block.index == block_index,
-                )
-            ):
+            if existing_block.last_processed_index >= block_index:
                 logger.warning(
                     f"Planet {planet_id.name} : Block {block_index} already applied. Skip."
                 )
                 return
 
-            sess.add(
-                Block(
-                    planet_id=planet_id,
-                    index=block_index,
-                    pass_type=PassType.WORLD_CLEAR_PASS,
-                )
-            )
+            existing_block.last_processed_index = block_index
+            
             logger.info(
                 f"Skip world clear exp for {planet_id.name} : #{block_index} before season starts."
             )
             sess.commit()
+            return
+
+        if existing_block.last_processed_index >= block_index:
+            logger.warning(
+                f"Planet {planet_id.name} : Block {block_index} already applied. Skip."
+            )
             return
 
         level_list = sess.scalars(
@@ -84,20 +87,6 @@ def consume_world_clear_message(message: TrackerMessage):
             .where(Level.pass_type == PassType.WORLD_CLEAR_PASS)
             .order_by(desc(Level.level))
         ).fetchall()
-
-        block_index = message.block
-        planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-        if sess.scalar(
-            select(Block).where(
-                Block.planet_id == planet_id,
-                Block.pass_type == PassType.WORLD_CLEAR_PASS,
-                Block.index == block_index,
-            )
-        ):
-            logger.warning(
-                f"Planet {planet_id.name} : Block {block_index} already applied. Skip."
-            )
-            return
 
         user_season_dict = verify_season_pass(
             sess, planet_id, current_pass, message.action_data
@@ -136,13 +125,9 @@ def consume_world_clear_message(message: TrackerMessage):
                             break
 
         sess.add_all(list(user_season_dict.values()))
-        sess.add(
-            Block(
-                planet_id=planet_id,
-                index=block_index,
-                pass_type=PassType.WORLD_CLEAR_PASS,
-            )
-        )
+        
+        existing_block.last_processed_index = block_index
+        
         sess.commit()
         logger.info(
             f"All {len(user_season_dict.values())} world clear for block {planet_id.name}:{message.block} applied."
@@ -153,7 +138,7 @@ def consume_world_clear_message(message: TrackerMessage):
         detail = str(e).split("\n")[1]
         if (
             err_msg
-            == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_pass_planet_unique"'
+            == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_pass_type_unique"'
         ):
             logger.warning(f"{err_msg} :: {detail}")
         else:

@@ -71,54 +71,72 @@ def track_missing_blocks():
 
         sess = scoped_session(sessionmaker(bind=engine))
         try:
-            # Get missing blocks
-            start_block = config.start_block_index_map[planet_id]
-            expected_all = set(
-                range(start_block, get_block_tip(gql_url, config.headless_jwt_secret))
-            )  # Sloth needs 1 block to render actions: get tip-1
-            all_blocks = set(
-                sess.scalars(
-                    select(Block.index)
-                    .where(
-                        Block.planet_id == planet_id.encode(),
-                        Block.index >= start_block,
-                        Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
-                    )
-                ).fetchall()
+            current_tip = get_block_tip(gql_url, config.headless_jwt_secret)
+            
+            existing_block = sess.scalar(
+                select(Block).where(
+                    Block.planet_id == planet_id.encode(),
+                    Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
+                )
             )
-            missing_blocks = expected_all - all_blocks
+            
+            if not existing_block:
+                raise ValueError(f"No existing block found for planet {planet_id} and pass type {PassType.ADVENTURE_BOSS_PASS}")
+            
+            start_from = existing_block.last_processed_index + 1
+            
+            if start_from >= current_tip:
+                logger.info(
+                    f"Planet {planet_id}: Already up to date. Current tip: {current_tip}"
+                )
+                continue
+                
+            logger.info(
+                f"Processing blocks from {start_from} to {current_tip}",
+                tracker="adv_boss_tracker",
+                planet_id=planet_id,
+                start_block=start_from,
+                end_block=current_tip,
+            )
+            
+            # Process blocks in batches of 100
+            end_block = min(start_from + 100, current_tip + 1)
+            
+            for block_index in range(start_from, end_block):
+                try:
+                    track_adv_boss_actions(planet_id, gql_url, block_index)
+                    
+                    if existing_block:
+                        existing_block.last_processed_index = block_index
+                    else:
+                        existing_block = Block(
+                            planet_id=planet_id.encode(),
+                            pass_type=PassType.ADVENTURE_BOSS_PASS,
+                            last_processed_index=block_index,
+                        )
+                        sess.add(existing_block)
+                    
+                    sess.commit()
+                    logger.info(f"Block {block_index} processed successfully")
+                    
+                except Exception as e:
+                    sess.rollback()
+                    logger.exception(
+                        f"Error processing block {block_index}",
+                        exc=e,
+                    )
+                    break
+            
+            logger.info(
+                f"Processed blocks from {start_from} to {end_block - 1}",
+                tracker="adv_boss_tracker",
+                planet_id=planet_id,
+            )
+                    
         except Exception as e:
-            raise e
+            logger.exception(
+                f"Error in track_missing_blocks for planet {planet_id}",
+                exc=e,
+            )
         finally:
             sess.close()
-
-        logger.info(
-            "Missing blocks",
-            tracker="adv_boss_tracker",
-            missing_blocks=[missing_blocks],
-            planet_id=planet_id,
-            start_block=start_block,
-        )
-
-        block_dict = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            for index in missing_blocks:
-                block_dict[
-                    executor.submit(track_adv_boss_actions, planet_id, gql_url, index)
-                ] = (
-                    index,
-                    PassType.ADVENTURE_BOSS_PASS,
-                )
-
-            for future in concurrent.futures.as_completed(block_dict):
-                index = block_dict[future]
-                exc = future.exception()
-                if exc:
-                    logger.exception(
-                        "Error occurred processing block",
-                        tracker="adv_boss_tracker",
-                        exc=exc,
-                    )
-                else:
-                    result = future.result()
-                    logger.info(f"Block {index} collected :: {result}")

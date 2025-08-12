@@ -16,10 +16,6 @@ class Settings(BaseSettings):
         "0x000000000000": "https://odin-rpc.nine-chronicles.com/graphql",
         "0x000000000001": "https://heimdall-rpc.nine-chronicles.com/graphql",
     }
-    start_block_index_map: dict[str, int] = {
-        "0x000000000000": 13796504,
-        "0x000000000001": 5320341,
-    }
     enabled_trackers: List[str] = [
         "AdventureBossTracker",
         "CourageTracker",
