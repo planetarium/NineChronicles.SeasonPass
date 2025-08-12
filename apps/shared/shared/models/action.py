@@ -25,12 +25,12 @@ class Block(AutoIdMixin, TimeStampMixin, Base):
         nullable=False,
         doc="An identifier to distinguish network & planet",
     )
-    index = Column(BigInteger, nullable=False)
+    last_processed_index = Column(BigInteger, nullable=True, doc="Last processed block index")
 
     __table_args__ = (
-        Index("idx_block_planet_pass_type_index", "planet_id", "pass_type", "index"),
+        Index("idx_block_planet_pass_type", "planet_id", "pass_type"),
         UniqueConstraint(
-            "planet_id", "pass_type", "index", name="block_by_pass_planet_unique"
+            "planet_id", "pass_type", name="block_by_planet_pass_type_unique"
         ),
     )
 

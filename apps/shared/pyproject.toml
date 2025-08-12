@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "shared"
-version = "1.0.0"
+version = "1.0.1"
 description = "Shared library for season pass service"
 authors = ["Planetarium <engineering@planetariumhq.com>"]
 readme = "README.md"

@@ -58,6 +58,16 @@ def consume_adventure_boss_message(message: TrackerMessage):
             include_exp=True,
         )
 
+        block_index = message.block
+        planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
+        
+        existing_block = sess.scalar(
+            select(Block).where(
+                Block.planet_id == planet_id,
+                Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
+            )
+        )
+
         # Skip blocks before season starts
         if current_pass is None:
             logger.warning(
@@ -66,26 +76,14 @@ def consume_adventure_boss_message(message: TrackerMessage):
                 timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
 
-            block_index = message.block
-            planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-            if sess.scalar(
-                select(Block).where(
-                    Block.planet_id == planet_id,
-                    Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
-                    Block.index == block_index,
-                )
-            ):
+            if existing_block.last_processed_index >= block_index:
                 logger.warning(
                     f"Planet {planet_id.name} : Block {block_index} already applied. Skip."
                 )
+                return
 
-            sess.add(
-                Block(
-                    planet_id=planet_id,
-                    index=block_index,
-                    pass_type=PassType.ADVENTURE_BOSS_PASS,
-                )
-            )
+            existing_block.last_processed_index = block_index
+            
             logger.info(
                 f"Skip adv.boss exp for {planet_id.name} : #{block_index} before season starts."
             )
@@ -99,15 +97,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
             ).fetchall()
         }
 
-        block_index = message.block
-        planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-        if sess.scalar(
-            select(Block).where(
-                Block.planet_id == planet_id,
-                Block.index == block_index,
-                Block.pass_type == PassType.ADVENTURE_BOSS_PASS,
-            )
-        ):
+        if existing_block.last_processed_index >= block_index:
             logger.warning(
                 f"Planet {planet_id.name} : Block {block_index} already applied. Skip."
             )
@@ -217,13 +207,9 @@ def consume_adventure_boss_message(message: TrackerMessage):
                 )
 
         sess.add_all(list(user_season_dict.values()))
-        sess.add(
-            Block(
-                planet_id=planet_id,
-                index=block_index,
-                pass_type=PassType.ADVENTURE_BOSS_PASS,
-            )
-        )
+        
+        existing_block.last_processed_index = block_index
+        
         sess.commit()
         logger.info(
             f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{message.block} applied."
@@ -234,7 +220,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
         detail = str(e).split("\n")[1]
         if (
             err_msg
-            == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_pass_planet_unique"'
+            == '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "block_by_planet_pass_type_unique"'
         ):
             logger.warning(f"{err_msg} :: {detail}")
         else:

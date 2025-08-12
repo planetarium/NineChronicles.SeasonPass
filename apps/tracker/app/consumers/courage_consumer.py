@@ -134,14 +134,15 @@ def consume_courage_message(message: TrackerMessage):
 
         block_index = message.block
         planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-
-        if sess.scalar(
+        
+        existing_block = sess.scalar(
             select(Block).where(
                 Block.planet_id == planet_id,
-                Block.index == block_index,
                 Block.pass_type == PassType.COURAGE_PASS,
             )
-        ):
+        )
+
+        if existing_block.last_processed_index >= block_index:
             logger.warning(
                 f"Planet {planet_id.name} : Block {block_index} already applied. Skip."
             )
@@ -215,13 +216,9 @@ def consume_courage_message(message: TrackerMessage):
                 logger.info(f"{len(action_data)} HackAndSlash applied.")
 
         sess.add_all(list(user_season_dict.values()))
-        sess.add(
-            Block(
-                planet_id=planet_id,
-                index=block_index,
-                pass_type=PassType.COURAGE_PASS,
-            )
-        )
+        
+        existing_block.last_processed_index = block_index
+        
         sess.commit()
         logger.info(
             f"All {len(user_season_dict.values())} brave exp for block {message.block} applied."

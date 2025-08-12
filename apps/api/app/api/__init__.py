@@ -2,8 +2,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import requests
-from app.config import config
-from app.dependencies import session
 from fastapi import APIRouter, Depends
 from shared.constants import SEASONPASS_ADDRESS
 from shared.enums import PassType, PlanetID, TxStatus
@@ -13,6 +11,9 @@ from shared.utils.season_pass import create_jwt_token
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
+
+from app.config import config
+from app.dependencies import session
 
 from . import admin, season_pass, tmp, user
 
@@ -54,7 +55,7 @@ def get_tip(url) -> int:
 
 def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
     tips = sess.execute(
-        select(Block.pass_type, func.max(Block.index))
+        select(Block.pass_type, func.max(Block.last_processed_index))
         .where(Block.planet_id == planet_id)
         .group_by(Block.pass_type)
     ).all()
