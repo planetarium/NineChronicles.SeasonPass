@@ -106,17 +106,10 @@ def create_claim_items_unsigned_tx(
     
     final_claim_data = []
     for avatar_address, fungible_asset_values in claim_items_data.items():
-        final_claim_data.append([
-            str(avatar_address),
-            [[
-                {
-                    "decimalPlaces": str(fav.decimal_places).zfill(2),
-                    "minters": fav.minters,
-                    "ticker": fav.ticker
-                },
-                str(fav.amount)
-            ] for fav in fungible_asset_values]
-        ])
+        final_claim_data.append({
+            "avatarAddress": avatar_address,
+            "fungibleAssetValues": fungible_asset_values
+        })
     
     claim_items_data = final_claim_data
 
