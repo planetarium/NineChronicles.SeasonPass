@@ -90,10 +90,8 @@ def create_claim_items_unsigned_tx(
     # claim_data를 ClaimItems 형식으로 변환
     claim_items_data = {}
     for item in claim_data:
-        avatar_address_str = str(Address(avatar_addr))
-        
-        if avatar_address_str not in claim_items_data:
-            claim_items_data[avatar_address_str] = []
+        if avatar_addr not in claim_items_data:
+            claim_items_data[avatar_addr] = []
         
         fungible_asset_value = FungibleAssetValue.from_raw_data(
             ticker=item["ticker"],
@@ -102,12 +100,12 @@ def create_claim_items_unsigned_tx(
             amount=item["amount"],
         )
         
-        claim_items_data[avatar_address_str].append(fungible_asset_value)
+        claim_items_data[avatar_addr].append(fungible_asset_value)
     
     final_claim_data = []
     for avatar_address_str, fungible_asset_values in claim_items_data.items():
         final_claim_data.append({
-            "avatarAddress": Address(avatar_address_str),
+            "avatarAddress": Address(avatar_addr),
             "fungibleAssetValues": fungible_asset_values
         })
     
