@@ -100,7 +100,7 @@ def track_missing_blocks():
             )
             
             # Process blocks in batches of 100
-            end_block = min(start_from + 100, current_tip + 1)
+            end_block = min(start_from + 100, current_tip)
             
             for block_index in range(start_from, end_block):
                 try:
@@ -128,7 +128,7 @@ def track_missing_blocks():
                     break
             
             logger.info(
-                f"Processed blocks from {start_from} to {end_block - 1}",
+                f"Processed blocks from {start_from} to {end_block}",
                 tracker="adv_boss_tracker",
                 planet_id=planet_id,
             )
