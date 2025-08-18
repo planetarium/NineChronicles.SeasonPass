@@ -2,6 +2,7 @@ import datetime
 from typing import Any, Dict, List
 
 import bencodex
+
 from shared.enums import PlanetID
 from shared.utils.actions import Address, BurnAsset, ClaimItems, FungibleAssetValue
 
@@ -87,24 +88,28 @@ def create_claim_items_unsigned_tx(
         raise ValueError("Nothing to claim")
 
     # claim_data를 ClaimItems 형식으로 변환
-    claim_items_data = []
+    claim_items_data = {}
     for item in claim_data:
-        # FungibleAssetValue 객체 생성
+        if avatar_addr not in claim_items_data:
+            claim_items_data[avatar_addr] = []
+        
         fungible_asset_value = FungibleAssetValue.from_raw_data(
             ticker=item["ticker"],
             decimal_places=item.get("decimal_places", 0),
             minters=None,
             amount=item["amount"],
         )
-
-        claim_items_data.append(
-            {
-                "avatarAddress": Address(avatar_addr),  # Address 객체로 변환
-                "fungibleAssetValues": [
-                    fungible_asset_value
-                ],  # FungibleAssetValue 객체로 변환
-            }
-        )
+        
+        claim_items_data[avatar_addr].append(fungible_asset_value)
+    
+    final_claim_data = []
+    for avatar_address_str, fungible_asset_values in claim_items_data.items():
+        final_claim_data.append({
+            "avatarAddress": Address(avatar_addr),
+            "fungibleAssetValues": fungible_asset_values
+        })
+    
+    claim_items_data = final_claim_data
 
     # ClaimItems 객체 생성
     claim_items = ClaimItems(
