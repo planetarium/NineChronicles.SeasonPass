@@ -425,29 +425,33 @@ def create_season_pass(
             detail=f"Season pass already exists for {season_pass_data.pass_type}:{season_pass_data.season_index}",
         )
 
-    # 시즌패스 생성
-    season_pass = SeasonPass(
-        pass_type=season_pass_data.pass_type,
-        season_index=season_pass_data.season_index,
-        start_timestamp=season_pass_data.start_timestamp,
-        end_timestamp=season_pass_data.end_timestamp,
-        reward_list=season_pass_data.reward_list,
-        instant_exp=season_pass_data.instant_exp,
-    )
-    sess.add(season_pass)
-    sess.flush()  # ID 생성을 위해 flush
-
-    # Exp 데이터 생성
-    for exp_data in season_pass_data.exp_list:
-        exp = Exp(
-            season_pass_id=season_pass.id,
-            action_type=exp_data.action_type,
-            exp=exp_data.exp,
+    try:
+        # 시즌패스 생성
+        season_pass = SeasonPass(
+            pass_type=season_pass_data.pass_type,
+            season_index=season_pass_data.season_index,
+            start_timestamp=season_pass_data.start_timestamp,
+            end_timestamp=season_pass_data.end_timestamp,
+            reward_list=season_pass_data.reward_list,
+            instant_exp=season_pass_data.instant_exp,
         )
-        sess.add(exp)
+        sess.add(season_pass)
+        sess.flush()  # ID 생성을 위해 flush
 
-    sess.commit()
-    sess.refresh(season_pass)
+        # Exp 데이터 생성
+        for exp_data in season_pass_data.exp_list:
+            exp = Exp(
+                season_pass_id=season_pass.id,
+                action_type=exp_data.action_type,
+                exp=exp_data.exp,
+            )
+            sess.add(exp)
+
+        sess.commit()
+        sess.refresh(season_pass)
+    except Exception:
+        sess.rollback()
+        raise
 
     # exp_list를 딕셔너리로 변환
     exp_list = [
@@ -487,28 +491,32 @@ def update_season_pass(
     if not season_pass:
         raise HTTPException(status_code=404, detail="Season pass not found")
 
-    # 시즌패스 정보 업데이트
-    season_pass.pass_type = season_pass_data.pass_type
-    season_pass.season_index = season_pass_data.season_index
-    season_pass.start_timestamp = season_pass_data.start_timestamp
-    season_pass.end_timestamp = season_pass_data.end_timestamp
-    season_pass.reward_list = season_pass_data.reward_list
-    season_pass.instant_exp = season_pass_data.instant_exp
+    try:
+        # 시즌패스 정보 업데이트
+        season_pass.pass_type = season_pass_data.pass_type
+        season_pass.season_index = season_pass_data.season_index
+        season_pass.start_timestamp = season_pass_data.start_timestamp
+        season_pass.end_timestamp = season_pass_data.end_timestamp
+        season_pass.reward_list = season_pass_data.reward_list
+        season_pass.instant_exp = season_pass_data.instant_exp
 
-    # 기존 Exp 데이터 삭제
-    sess.query(Exp).where(Exp.season_pass_id == season_pass_id).delete()
+        # 기존 Exp 데이터 삭제
+        sess.query(Exp).where(Exp.season_pass_id == season_pass_id).delete()
 
-    # Exp 데이터 생성
-    for exp_data in season_pass_data.exp_list:
-        exp = Exp(
-            season_pass_id=season_pass_id,
-            action_type=exp_data.action_type,
-            exp=exp_data.exp,
-        )
-        sess.add(exp)
+        # Exp 데이터 생성
+        for exp_data in season_pass_data.exp_list:
+            exp = Exp(
+                season_pass_id=season_pass_id,
+                action_type=exp_data.action_type,
+                exp=exp_data.exp,
+            )
+            sess.add(exp)
 
-    sess.commit()
-    sess.refresh(season_pass)
+        sess.commit()
+        sess.refresh(season_pass)
+    except Exception:
+        sess.rollback()
+        raise
 
     # exp_list를 딕셔너리로 변환
     exp_list = [
@@ -547,12 +555,16 @@ def delete_season_pass(season_pass_id: int, sess=Depends(session)):
     if not season_pass:
         raise HTTPException(status_code=404, detail="Season pass not found")
 
-    # 관련 Exp 데이터도 함께 삭제
-    sess.query(Exp).where(Exp.season_pass_id == season_pass_id).delete()
-    sess.delete(season_pass)
-    sess.commit()
+    try:
+        # 관련 Exp 데이터도 함께 삭제
+        sess.query(Exp).where(Exp.season_pass_id == season_pass_id).delete()
+        sess.delete(season_pass)
+        sess.commit()
 
-    return {"message": "Season pass deleted successfully"}
+        return {"message": "Season pass deleted successfully"}
+    except Exception:
+        sess.rollback()
+        raise
 
 
 @router.post("/burn-asset", response_model=BurnAssetResponse)

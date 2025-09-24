@@ -88,7 +88,7 @@ def track_courage_actions(planet_id: str, gql_url: str, block_index: int):
                     sess.rollback()
                     continue
                 finally:
-                    sess.remove()
+                    sess.close()
 
             action_data[action_json.type_id].append(
                 {
