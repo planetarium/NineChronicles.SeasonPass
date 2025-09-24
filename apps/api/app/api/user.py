@@ -46,46 +46,50 @@ def get_default_usp(
     avatar_addr: str,
     season_pass: SeasonPass,
 ) -> UserSeasonPass:
-    match season_pass.pass_type:
-        case PassType.WORLD_CLEAR_PASS:
-            gql_client = GQLClient(config.converted_gql_url_map, config.jwt_secret)
-            _, cleared_stage = gql_client.get_last_cleared_stage(
-                planet_id, avatar_addr, timeout=1
-            )
+    try:
+        match season_pass.pass_type:
+            case PassType.WORLD_CLEAR_PASS:
+                gql_client = GQLClient(config.converted_gql_url_map, config.jwt_secret)
+                _, cleared_stage = gql_client.get_last_cleared_stage(
+                    planet_id, avatar_addr, timeout=1
+                )
 
-            usp = UserSeasonPass(
-                planet_id=planet_id,
-                agent_addr=agent_addr,
-                avatar_addr=avatar_addr,
-                season_pass=season_pass,
-                exp=cleared_stage,
-            )
-            if cleared_stage > 0:
-                usp.level = get_level(sess, season_pass.pass_type, usp.exp)
-            sess.add(usp)
-            sess.commit()
-            sess.refresh(usp)
+                usp = UserSeasonPass(
+                    planet_id=planet_id,
+                    agent_addr=agent_addr,
+                    avatar_addr=avatar_addr,
+                    season_pass=season_pass,
+                    exp=cleared_stage,
+                )
+                if cleared_stage > 0:
+                    usp.level = get_level(sess, season_pass.pass_type, usp.exp)
+                sess.add(usp)
+                sess.commit()
+                sess.refresh(usp)
 
-        case PassType.COURAGE_PASS | PassType.ADVENTURE_BOSS_PASS:
-            usp = UserSeasonPass(
-                planet_id=planet_id,
-                agent_addr=agent_addr,
-                avatar_addr=avatar_addr,
-                season_pass=season_pass,
-                exp=0,
-                level=0,
-                is_premium=False,
-                is_premium_plus=False,
-                last_normal_claim=0,
-                last_premium_claim=0,
-            )
+            case PassType.COURAGE_PASS | PassType.ADVENTURE_BOSS_PASS:
+                usp = UserSeasonPass(
+                    planet_id=planet_id,
+                    agent_addr=agent_addr,
+                    avatar_addr=avatar_addr,
+                    season_pass=season_pass,
+                    exp=0,
+                    level=0,
+                    is_premium=False,
+                    is_premium_plus=False,
+                    last_normal_claim=0,
+                    last_premium_claim=0,
+                )
 
-        case _:
-            raise ValueError(
-                f"{season_pass.pass_type.name} is not valid pass type to create default UserSeasonPass"
-            )
+            case _:
+                raise ValueError(
+                    f"{season_pass.pass_type.name} is not valid pass type to create default UserSeasonPass"
+                )
 
-    return usp
+        return usp
+    except Exception:
+        sess.rollback()
+        raise
 
 
 @router.get("/status", response_model=UserSeasonPassSchema)
@@ -303,21 +307,29 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
                 for x in request.reward_list
             ],
         )
-        sess.add(claim)
+        try:
+            sess.add(claim)
+            sess.commit()
+            sess.refresh(claim)
+
+            # Send task to Celery worker
+            claim_message = ClaimMessage(uuid=claim.uuid)
+            task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+            logging.debug(
+                f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
+            )
+        except Exception:
+            sess.rollback()
+            raise
+
+    try:
+        sess.add(target_usp)
         sess.commit()
-        sess.refresh(claim)
-
-        # Send task to Celery worker
-        claim_message = ClaimMessage(uuid=claim.uuid)
-        task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
-        logging.debug(
-            f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
-        )
-
-    sess.add(target_usp)
-    sess.commit()
-    sess.refresh(target_usp)
-    return target_usp
+        sess.refresh(target_usp)
+        return target_usp
+    except Exception:
+        sess.rollback()
+        raise
 
 
 def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> Claim:
@@ -416,22 +428,26 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     if inprogress_claim_count > 50:
         raise ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
 
-    claim = create_claim(sess, target_pass, user_season)
-    sess.commit()
-    sess.refresh(user_season)
+    try:
+        claim = create_claim(sess, target_pass, user_season)
+        sess.commit()
+        sess.refresh(user_season)
 
-    if claim.reward_list:
-        claim_message = ClaimMessage(uuid=claim.uuid)
-        task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
-        logging.debug(
-            f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
+        if claim.reward_list:
+            claim_message = ClaimMessage(uuid=claim.uuid)
+            task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+            logging.debug(
+                f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
+            )
+
+        # Return result
+        return ClaimResultSchema(
+            user=user_season,
+            reward_list=claim.reward_list,
         )
-
-    # Return result
-    return ClaimResultSchema(
-        user=user_season,
-        reward_list=claim.reward_list,
-    )
+    except Exception:
+        sess.rollback()
+        raise
 
 
 @router.post("/claim-prev", response_model=ClaimResultSchema)
@@ -479,22 +495,26 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
         raise NotPremiumError(f"Prev. season claim is only allowed for premium users.")
 
     # Claim
-    claim = create_claim(sess, target_pass, user_season)
-    sess.commit()
-    sess.refresh(user_season)
+    try:
+        claim = create_claim(sess, target_pass, user_season)
+        sess.commit()
+        sess.refresh(user_season)
 
-    if claim.reward_list:
-        claim_message = ClaimMessage(uuid=claim.uuid)
-        task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
-        logging.debug(
-            f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
+        if claim.reward_list:
+            claim_message = ClaimMessage(uuid=claim.uuid)
+            task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+            logging.debug(
+                f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
+            )
+
+        # Return result
+        return ClaimResultSchema(
+            reward_list=claim.reward_list,
+            user=user_season,
+            # Deprecated: For backward compatibility
+            items=[],
+            currencies=[],
         )
-
-    # Return result
-    return ClaimResultSchema(
-        reward_list=claim.reward_list,
-        user=user_season,
-        # Deprecated: For backward compatibility
-        items=[],
-        currencies=[],
-    )
+    except Exception:
+        sess.rollback()
+        raise

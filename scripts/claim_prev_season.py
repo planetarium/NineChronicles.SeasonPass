@@ -30,32 +30,35 @@ def claim(season: int):
     engine = create_engine(DB_URI)
     sess = scoped_session(sessionmaker(bind=engine))
 
-    claim_list = sess.scalars(select(UserSeasonPass).where(
-        UserSeasonPass.season_pass_id == season,
-        or_(UserSeasonPass.last_normal_claim < UserSeasonPass.level,
-            and_(UserSeasonPass.is_premium, UserSeasonPass.last_premium_claim < UserSeasonPass.level)
-            )
-    )).fetchall()
+    try:
+        claim_list = sess.scalars(select(UserSeasonPass).where(
+            UserSeasonPass.season_pass_id == season,
+            or_(UserSeasonPass.last_normal_claim < UserSeasonPass.level,
+                and_(UserSeasonPass.is_premium, UserSeasonPass.last_premium_claim < UserSeasonPass.level)
+                )
+        )).fetchall()
 
-    active_group = []
-    inactive_group = []
+        active_group = []
+        inactive_group = []
 
-    for claim in claim_list:
-        if claim.last_normal_claim == 0:
-            inactive_group.append(claim)
-        else:
-            active_group.append(claim)
+        for claim in claim_list:
+            if claim.last_normal_claim == 0:
+                inactive_group.append(claim)
+            else:
+                active_group.append(claim)
 
-    print(f"{len(claim_list)} claims to go : {len(active_group)} active group and {len(inactive_group)} inactive group.")
+        print(f"{len(claim_list)} claims to go : {len(active_group)} active group and {len(inactive_group)} inactive group.")
 
-    for group in [active_group, inactive_group]:
-        for i, c in enumerate(group):
-            resp = requests.post(CLAIM_URL, json={"planet_id": c.planet_id.decode(),
-                                                  "agent_addr": c.agent_addr, "avatar_addr": c.avatar_addr,
-                                                  "season_id": c.season_pass_id, "force": True})
-            print(f"{i + 1}/{len(claim_list)} :: {c.planet_id.decode()} :: {c.avatar_addr}")
-            print(resp.json())
-            print("=" * 32)
+        for group in [active_group, inactive_group]:
+            for i, c in enumerate(group):
+                resp = requests.post(CLAIM_URL, json={"planet_id": c.planet_id.decode(),
+                                                      "agent_addr": c.agent_addr, "avatar_addr": c.avatar_addr,
+                                                      "season_id": c.season_pass_id, "force": True})
+                print(f"{i + 1}/{len(claim_list)} :: {c.planet_id.decode()} :: {c.avatar_addr}")
+                print(resp.json())
+                print("=" * 32)
+    finally:
+        sess.close()
 
 
 if __name__ == "__main__":
