@@ -98,8 +98,6 @@ def track_tx():
             # if msg:
             #     claim.msg = "\n".join([claim.msg, msg])
             sess.add(target_claim)
-    sess.commit()
-    sess.close()
 
     logger.info(
         "Transactions found to track",
@@ -108,6 +106,9 @@ def track_tx():
         start_id=claim_list[0].id,
         end_id=claim_list[-1].id,
     )
+    sess.commit()
+    sess.close()
+
     for status, tx_list in result.items():
         if status is None:
             logger.error(

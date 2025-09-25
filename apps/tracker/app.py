@@ -60,7 +60,7 @@ def main():
             lambda: track_world_clear_missing_blocks(),
             8,
         ),
-        "TxTracker": (track_tx, 4),
+        "TxTracker": (track_tx, 10),
     }
 
     enabled_tracker_names = config.enabled_trackers
