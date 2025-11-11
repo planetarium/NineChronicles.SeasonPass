@@ -71,6 +71,9 @@ def check_nonce(planet: str, sess=Depends(session)):
     elif planet.lower() == "heimdall":
         planet_id = PlanetID.HEIMDALL if is_mainnet else PlanetID.HEIMDALL_INTERNAL
         url = config.converted_gql_url_map[planet_id]
+    elif planet.lower() == "thor":
+        planet_id = PlanetID.THOR if is_mainnet else PlanetID.THOR_INTERNAL
+        url = config.converted_gql_url_map[planet_id]
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
 
@@ -119,6 +122,14 @@ def block_status(sess=Depends(session)):
     result[heimdall_planet.name] = {
         k.value: heimdall_tip - v for k, v in heimdall_blocks.items()
     }
+
+    thor_planet = PlanetID.THOR if stage == "mainnet" else PlanetID.THOR_INTERNAL
+    if thor_planet in config.converted_gql_url_map:
+        thor_tip = get_tip(config.converted_gql_url_map[thor_planet])
+        thor_blocks = get_db_tip(sess, thor_planet)
+        result[thor_planet.name] = {
+            k.value: thor_tip - v for k, v in thor_blocks.items()
+        }
 
     err = False
     for planet, report in result.items():
@@ -170,6 +181,8 @@ def balance(planet: str):
         url = config.converted_gql_url_map[PlanetID.ODIN]
     elif planet.lower() == "heimdall":
         url = config.converted_gql_url_map[PlanetID.HEIMDALL]
+    elif planet.lower() == "thor":
+        url = config.converted_gql_url_map[PlanetID.THOR]
     else:
         return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
     resp = requests.post(

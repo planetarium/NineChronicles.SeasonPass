@@ -217,13 +217,24 @@ def test_get_genesis_block_hash():
     # 각 planet_id에 대한 genesis hash 확인
     odin_hash = get_genesis_block_hash(PlanetID.ODIN)
     heimdall_hash = get_genesis_block_hash(PlanetID.HEIMDALL)
+    thor_hash = get_genesis_block_hash(PlanetID.THOR)
+    odin_internal_hash = get_genesis_block_hash(PlanetID.ODIN_INTERNAL)
+    heimdall_internal_hash = get_genesis_block_hash(PlanetID.HEIMDALL_INTERNAL)
+    thor_internal_hash = get_genesis_block_hash(PlanetID.THOR_INTERNAL)
 
     # 결과가 bytes인지 확인
     assert isinstance(odin_hash, bytes)
     assert isinstance(heimdall_hash, bytes)
+    assert isinstance(thor_hash, bytes)
+    assert isinstance(odin_internal_hash, bytes)
+    assert isinstance(heimdall_internal_hash, bytes)
+    assert isinstance(thor_internal_hash, bytes)
 
     # 각각 다른 해시값인지 확인
     assert odin_hash != heimdall_hash
+    assert odin_hash == odin_internal_hash
+    assert heimdall_hash == heimdall_internal_hash
+    assert thor_hash == thor_internal_hash
 
 
 def test_get_genesis_block_hash_invalid_planet():
