@@ -64,6 +64,12 @@ def get_genesis_block_hash(planet_id: PlanetID) -> bytes:
         PlanetID.HEIMDALL_INTERNAL: bytes.fromhex(
             "729fa26958648a35b53e8e3905d11ec53b1b4929bf5f499884aed7df616f5913"
         ),
+        PlanetID.THOR: bytes.fromhex(
+            "7eacf897e54eb4ba5e1b99050e77aaa74d514b98b0eaab2eee25189e8c801228"
+        ),
+        PlanetID.THOR_INTERNAL: bytes.fromhex(
+            "7eacf897e54eb4ba5e1b99050e77aaa74d514b98b0eaab2eee25189e8c801228"
+        ),
     }
     if planet_id not in switcher:
         raise ValueError("Invalid planet id")

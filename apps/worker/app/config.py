@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     gql_url_map: dict[str, str] = {
         "0x000000000000": "https://odin-rpc.nine-chronicles.com/graphql",
         "0x000000000001": "https://heimdall-rpc.nine-chronicles.com/graphql",
+        "0x000000000003": "https://thor-rpc.nine-chronicles.com/graphql",
     }
     region_name: str = "us-east-2"
     kms_key_id: str
