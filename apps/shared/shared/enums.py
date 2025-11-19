@@ -97,6 +97,7 @@ class ActionType(Enum):
     WANTED = "wanted"
     CHALLENGE = "explore_adventure_boss"
     RUSH = "sweep_adventure_boss"
+    INFINITE_TOWER = "infinite_tower_battle"
 
 
 class PlanetID(bytes, Enum):

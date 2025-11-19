@@ -202,6 +202,18 @@ def consume_courage_message(message: TrackerMessage):
                     action_data,
                 )
                 logger.info(f"{len(action_data)} Event Dungeon applied.")
+            elif "infinite_tower_battle" == type_id:
+                apply_exp(
+                    sess,
+                    planet_id,
+                    user_season_dict,
+                    ActionType.INFINITE_TOWER,
+                    current_pass.exp_dict[ActionType.INFINITE_TOWER],
+                    level_dict,
+                    block_index,
+                    action_data,
+                )
+                logger.info(f"{len(action_data)} Infinite Tower applied.")
             else:
                 apply_exp(
                     sess,
