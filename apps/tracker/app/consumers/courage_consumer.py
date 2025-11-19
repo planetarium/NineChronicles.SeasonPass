@@ -152,7 +152,7 @@ def consume_courage_message(message: TrackerMessage):
             sess, planet_id, current_pass, message.action_data
         )
         for type_id, action_data in message.action_data.items():
-            if "random_buff" in type_id or "raid_reward" in type_id:
+            if "random_buff" in type_id or "raid_reward" in type_id or "infinite_tower_battle" == type_id:
                 continue
 
             if "raid7" == type_id:
