@@ -194,12 +194,19 @@ def consume_courage_message(message: TrackerMessage):
                 )
                 logger.info(f"{len(action_data)} Sweep applied.")
             elif "event_dungeon_battle6" == type_id:
+                event_exp = current_pass.exp_dict.get(ActionType.EVENT)
+                if event_exp is None:
+                    logger.warning(
+                        f"ActionType.EVENT exp not found for season pass {current_pass.id}, "
+                        f"skipping {len(action_data)} event dungeon actions"
+                    )
+                    continue
                 apply_exp(
                     sess,
                     planet_id,
                     user_season_dict,
                     ActionType.EVENT,
-                    current_pass.exp_dict[ActionType.EVENT],
+                    event_exp,
                     level_dict,
                     block_index,
                     action_data,
