@@ -7,6 +7,7 @@ from shared.utils.actions import Address, ClaimItems, FungibleAssetValue
 from shared.utils.transaction import (
     append_signature_to_unsigned_tx,
     create_claim_items_unsigned_tx,
+    create_grant_items_unsigned_tx,
     create_signed_tx,
     create_unsigned_tx,
     get_genesis_block_hash,
@@ -282,6 +283,48 @@ def test_create_claim_items_unsigned_tx():
     # claim_items 액션인지 확인
     action = decoded[b"a"][0]
     assert action["type_id"] == "claim_items"
+
+
+def test_create_grant_items_unsigned_tx():
+    """create_grant_items_unsigned_tx 함수 테스트"""
+    claim_data = [{"ticker": "Item_NT_500000", "amount": 1, "decimal_places": 0}]
+
+    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0)
+    memo = '{"season_pass": {"n": [1], "p": [], "t": "claim"}}'
+
+    result = create_grant_items_unsigned_tx(
+        planet_id=PlanetID.ODIN,
+        public_key="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        address="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+        nonce=1,
+        avatar_addr="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+        claim_data=claim_data,
+        memo=memo,
+        timestamp=timestamp,
+    )
+
+    assert isinstance(result, bytes)
+
+    decoded = bencodex.loads(result)
+    action = decoded[b"a"][0]
+    assert action["type_id"] == "grant_items"
+    assert "id" not in action["values"]
+    assert action["values"]["m"] == memo
+
+
+def test_create_grant_items_unsigned_tx_empty_claim_data():
+    """빈 claim_data에 대한 예외 테스트 (grant_items)"""
+    with pytest.raises(ValueError, match="Nothing to claim"):
+        create_grant_items_unsigned_tx(
+            planet_id=PlanetID.ODIN,
+            public_key="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            address="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+            nonce=1,
+            avatar_addr="0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa",
+            claim_data=[],
+            memo="test",
+            timestamp=datetime.datetime(2023, 1, 1, 12, 0, 0),
+        )
 
 
 def test_create_signed_tx():

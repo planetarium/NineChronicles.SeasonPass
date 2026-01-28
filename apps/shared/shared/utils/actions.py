@@ -9,7 +9,14 @@ from uuid import uuid1
 import bencodex
 import eth_utils
 
-__all__ = ["Address", "BurnAsset", "ClaimItems", "Currency", "FungibleAssetValue"]
+__all__ = [
+    "Address",
+    "BurnAsset",
+    "ClaimItems",
+    "Currency",
+    "FungibleAssetValue",
+    "GrantItems",
+]
 
 
 class Address:
@@ -247,3 +254,45 @@ class ClaimItems(ActionBase):
             ],
             "m": self._memo,
         }
+
+
+class GrantItems(ActionBase):
+    """
+    Python port of `GrantItems` action from lib9c (PR #3257).
+
+    - type_id : `grant_items`
+    - values:
+      - cd: List[(avatarAddress, fungibleAssetValues)]
+      - m: optional memo string (omitted if empty)
+
+    NOTE:
+    - Unlike `ClaimItems`, `GrantItems` does NOT include an `id` field in values.
+    """
+
+    TYPE_ID: str = "grant_items"
+
+    def __init__(
+        self,
+        *,
+        claim_data: List[Dict[str, Address | List[FungibleAssetValue]]],
+        memo: Optional[str] = None,
+        _id: Optional[str] = None,
+    ):
+        super().__init__(self.TYPE_ID, _id)
+        self._claim_data = claim_data
+        self._memo = memo
+
+    @property
+    def _plain_value(self):
+        pv: Dict[str, Any] = {
+            "cd": [
+                [
+                    cd["avatarAddress"].raw,
+                    [x.plain_value for x in cd["fungibleAssetValues"]],
+                ]
+                for cd in self._claim_data
+            ],
+        }
+        if self._memo is not None and self._memo != "":
+            pv["m"] = self._memo
+        return pv

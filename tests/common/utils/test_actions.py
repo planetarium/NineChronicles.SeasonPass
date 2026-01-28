@@ -1,6 +1,12 @@
 from unittest.mock import Mock, patch
 
-from shared.utils.actions import Address, BurnAsset, ClaimItems, FungibleAssetValue
+from shared.utils.actions import (
+    Address,
+    BurnAsset,
+    ClaimItems,
+    FungibleAssetValue,
+    GrantItems,
+)
 
 
 def test_claim_items_plain_value():
@@ -53,6 +59,53 @@ def test_claim_items_serialized_plain_value():
     assert b"claim_items" in serialized or b"claim_items" in serialized.decode(
         errors="ignore"
     )
+
+
+def test_grant_items_plain_value():
+    grant_items = GrantItems(
+        claim_data=[
+            {
+                "avatarAddress": Address("0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa"),
+                "fungibleAssetValues": [
+                    FungibleAssetValue.from_raw_data(
+                        ticker="Item_NT_500000",
+                        decimal_places=0,
+                        minters=None,
+                        amount=1,
+                    )
+                ],
+            }
+        ],
+        memo="memo",
+    )
+    plain = grant_items.plain_value
+    assert plain["type_id"] == "grant_items"
+    assert "id" not in plain["values"]
+    assert plain["values"]["m"] == "memo"
+    assert isinstance(plain["values"]["cd"][0][0], bytes)
+    assert isinstance(plain["values"]["cd"][0][1][0], list)
+
+
+def test_grant_items_omit_empty_memo():
+    grant_items = GrantItems(
+        claim_data=[
+            {
+                "avatarAddress": Address("0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa"),
+                "fungibleAssetValues": [
+                    FungibleAssetValue.from_raw_data(
+                        ticker="Item_NT_500000",
+                        decimal_places=0,
+                        minters=None,
+                        amount=1,
+                    )
+                ],
+            }
+        ],
+        memo="",
+    )
+    plain = grant_items.plain_value
+    assert plain["type_id"] == "grant_items"
+    assert "m" not in plain["values"]
 
 
 def test_burn_asset_plain_value():
