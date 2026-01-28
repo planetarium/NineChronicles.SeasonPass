@@ -80,7 +80,7 @@ def test_grant_items_plain_value():
     )
     plain = grant_items.plain_value
     assert plain["type_id"] == "grant_items"
-    assert "id" not in plain["values"]
+    assert plain["values"]["id"] == bytes.fromhex(grant_items._id)
     assert plain["values"]["m"] == "memo"
     assert isinstance(plain["values"]["cd"][0][0], bytes)
     assert isinstance(plain["values"]["cd"][0][1][0], list)
@@ -105,6 +105,7 @@ def test_grant_items_omit_empty_memo():
     )
     plain = grant_items.plain_value
     assert plain["type_id"] == "grant_items"
+    assert plain["values"]["id"] == bytes.fromhex(grant_items._id)
     assert "m" not in plain["values"]
 
 

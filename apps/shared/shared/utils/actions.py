@@ -266,7 +266,7 @@ class GrantItems(ActionBase):
       - m: optional memo string (omitted if empty)
 
     NOTE:
-    - Unlike `ClaimItems`, `GrantItems` does NOT include an `id` field in values.
+    - This project includes `id` field in values for `GrantItems` as well.
     """
 
     TYPE_ID: str = "grant_items"
@@ -285,6 +285,7 @@ class GrantItems(ActionBase):
     @property
     def _plain_value(self):
         pv: Dict[str, Any] = {
+            "id": bytes.fromhex(self._id),
             "cd": [
                 [
                     cd["avatarAddress"].raw,

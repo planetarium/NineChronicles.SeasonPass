@@ -308,7 +308,7 @@ def test_create_grant_items_unsigned_tx():
     decoded = bencodex.loads(result)
     action = decoded[b"a"][0]
     assert action["type_id"] == "grant_items"
-    assert "id" not in action["values"]
+    assert "id" in action["values"]
     assert action["values"]["m"] == memo
 
 
