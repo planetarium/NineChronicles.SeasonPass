@@ -105,7 +105,7 @@ class ActionJson:
             return 1
         elif self.type_id.startswith("battle"):
             return 1
-        elif "sweep" in self.type_id:
+        elif "hack_and_slash_sweep" in self.type_id:
             # !!! WARNING: This returns used AP, not play count !!!
             return self.actionPoint + self.apStoneCount * AP_PER_STONE
         elif "event" in self.type_id:

@@ -1,8 +1,10 @@
-import os
 from typing import Dict, List
 
 import requests
 import structlog
+from app.config import config
+from app.utils.season_pass import apply_exp, verify_season_pass
+from app.utils.stake import StakeAPCoef
 from shared.enums import ActionType, PassType, PlanetID
 from shared.models.action import ActionHistory, Block
 from shared.models.season_pass import Level
@@ -12,10 +14,6 @@ from shared.utils.season_pass import create_jwt_token, get_pass
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import scoped_session, sessionmaker
-
-from app.config import config
-from app.utils.season_pass import apply_exp, verify_season_pass
-from app.utils.stake import StakeAPCoef
 
 AP_PER_ADVENTURE = 5
 
@@ -134,7 +132,7 @@ def consume_courage_message(message: TrackerMessage):
 
         block_index = message.block
         planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-        
+
         existing_block = sess.scalar(
             select(Block).where(
                 Block.planet_id == planet_id,
@@ -152,7 +150,12 @@ def consume_courage_message(message: TrackerMessage):
             sess, planet_id, current_pass, message.action_data
         )
         for type_id, action_data in message.action_data.items():
-            if "random_buff" in type_id or "raid_reward" in type_id or "infinite_tower_battle" == type_id:
+            if (
+                "random_buff" in type_id
+                or "raid_reward" in type_id
+                or "infinite_tower_battle" == type_id
+                or "event_dungeon_battle_sweep" == type_id
+            ):
                 continue
 
             if "raid7" == type_id:
@@ -191,12 +194,19 @@ def consume_courage_message(message: TrackerMessage):
                 )
                 logger.info(f"{len(action_data)} Sweep applied.")
             elif "event_dungeon_battle6" == type_id:
+                event_exp = current_pass.exp_dict.get(ActionType.EVENT)
+                if event_exp is None:
+                    logger.warning(
+                        f"ActionType.EVENT exp not found for season pass {current_pass.id}, "
+                        f"skipping {len(action_data)} event dungeon actions"
+                    )
+                    continue
                 apply_exp(
                     sess,
                     planet_id,
                     user_season_dict,
                     ActionType.EVENT,
-                    current_pass.exp_dict[ActionType.EVENT],
+                    event_exp,
                     level_dict,
                     block_index,
                     action_data,
@@ -216,9 +226,9 @@ def consume_courage_message(message: TrackerMessage):
                 logger.info(f"{len(action_data)} HackAndSlash applied.")
 
         sess.add_all(list(user_season_dict.values()))
-        
+
         existing_block.last_processed_index = block_index
-        
+
         sess.commit()
         logger.info(
             f"All {len(user_season_dict.values())} brave exp for block {message.block} applied."
