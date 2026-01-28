@@ -2,9 +2,14 @@ import datetime
 from typing import Any, Dict, List
 
 import bencodex
-
 from shared.enums import PlanetID
-from shared.utils.actions import Address, BurnAsset, ClaimItems, FungibleAssetValue
+from shared.utils.actions import (
+    Address,
+    BurnAsset,
+    ClaimItems,
+    FungibleAssetValue,
+    GrantItems,
+)
 
 
 def create_unsigned_tx(
@@ -98,23 +103,25 @@ def create_claim_items_unsigned_tx(
     for item in claim_data:
         if avatar_addr not in claim_items_data:
             claim_items_data[avatar_addr] = []
-        
+
         fungible_asset_value = FungibleAssetValue.from_raw_data(
             ticker=item["ticker"],
             decimal_places=item.get("decimal_places", 0),
             minters=None,
             amount=item["amount"],
         )
-        
+
         claim_items_data[avatar_addr].append(fungible_asset_value)
-    
+
     final_claim_data = []
     for avatar_address_str, fungible_asset_values in claim_items_data.items():
-        final_claim_data.append({
-            "avatarAddress": Address(avatar_addr),
-            "fungibleAssetValues": fungible_asset_values
-        })
-    
+        final_claim_data.append(
+            {
+                "avatarAddress": Address(avatar_addr),
+                "fungibleAssetValues": fungible_asset_values,
+            }
+        )
+
     claim_items_data = final_claim_data
 
     # ClaimItems 객체 생성
@@ -128,6 +135,63 @@ def create_claim_items_unsigned_tx(
     plain_value = claim_items.plain_value
 
     # unsigned transaction 생성
+    return create_unsigned_tx(
+        planet_id=planet_id,
+        public_key=public_key,
+        address=address,
+        nonce=nonce,
+        plain_value=plain_value,
+        timestamp=timestamp,
+    )
+
+
+def create_grant_items_unsigned_tx(
+    planet_id: PlanetID,
+    public_key: str,
+    address: str,
+    nonce: int,
+    avatar_addr: str,
+    claim_data: List[Dict[str, Any]],
+    memo: str,
+    timestamp: datetime.datetime,
+) -> bytes:
+    """
+    grant_items 액션을 위한 unsigned transaction을 생성합니다.
+    (SeasonPass reward 지급용) GQL 의존성을 제거하고 로컬에서 생성합니다.
+    """
+    if not claim_data:
+        raise ValueError("Nothing to claim")
+
+    claim_items_data = {}
+    for item in claim_data:
+        if avatar_addr not in claim_items_data:
+            claim_items_data[avatar_addr] = []
+
+        fungible_asset_value = FungibleAssetValue.from_raw_data(
+            ticker=item["ticker"],
+            decimal_places=item.get("decimal_places", 0),
+            minters=None,
+            amount=item["amount"],
+        )
+
+        claim_items_data[avatar_addr].append(fungible_asset_value)
+
+    final_claim_data = []
+    for _, fungible_asset_values in claim_items_data.items():
+        final_claim_data.append(
+            {
+                "avatarAddress": Address(avatar_addr),
+                "fungibleAssetValues": fungible_asset_values,
+            }
+        )
+
+    grant_items = GrantItems(
+        claim_data=final_claim_data,
+        memo=memo,
+    )
+
+    plain_value = grant_items.plain_value
+
     return create_unsigned_tx(
         planet_id=planet_id,
         public_key=public_key,
