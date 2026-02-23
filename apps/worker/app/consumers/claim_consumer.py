@@ -9,7 +9,7 @@ from shared.enums import TxStatus
 from shared.models.user import Claim
 from shared.schemas.message import ClaimMessage
 from shared.utils._graphql import GQLClient
-from shared.utils.transaction import create_claim_items_unsigned_tx, create_signed_tx
+from shared.utils.transaction import create_grant_items_unsigned_tx, create_signed_tx
 from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
@@ -86,7 +86,7 @@ def consume_claim_message(message: ClaimMessage):
             }
         )
 
-        unsigned_tx = create_claim_items_unsigned_tx(
+        unsigned_tx = create_grant_items_unsigned_tx(
             planet_id=claim.planet_id,
             public_key=account.pubkey.hex(),
             address=account.address,
