@@ -2,6 +2,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import requests
+from app.config import config
+from app.dependencies import session
 from fastapi import APIRouter, Depends
 from shared.constants import SEASONPASS_ADDRESS
 from shared.enums import PassType, PlanetID, TxStatus
@@ -11,9 +13,6 @@ from shared.utils.season_pass import create_jwt_token
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
-
-from app.config import config
-from app.dependencies import session
 
 from . import admin, season_pass, tmp, user
 
@@ -124,7 +123,10 @@ def block_status(sess=Depends(session)):
     }
 
     thor_planet = PlanetID.THOR if stage == "mainnet" else PlanetID.THOR_INTERNAL
-    if thor_planet in config.converted_gql_url_map:
+    if (
+        thor_planet in config.converted_gql_url_map
+        and thor_planet.value.decode() in config.enabled_planets
+    ):
         thor_tip = get_tip(config.converted_gql_url_map[thor_planet])
         thor_blocks = get_db_tip(sess, thor_planet)
         result[thor_planet.name] = {
