@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from decimal import Decimal
+from typing import Dict, List, Optional
 
 from app.celery import send_to_worker
 from app.dependencies import session
@@ -8,7 +9,7 @@ from app.utils import verify_token
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
-from shared.enums import ActionType, PassType, TxStatus
+from shared.enums import ActionType, PassType, PlanetID, TxStatus
 from shared.models.season_pass import Exp, SeasonPass
 from shared.models.user import Claim, UserSeasonPass
 from shared.utils.season_pass import get_pass
@@ -600,3 +601,72 @@ def burn_asset(burn_request: BurnAssetRequest):
         raise HTTPException(
             status_code=500, detail=f"Failed to trigger burn asset task: {str(e)}"
         )
+
+
+class RewardClaimItem(BaseModel):
+    ticker: str
+    decimal_places: int
+    total_amount: Decimal
+
+
+class PlanetRewardClaims(BaseModel):
+    tokens: List[RewardClaimItem]
+
+
+class RewardClaimsResponse(BaseModel):
+    year: int
+    month: int
+    planets: Dict[str, PlanetRewardClaims]
+
+
+@router.get("/stats/reward-claims", response_model=RewardClaimsResponse)
+def get_reward_claims(
+    year: int = Query(..., ge=2020, le=2030),
+    month: int = Query(..., ge=1, le=12),
+    sess=Depends(session),
+):
+    utc_start = datetime(year, month, 1, tzinfo=timezone.utc)
+    utc_end = (
+        datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        if month == 12
+        else datetime(year, month + 1, 1, tzinfo=timezone.utc)
+    )
+
+    mainnet_planets = [PlanetID.ODIN.value, PlanetID.HEIMDALL.value]
+
+    claims = sess.scalars(
+        select(Claim).where(
+            Claim.tx_status == TxStatus.SUCCESS,
+            Claim.planet_id.in_(mainnet_planets),
+            Claim.created_at >= utc_start,
+            Claim.created_at < utc_end,
+        )
+    ).all()
+
+    agg: dict = {}
+    for claim in claims:
+        planet_name = PlanetID(claim.planet_id).name
+        planet_agg = agg.setdefault(planet_name, {})
+        for reward in claim.reward_list:
+            ticker = reward["ticker"]
+            dp = reward.get("decimal_places", 0)
+            amount = Decimal(str(reward["amount"]))
+            if ticker not in planet_agg:
+                planet_agg[ticker] = {"decimal_places": dp, "total_amount": Decimal(0)}
+            planet_agg[ticker]["total_amount"] += amount
+
+    planets = {
+        planet: PlanetRewardClaims(
+            tokens=[
+                RewardClaimItem(
+                    ticker=t,
+                    decimal_places=v["decimal_places"],
+                    total_amount=v["total_amount"],
+                )
+                for t, v in tokens.items()
+            ]
+        )
+        for planet, tokens in agg.items()
+    }
+
+    return RewardClaimsResponse(year=year, month=month, planets=planets)
