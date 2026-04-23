@@ -7,6 +7,7 @@ from app.config import config
 from app.consumers.courage_consumer import consume_courage_message
 from app.schemas.action import ActionJson
 from app.utils.gql import fetch_block_data, get_block_tip
+from app.utils.stage_cost import refresh_stage_sheets
 from shared.enums import PassType
 from shared.models.action import Block
 from shared.models.arena import BattleHistory
@@ -111,6 +112,7 @@ def track_courage_actions(planet_id: str, gql_url: str, block_index: int):
 
 
 def track_missing_blocks():
+    refresh_stage_sheets()
     for planet_id, gql_url in config.gql_url_map.items():
         if planet_id not in config.enabled_planets:
             continue
