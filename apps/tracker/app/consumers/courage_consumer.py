@@ -4,6 +4,7 @@ import requests
 import structlog
 from app.config import config
 from app.utils.season_pass import apply_exp, verify_season_pass
+from app.utils.stage_cost import get_stage_cost_ap
 from app.utils.stake import StakeAPCoef
 from shared.enums import ActionType, PassType, PlanetID
 from shared.models.action import ActionHistory, Block
@@ -15,7 +16,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-AP_PER_ADVENTURE = 5
+DEFAULT_AP_PER_ADVENTURE = 5
 
 logger = structlog.get_logger(__name__)
 
@@ -54,7 +55,13 @@ def handle_sweep(
                 coef = ap_coef.get_ap_coef(float(data["deposit"]))
             coef_dict[d["agent_addr"]] = coef
 
-        real_count = d["count_base"] // (AP_PER_ADVENTURE * coef / 100)
+        stage_id = d.get("stage_id")
+        cost_ap = (
+            get_stage_cost_ap(planet_id, stage_id)
+            if stage_id
+            else DEFAULT_AP_PER_ADVENTURE
+        )
+        real_count = d["count_base"] // (cost_ap * coef / 100)
 
         if exp * real_count < 0:
             logger.warning(

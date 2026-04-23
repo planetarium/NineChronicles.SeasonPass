@@ -1,10 +1,12 @@
-import concurrent.futures
 import json
-import time
 from collections import defaultdict
 
 import jwt
 import structlog
+from app.config import config
+from app.consumers.courage_consumer import consume_courage_message
+from app.schemas.action import ActionJson
+from app.utils.gql import fetch_block_data, get_block_tip
 from shared.enums import PassType
 from shared.models.action import Block
 from shared.models.arena import BattleHistory
@@ -12,12 +14,6 @@ from shared.schemas.message import TrackerMessage
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import scoped_session, sessionmaker
-
-from app.celery import send_to_worker
-from app.config import config
-from app.consumers.courage_consumer import consume_courage_message
-from app.schemas.action import ActionJson
-from app.utils.gql import fetch_block_data, get_block_tip
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn))
@@ -90,14 +86,15 @@ def track_courage_actions(planet_id: str, gql_url: str, block_index: int):
                 finally:
                     sess.close()
 
-            action_data[action_json.type_id].append(
-                {
-                    "tx_id": tx["id"],
-                    "agent_addr": tx["signer"].lower(),
-                    "avatar_addr": action_json.avatar_addr.lower(),
-                    "count_base": action_json.count_base,
-                }
-            )
+            entry = {
+                "tx_id": tx["id"],
+                "agent_addr": tx["signer"].lower(),
+                "avatar_addr": action_json.avatar_addr.lower(),
+                "count_base": action_json.count_base,
+            }
+            if action_json.stageId is not None:
+                entry["stage_id"] = action_json.stageId
+            action_data[action_json.type_id].append(entry)
 
     logger.info(
         f"Sending task to Celery worker: season_pass.process_courage",
@@ -121,25 +118,27 @@ def track_missing_blocks():
         sess = scoped_session(sessionmaker(bind=engine))
         try:
             current_tip = get_block_tip(gql_url, config.headless_jwt_secret)
-            
+
             existing_block = sess.scalar(
                 select(Block).where(
                     Block.planet_id == planet_id.encode(),
                     Block.pass_type == PassType.COURAGE_PASS,
                 )
             )
-            
+
             if not existing_block:
-                raise ValueError(f"No existing block found for planet {planet_id} and pass type {PassType.COURAGE_PASS}")
-            
+                raise ValueError(
+                    f"No existing block found for planet {planet_id} and pass type {PassType.COURAGE_PASS}"
+                )
+
             start_from = existing_block.last_processed_index + 1
-            
+
             if start_from >= current_tip:
                 logger.info(
                     f"Planet {planet_id}: Already up to date. Current tip: {current_tip}"
                 )
                 continue
-                
+
             logger.info(
                 f"Processing blocks from {start_from} to {current_tip}",
                 tracker="courage_tracker",
@@ -147,14 +146,14 @@ def track_missing_blocks():
                 start_block=start_from,
                 end_block=current_tip,
             )
-            
+
             # Process blocks in batches of 100
             end_block = min(start_from + 100, current_tip)
-            
+
             for block_index in range(start_from, end_block):
                 try:
                     track_courage_actions(planet_id, gql_url, block_index)
-                    
+
                     if existing_block:
                         existing_block.last_processed_index = block_index
                     else:
@@ -164,10 +163,10 @@ def track_missing_blocks():
                             last_processed_index=block_index,
                         )
                         sess.add(existing_block)
-                    
+
                     sess.commit()
                     logger.info(f"Block {block_index} processed successfully")
-                    
+
                 except Exception as e:
                     sess.rollback()
                     logger.exception(
@@ -175,13 +174,13 @@ def track_missing_blocks():
                         exc=e,
                     )
                     break
-            
+
             logger.info(
                 f"Processed blocks from {start_from} to {end_block}",
                 tracker="courage_tracker",
                 planet_id=planet_id,
             )
-                    
+
         except Exception as e:
             logger.exception(
                 f"Error in track_missing_blocks for planet {planet_id}",
