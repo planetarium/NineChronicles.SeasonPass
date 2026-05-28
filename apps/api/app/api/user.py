@@ -49,7 +49,11 @@ def get_default_usp(
     try:
         match season_pass.pass_type:
             case PassType.WORLD_CLEAR_PASS:
-                gql_client = GQLClient(config.converted_gql_url_map, config.jwt_secret)
+                gql_client = GQLClient(
+                    config.converted_gql_url_map,
+                    config.jwt_secret,
+                    timeout=config.gql_timeout,
+                )
                 _, cleared_stage = gql_client.get_last_cleared_stage(
                     planet_id, avatar_addr, timeout=1
                 )
@@ -125,7 +129,12 @@ def user_status(
         target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
     elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
         # 0 cleared stage is usually not normal data.
-        _, cleared_stage = get_last_cleared_stage(
+        gql_client = GQLClient(
+            config.converted_gql_url_map,
+            config.jwt_secret,
+            timeout=config.gql_timeout,
+        )
+        _, cleared_stage = gql_client.get_last_cleared_stage(
             planet_id, target.avatar_addr, timeout=1
         )
         target.exp = cleared_stage
@@ -164,7 +173,12 @@ def all_user_status(
             )
         elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
             # 0 cleared stage is usually not normal data.
-            _, cleared_stage = get_last_cleared_stage(
+            gql_client = GQLClient(
+                config.converted_gql_url_map,
+                config.jwt_secret,
+                timeout=config.gql_timeout,
+            )
+            _, cleared_stage = gql_client.get_last_cleared_stage(
                 planet_id, target.avatar_addr, timeout=1
             )
             target.exp = cleared_stage

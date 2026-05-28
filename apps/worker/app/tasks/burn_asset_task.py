@@ -49,7 +49,11 @@ def process_burn_asset(self, message: Dict[str, Any]) -> str:
     """
     sess = scoped_session(sessionmaker(bind=engine))
     account = Account(config.kms_key_id, config.region_name)
-    gql = GQLClient(config.converted_gql_url_map, config.headless_jwt_secret)
+    gql = GQLClient(
+        config.converted_gql_url_map,
+        config.headless_jwt_secret,
+        timeout=config.gql_timeout,
+    )
 
     try:
         logger.info("Processing burn asset message", message=message)

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     port: int = 8000
     workers: int = 1
     timeout_keep_alive: int = 5
+    gql_timeout: float = 5.0
     gql_url_map: dict[str, str] = {
         "0x000000000000": "https://odin-rpc.nine-chronicles.com/graphql",
         "0x000000000001": "https://heimdall-rpc.nine-chronicles.com/graphql",

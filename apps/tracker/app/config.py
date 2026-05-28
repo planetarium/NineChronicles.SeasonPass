@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://127.0.0.1:6379/0"
     headless_jwt_secret: Optional[str] = None
     arena_service_jwt_public_key: str
+    gql_timeout: float = 5.0
     gql_url_map: dict[str, str] = {
         "0x000000000000": "https://odin-rpc.nine-chronicles.com/graphql",
         "0x000000000001": "https://heimdall-rpc.nine-chronicles.com/graphql",
