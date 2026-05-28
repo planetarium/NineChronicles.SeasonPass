@@ -49,7 +49,11 @@ def get_default_usp(
     try:
         match season_pass.pass_type:
             case PassType.WORLD_CLEAR_PASS:
-                gql_client = GQLClient(config.converted_gql_url_map, config.jwt_secret)
+                gql_client = GQLClient(
+                    config.converted_gql_url_map,
+                    config.jwt_secret,
+                    timeout=config.gql_timeout,
+                )
                 _, cleared_stage = gql_client.get_last_cleared_stage(
                     planet_id, avatar_addr, timeout=1
                 )

@@ -32,7 +32,11 @@ def process_retry_stage(self, message: Dict[str, Any] = None):
         message: send_to_worker에서 전달되는 메시지 (옵션)
     """
     sess = scoped_session(sessionmaker(bind=engine))
-    gql = GQLClient(config.converted_gql_url_map, config.headless_jwt_secret)
+    gql = GQLClient(
+        config.converted_gql_url_map,
+        config.headless_jwt_secret,
+        timeout=config.gql_timeout,
+    )
 
     try:
         now = datetime.now(tz=timezone.utc)

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import Optional
 
 import requests
 
@@ -6,9 +7,15 @@ from shared.utils.season_pass import create_jwt_token
 
 
 class StakeAPCoef:
-    def __init__(self, gql_url: str = "", jwt_secret: str = ""):
+    def __init__(
+        self,
+        gql_url: str = "",
+        jwt_secret: str = "",
+        timeout: Optional[float] = None,
+    ):
         self.gql_url = gql_url
         self.jwt_secret = jwt_secret
+        self.timeout = timeout
         self.crit = []
 
     def __fetch(self):
@@ -26,6 +33,7 @@ class StakeAPCoef:
                              )}"""
             },
             headers={"Authorization": f"Bearer {create_jwt_token(self.jwt_secret)}"},
+            timeout=self.timeout,
         )
         state = resp.json()["data"]["state"]
         raw = bytes.fromhex(state)

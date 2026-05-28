@@ -21,7 +21,9 @@ DEFAULT_AP_PER_ADVENTURE = 5
 logger = structlog.get_logger(__name__)
 
 engine = create_engine(str(config.pg_dsn))
-ap_coef = StakeAPCoef(jwt_secret=config.headless_jwt_secret)
+ap_coef = StakeAPCoef(
+    jwt_secret=config.headless_jwt_secret, timeout=config.gql_timeout
+)
 coef_dict = {}
 
 
@@ -47,6 +49,7 @@ def handle_sweep(
                 headers={
                     "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
                 },
+                timeout=config.gql_timeout,
             )
             data = resp.json()["data"]["stateQuery"]["stakeState"]
             if data is None:
