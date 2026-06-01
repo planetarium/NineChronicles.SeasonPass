@@ -114,6 +114,7 @@ def consume_world_clear_message(message: TrackerMessage):
                         client = GQLClient(
                             config.converted_gql_url_map,
                             config.headless_jwt_secret,
+                            timeout=config.gql_timeout,
                         )
                         cleared_world, target_data.exp = client.get_last_cleared_stage(
                             planet_id, action["avatar_addr"]

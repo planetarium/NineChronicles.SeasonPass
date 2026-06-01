@@ -82,6 +82,7 @@ def check_nonce(planet: str, sess=Depends(session)):
         headers={
             "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
         },
+        timeout=config.gql_timeout,
     )
     result = resp.json()
     next_nonce = result["data"]["nextTxNonce"]
@@ -212,6 +213,7 @@ def balance(planet: str):
         headers={
             "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
         },
+        timeout=config.gql_timeout,
     )
     data = resp.json()["data"]["stateQuery"]
     resp = {}

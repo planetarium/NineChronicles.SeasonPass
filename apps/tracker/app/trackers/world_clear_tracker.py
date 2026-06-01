@@ -26,6 +26,7 @@ def track_world_clear_actions(planet_id: str, gql_url: str, block_index: int):
         block_index,
         PassType.WORLD_CLEAR_PASS,
         config.headless_jwt_secret,
+        timeout=config.gql_timeout,
     )
 
     action_data = defaultdict(list)
@@ -71,7 +72,9 @@ def track_missing_blocks():
 
         sess = scoped_session(sessionmaker(bind=engine))
         try:
-            current_tip = get_block_tip(gql_url, config.headless_jwt_secret)
+            current_tip = get_block_tip(
+                gql_url, config.headless_jwt_secret, timeout=config.gql_timeout
+            )
             
             existing_block = sess.scalar(
                 select(Block).where(

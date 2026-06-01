@@ -1,6 +1,5 @@
 import datetime
 import logging
-import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import jwt
@@ -9,15 +8,25 @@ from gql import Client
 from gql.dsl import DSLMutation, DSLQuery, DSLSchema, dsl_gql
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode, ExecutionResult
-
 from shared.enums import PlanetID
+
+# Per-endpoint GraphQL schema cache. Introspection is expensive and the schema
+# is stable per headless URL, so we introspect at most once per URL across the
+# process lifetime. See issue #303.
+_SCHEMA_CACHE: Dict[str, Any] = {}
 
 
 class GQLClient:
-    def __init__(self, gql_url_map: Dict[PlanetID, str], jwt_secret: str = None):
+    def __init__(
+        self,
+        gql_url_map: Dict[PlanetID, str],
+        jwt_secret: str = None,
+        timeout: Optional[float] = None,
+    ):
         self.gql_url_map = gql_url_map
         self.client = None
         self.ds = None
+        self.timeout = timeout
         self.__jwt_secret = jwt_secret
 
     def __create_token(self) -> str:
@@ -38,16 +47,28 @@ class GQLClient:
         return {"Authorization": f"Bearer {self.__create_token()}"}
 
     def reset(self, planet_id: PlanetID):
+        url = self.gql_url_map[planet_id]
         transport = RequestsHTTPTransport(
-            url=self.gql_url_map[planet_id],
+            url=url,
             verify=True,
             retries=2,
             headers=self.__create_header(),
+            timeout=self.timeout,
         )
-        self.client = Client(transport=transport, fetch_schema_from_transport=True)
-        with self.client as _:
-            assert self.client.schema is not None
-            self.ds = DSLSchema(self.client.schema)
+
+        schema = _SCHEMA_CACHE.get(url)
+        if schema is None:
+            # One-time introspection per URL, bounded by `timeout` on the transport.
+            introspect_client = Client(
+                transport=transport, fetch_schema_from_transport=True
+            )
+            with introspect_client as _:
+                assert introspect_client.schema is not None
+                schema = introspect_client.schema
+            _SCHEMA_CACHE[url] = schema
+
+        self.client = Client(transport=transport, schema=schema)
+        self.ds = DSLSchema(schema)
 
     def execute(self, query: DocumentNode) -> Union[Dict[str, Any], ExecutionResult]:
         with self.client as sess:
@@ -178,7 +199,9 @@ class GQLClient:
         self.reset(planet_id)
         query = dsl_gql(
             DSLMutation(
-                self.ds.StandaloneMutation.stageTransaction.args(payload=signed_tx.hex())
+                self.ds.StandaloneMutation.stageTransaction.args(
+                    payload=signed_tx.hex()
+                )
             )
         )
         result = self.execute(query)
@@ -189,8 +212,10 @@ class GQLClient:
     def get_last_cleared_stage(
         self, planet_id: PlanetID, avatar_addr: str, timeout: int = None
     ) -> Tuple[int, int]:
-        query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{ 
-        worldInformation {{ lastClearedStage {{ worldId stageId }} }} 
+        if timeout is None:
+            timeout = self.timeout
+        query = f"""{{ stateQuery {{ avatar(avatarAddress: "{avatar_addr}") {{
+        worldInformation {{ lastClearedStage {{ worldId stageId }} }}
         }} }} }}"""
         resp = requests.post(
             self.gql_url_map[planet_id],

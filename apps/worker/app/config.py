@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     pg_dsn: str = "postgresql://local_test:password@127.0.0.1:5432/season_pass"
     broker_url: str = "pyamqp://local_test:password@127.0.0.1:5672/"
     result_backend: str = "redis://127.0.0.1:6379/0"
+    gql_timeout: float = 5.0
     gql_url_map: dict[str, str] = {
         "0x000000000000": "https://odin-rpc.nine-chronicles.com/graphql",
         "0x000000000001": "https://heimdall-rpc.nine-chronicles.com/graphql",

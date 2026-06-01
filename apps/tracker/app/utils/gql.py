@@ -58,11 +58,16 @@ def derive_address(addr: str, key: str) -> str:
     )
 
 
-def get_block_tip(gql_url: str, headless_jwt_secret: Optional[str] = None):
+def get_block_tip(
+    gql_url: str,
+    headless_jwt_secret: Optional[str] = None,
+    timeout: Optional[float] = None,
+):
     resp = requests.post(
         gql_url,
         json={"query": "{ nodeStatus { tip { index } } }"},
         headers={"Authorization": f"Bearer {create_jwt_token(headless_jwt_secret)}"},
+        timeout=timeout,
     )
     return resp.json()["data"]["nodeStatus"]["tip"]["index"]
 
@@ -72,6 +77,7 @@ def fetch_block_data(
     block_index: int,
     pass_type: PassType,
     headless_jwt_secret: Optional[str] = None,
+    timeout: Optional[float] = None,
 ):
     # Fetch Tx. and actions
     nct_query = f"""{{ transaction {{ ncTransactions (
@@ -84,6 +90,7 @@ def fetch_block_data(
         gql_url,
         json={"query": nct_query},
         headers={"Authorization": f"Bearer {create_jwt_token(headless_jwt_secret)}"},
+        timeout=timeout,
     )
     tx_data = resp.json()["data"]["transaction"]["ncTransactions"]
 
@@ -95,6 +102,7 @@ def fetch_block_data(
         gql_url,
         json={"query": tx_result_query},
         headers={"Authorization": f"Bearer {create_jwt_token(headless_jwt_secret)}"},
+        timeout=timeout,
     )
     tx_result_list = [
         x["txStatus"] for x in resp.json()["data"]["transaction"]["transactionResults"]
@@ -108,6 +116,7 @@ def get_explore_floor(
     season: int,
     avatar_addr: str,
     headless_jwt_secret: Optional[str] = None,
+    timeout: Optional[float] = None,
 ) -> int:
     season_string = f"{season:040}"
     query = f"""{{ state(
@@ -120,6 +129,7 @@ def get_explore_floor(
         gql_url,
         json={"query": query},
         headers={"Authorization": f"Bearer {create_jwt_token(headless_jwt_secret)}"},
+        timeout=timeout,
     )
     data = resp.json()["data"]["state"]
     if data is None:

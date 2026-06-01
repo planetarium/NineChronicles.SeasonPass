@@ -147,6 +147,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
                             action["season_index"],
                             action["avatar_addr"],
                             config.headless_jwt_secret,
+                            timeout=config.gql_timeout,
                         )
                         action["count_base"] = current_floor
                 apply_exp(
@@ -168,6 +169,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
                         action["season_index"],
                         action["avatar_addr"],
                         config.headless_jwt_secret,
+                        timeout=config.gql_timeout,
                     )
                     explore_data = explore_dict.get(action["season_index"], {}).get(
                         action["avatar_addr"], None
@@ -185,6 +187,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
                             action["season_index"],
                             action["avatar_addr"],
                             config.headless_jwt_secret,
+                            timeout=config.gql_timeout,
                         )
                         explore_data = AdventureBossHistory(
                             planet_id=planet_id,
