@@ -1,4 +1,3 @@
-import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -328,7 +327,9 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
 
             # Send task to Celery worker
             claim_message = ClaimMessage(uuid=claim.uuid)
-            task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+            task_id = send_to_worker(
+                "season_pass.process_claim", claim_message.model_dump()
+            )
             logging.debug(
                 f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
             )
@@ -432,10 +433,18 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
             f"No activity recorded for season {target_pass.id} for avatar {request.avatar_addr}"
         )
 
+    # Short-circuit no-op claims: nothing to reward means no Claim row and
+    # no worker dispatch are needed, so we can skip the row lock and commit.
+    available = user_season.available_rewards(sess)
+    if not available["normal"] and not available["premium"]:
+        return ClaimResultSchema(user=user_season, reward_list=[])
+
     inprogress_claim_count = sess.scalar(
         select(func.count()).where(
             Claim.reward_list != [],
-            or_(Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID),
+            or_(
+                Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID
+            ),
         )
     )
 
@@ -449,7 +458,9 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
         if claim.reward_list:
             claim_message = ClaimMessage(uuid=claim.uuid)
-            task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+            task_id = send_to_worker(
+                "season_pass.process_claim", claim_message.model_dump()
+            )
             logging.debug(
                 f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
             )
@@ -516,7 +527,9 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
 
         if claim.reward_list:
             claim_message = ClaimMessage(uuid=claim.uuid)
-            task_id = send_to_worker("season_pass.process_claim", claim_message.model_dump())
+            task_id = send_to_worker(
+                "season_pass.process_claim", claim_message.model_dump()
+            )
             logging.debug(
                 f"Task for claim {claim.uuid} sent to Celery worker with task_id: {task_id}"
             )
