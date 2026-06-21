@@ -6,11 +6,11 @@ from app.config import config
 engine = create_engine(
     str(config.pg_dsn),
     echo=config.db_echo,
-    pool_size=10,  
-    max_overflow=20,  
-    pool_timeout=60,  
-    pool_recycle=3600, 
-    pool_pre_ping=True  
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=10,  # fail fast on a DB stall instead of pinning a worker thread for 60s
+    pool_recycle=3600,
+    pool_pre_ping=True,
 )
 
 
