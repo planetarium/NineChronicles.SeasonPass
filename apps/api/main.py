@@ -1,5 +1,6 @@
 import logging
 
+import anyio.to_thread
 import uvicorn
 from fastapi import FastAPI
 from fastapi.security import HTTPBearer
@@ -36,6 +37,18 @@ app = FastAPI(
     version=__VERSION__,
     debug=config.debug,
 )
+
+
+@app.on_event("startup")
+async def _limit_threadpool() -> None:
+    # Cap the anyio threadpool that runs sync route handlers so the number of
+    # concurrent DB-backed requests can never exceed the SQLAlchemy pool
+    # (dependencies.py: 10 + 20 = 30). Default is 40, so a traffic burst spawns
+    # more sync handlers than there are connections; the excess block on
+    # checkout and 500 with "QueuePool limit ... timed out", which trips the
+    # block-status/invalid-claim monitors together. Capping below the pool makes
+    # bursts queue briefly instead of failing.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = config.thread_limit
 
 
 @app.middleware("http")
