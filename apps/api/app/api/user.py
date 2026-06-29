@@ -38,6 +38,26 @@ router = APIRouter(
 )
 
 
+def _fetch_cleared_stage(planet_id: PlanetID, avatar_addr: str) -> int:
+    """Fetch the avatar's last cleared stage from headless (GQL).
+
+    Deliberately takes NO DB session. Callers MUST release any open DB
+    transaction (sess.rollback()/commit()) before calling this. Holding a
+    pooled connection / row lock open across this network round-trip is what
+    caused idle-in-transaction lock pile-ups and DB pool exhaustion when the
+    RPC node was slow.
+    """
+    gql_client = GQLClient(
+        config.converted_gql_url_map,
+        config.jwt_secret,
+        timeout=config.gql_timeout,
+    )
+    _, cleared_stage = gql_client.get_last_cleared_stage(
+        planet_id, avatar_addr, timeout=1
+    )
+    return cleared_stage
+
+
 def get_default_usp(
     sess,
     planet_id: PlanetID,
@@ -48,24 +68,24 @@ def get_default_usp(
     try:
         match season_pass.pass_type:
             case PassType.WORLD_CLEAR_PASS:
-                gql_client = GQLClient(
-                    config.converted_gql_url_map,
-                    config.jwt_secret,
-                    timeout=config.gql_timeout,
-                )
-                _, cleared_stage = gql_client.get_last_cleared_stage(
-                    planet_id, avatar_addr, timeout=1
-                )
+                # Capture scalars, then release the read connection BEFORE the
+                # RPC call so we don't pin a pooled connection / hold a lock
+                # open across the (possibly slow) network round-trip.
+                season_pass_id = season_pass.id
+                pass_type = season_pass.pass_type
+                sess.rollback()
+
+                cleared_stage = _fetch_cleared_stage(planet_id, avatar_addr)
 
                 usp = UserSeasonPass(
                     planet_id=planet_id,
                     agent_addr=agent_addr,
                     avatar_addr=avatar_addr,
-                    season_pass=season_pass,
+                    season_pass_id=season_pass_id,
                     exp=cleared_stage,
                 )
                 if cleared_stage > 0:
-                    usp.level = get_level(sess, season_pass.pass_type, usp.exp)
+                    usp.level = get_level(sess, pass_type, usp.exp)
                 sess.add(usp)
                 sess.commit()
                 sess.refresh(usp)
@@ -128,16 +148,15 @@ def user_status(
         target = get_default_usp(sess, planet_id, agent_addr, avatar_addr, target_pass)
     elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
         # 0 cleared stage is usually not normal data.
-        gql_client = GQLClient(
-            config.converted_gql_url_map,
-            config.jwt_secret,
-            timeout=config.gql_timeout,
-        )
-        _, cleared_stage = gql_client.get_last_cleared_stage(
-            planet_id, target.avatar_addr, timeout=1
-        )
+        # Capture scalars, release the read connection, then call the RPC with
+        # no transaction held (see _fetch_cleared_stage).
+        avatar = target.avatar_addr
+        pass_type = target_pass.pass_type
+        sess.rollback()
+
+        cleared_stage = _fetch_cleared_stage(planet_id, avatar)
         target.exp = cleared_stage
-        target.level = get_level(sess, target_pass.pass_type, target.exp)
+        target.level = get_level(sess, pass_type, target.exp)
         sess.add(target)
         sess.commit()
 
@@ -172,16 +191,15 @@ def all_user_status(
             )
         elif pass_type == PassType.WORLD_CLEAR_PASS and target.exp == 0:
             # 0 cleared stage is usually not normal data.
-            gql_client = GQLClient(
-                config.converted_gql_url_map,
-                config.jwt_secret,
-                timeout=config.gql_timeout,
-            )
-            _, cleared_stage = gql_client.get_last_cleared_stage(
-                planet_id, target.avatar_addr, timeout=1
-            )
+            # Capture scalars, release the read connection, then call the RPC
+            # with no transaction held (see _fetch_cleared_stage).
+            avatar = target.avatar_addr
+            pass_type = target_pass.pass_type
+            sess.rollback()
+
+            cleared_stage = _fetch_cleared_stage(planet_id, avatar)
             target.exp = cleared_stage
-            target.level = get_level(sess, target_pass.pass_type, target.exp)
+            target.level = get_level(sess, pass_type, target.exp)
             sess.add(target)
             sess.commit()
 
