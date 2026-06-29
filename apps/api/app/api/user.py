@@ -155,8 +155,15 @@ def user_status(
         sess.rollback()
 
         cleared_stage = _fetch_cleared_stage(planet_id, avatar)
+        # Resolve the level BEFORE mutating `target`. get_level() runs a SELECT,
+        # and if `target` were already dirty the SELECT would autoflush it as an
+        # UPDATE user_season_pass -- taking the row lock for the whole rest of the
+        # block (and, under load, holding it while the connection sits idle).
+        # Computing the level first means the only write is the single UPDATE at
+        # commit, so the row lock is held for that flush alone.
+        level = get_level(sess, pass_type, cleared_stage)
         target.exp = cleared_stage
-        target.level = get_level(sess, pass_type, target.exp)
+        target.level = level
         sess.add(target)
         sess.commit()
 
@@ -198,8 +205,13 @@ def all_user_status(
             sess.rollback()
 
             cleared_stage = _fetch_cleared_stage(planet_id, avatar)
+            # Resolve the level BEFORE mutating `target` so get_level()'s SELECT
+            # doesn't autoflush a dirtied `target` into an early UPDATE that holds
+            # the user_season_pass row lock across the rest of the block. See the
+            # matching note in user_status().
+            level = get_level(sess, pass_type, cleared_stage)
             target.exp = cleared_stage
-            target.level = get_level(sess, pass_type, target.exp)
+            target.level = level
             sess.add(target)
             sess.commit()
 
