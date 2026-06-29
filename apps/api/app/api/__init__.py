@@ -2,8 +2,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import requests
-from app.config import config
-from app.dependencies import session
 from fastapi import APIRouter, Depends
 from shared.constants import SEASONPASS_ADDRESS
 from shared.enums import PassType, PlanetID, TxStatus
@@ -13,6 +11,9 @@ from shared.utils.season_pass import create_jwt_token
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
+
+from app.config import config
+from app.dependencies import session
 
 from . import admin, season_pass, tmp, user
 
@@ -144,22 +145,29 @@ def block_status(sess=Depends(session)):
     return JSONResponse(status_code=503 if err else 200, content=result)
 
 
-@router.get("/invalid-claim")
+@router.get("/invalid-claim", response_model=int)
 def invalid_claim(sess: Session = Depends(session)):
+    """Number of claims stuck unsettled: older than 5 minutes, with rewards, and
+    not yet SUCCESS.
+
+    Returns a COUNT (always HTTP 200) rather than 503-if-any, so the alert
+    threshold lives in the monitor (mirrors IAP /purchase/invalid-receipt-count).
+    A single transient slow-settling tx therefore no longer pages on its own.
+
+    NOTE: the Assertible "Test Invalid Claim" check must assert on this number
+    (fail when it exceeds the threshold). Otherwise the check always sees 200 and
+    never alarms.
+    """
     now = datetime.now(tz=timezone.utc)
-    invalid_claim_list = sess.scalars(
-        select(Claim).where(
+    return sess.scalar(
+        select(func.count())
+        .select_from(Claim)
+        .where(
             Claim.created_at <= now - timedelta(minutes=5),
             Claim.reward_list != [],
             or_(Claim.tx_status != TxStatus.SUCCESS, Claim.tx_status.is_(None)),
         )
-    ).fetchall()
-    if invalid_claim_list:
-        return JSONResponse(
-            status_code=503,
-            content=f"{len(invalid_claim_list)} of invalid claims found.",
-        )
-    return JSONResponse(status_code=200, content="No invalid claims found.")
+    )
 
 
 @router.get("/failure-claim")
