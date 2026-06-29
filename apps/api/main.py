@@ -1,15 +1,7 @@
 import logging
 
+import anyio.to_thread
 import uvicorn
-from app import api
-from app.config import config
-from app.exceptions import (
-    InvalidSeasonError,
-    NotPremiumError,
-    SeasonNotFoundError,
-    ServerOverloadError,
-    UserNotFoundError,
-)
 from fastapi import FastAPI
 from fastapi.security import HTTPBearer
 from requests import ReadTimeout
@@ -21,6 +13,16 @@ from starlette.status import (
     HTTP_404_NOT_FOUND,
     HTTP_500_INTERNAL_SERVER_ERROR,
     HTTP_503_SERVICE_UNAVAILABLE,
+)
+
+from app import api
+from app.config import config
+from app.exceptions import (
+    InvalidSeasonError,
+    NotPremiumError,
+    SeasonNotFoundError,
+    ServerOverloadError,
+    UserNotFoundError,
 )
 
 __VERSION__ = "0.3.1"
@@ -35,6 +37,18 @@ app = FastAPI(
     version=__VERSION__,
     debug=config.debug,
 )
+
+
+@app.on_event("startup")
+async def _limit_threadpool() -> None:
+    # Cap the anyio threadpool that runs sync route handlers so the number of
+    # concurrent DB-backed requests can never exceed the SQLAlchemy pool
+    # (dependencies.py: 10 + 20 = 30). Default is 40, so a traffic burst spawns
+    # more sync handlers than there are connections; the excess block on
+    # checkout and 500 with "QueuePool limit ... timed out", which trips the
+    # block-status/invalid-claim monitors together. Capping below the pool makes
+    # bursts queue briefly instead of failing.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = config.thread_limit
 
 
 @app.middleware("http")
@@ -61,7 +75,11 @@ def handle_exceptions(request: Request, e: Exception):
 
 
 @app.get("/ping", tags=["Default"])
-def ping():
+async def ping():
+    # Async on purpose: served on the event loop so the k8s liveness/readiness
+    # probe stays responsive even when the sync-handler threadpool is saturated
+    # by DB-bound requests (e.g. a postgres stall). A *sync* /ping shares that
+    # threadpool and times out under load, triggering spurious liveness restarts.
     return "pong"
 
 
