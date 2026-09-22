@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     port: int = 8000
     workers: int = 1
     timeout_keep_alive: int = 5
+    # Max concurrent sync route handlers (anyio threadpool). Must stay <= the
+    # SQLAlchemy pool in dependencies.py (pool_size 10 + max_overflow 20 = 30)
+    # so a burst of sync requests cannot exhaust the DB pool and 500.
+    thread_limit: int = 25
     gql_timeout: float = 5.0
     gql_url_map: dict[str, str] = {
         "0x000000000000": "https://odin-rpc.nine-chronicles.com/graphql",
