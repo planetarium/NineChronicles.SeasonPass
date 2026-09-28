@@ -1,7 +1,8 @@
 import structlog
-from app.config import config
 from celery import Celery
 from kombu import Exchange, Queue
+
+from app.config import config
 
 logger = structlog.get_logger(__name__)
 
@@ -21,6 +22,28 @@ app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
+    # (2026-09-29) 결과 백엔드를 태스크 발행 경로에서 뗀다. beat 데드락의 근본 원인이다.
+    #   celery 의 send_task 는 `if not ignore_result: self.backend.on_task_call(...)` 이라,
+    #   결과를 안 쓰겠다고 선언하면 발행 때마다 Redis 에 PubSub SUBSCRIBE 를 거는 경로가
+    #   통째로 사라진다. 그 경로에서 이런 일이 벌어졌다(자매 서비스 IAP 에서 py-spy 로 확인):
+    #     send_task → on_task_call → PubSub.subscribe(SUBSCRIBE 전송) 도중
+    #     GC 가 AsyncResult.__del__ 을 실행 → remove_pending_result → cancel_for →
+    #     **같은 PubSub 커넥션에 UNSUBSCRIBE 재진입** → redis/client.py 에서 영구 블록.
+    #   seasonpass-beat 은 이 상태로 **2일 18시간**(2026-09-26 01:33 UTC~) 멈춰 있었다.
+    #   파드는 내내 Running 1/1 이었고 재시작도 0회라 k8s 로는 보이지 않았다. 그동안
+    #   process_retry_claim / process_retry_stage 가 통째로 멈췄다 — 일반 클레임은 api 가
+    #   직접 발행하므로 정상이었고, **실패한 클레임의 복구 경로만** 조용히 죽어 있었다.
+    #   끌 수 있는 근거: 이 저장소에는 AsyncResult/.ready()/.get() 사용처가 하나도 없다.
+    #   flower 도 안 잃는다 — 결과는 워커의 `task-succeeded` **이벤트**로 가고(celery 소스상
+    #   ignore_result 와 무관하다), 결과 백엔드를 거치지 않는다.
+    task_ignore_result=True,
+    # 위 설정이 발행 경로를 막아도 백엔드 객체 자체는 남는다. 원격 Redis 라 끊김이 상시이므로,
+    #   어떤 경로로든 붙을 때 무한 대기하지 않도록 타임아웃을 못 박는다. 기본값은 전부 None
+    #   = 영원히 블록이고, 그래서 위 데드락이 스스로 풀릴 길이 없었다.
+    redis_socket_timeout=5.0,
+    redis_socket_connect_timeout=5.0,
+    redis_socket_keepalive=True,
+    redis_retry_on_timeout=True,
     timezone="UTC",
     enable_utc=True,
     worker_concurrency=4,
