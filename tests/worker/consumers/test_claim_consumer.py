@@ -457,3 +457,55 @@ class TestClaimConsumer:
 
         # 검증 - 세션이 정리되어야 함
         mock_session.close.assert_called_once()
+
+    @patch("app.consumers.claim_consumer.create_grant_items_unsigned_tx")
+    @patch("app.consumers.claim_consumer.scoped_session")
+    @patch("app.consumers.claim_consumer.Account")
+    @patch("app.consumers.claim_consumer.GQLClient")
+    def test_tx_타임스탬프는_클레임_생성시각이_아니라_지금이다(
+        self,
+        mock_gql_client,
+        mock_account_class,
+        mock_session_factory,
+        mock_create_tx,
+        mock_claim,
+        mock_message,
+    ):
+        """
+        회귀 테스트 — 2026-09-29 Heimdall 지급 정지.
+
+        tx 의 t 필드를 claim.created_at 으로 박으면, 재시도가 늦어진 클레임은
+        **태어날 때부터 만료된 tx** 가 된다. 체인이 그걸 거부하는데 그 tx 가 이미
+        nonce 를 선점했으므로 뒤따르는 클레임이 전부 막힌다(구멍 뒤의 tx 는 스테이징에서
+        밀려나 차례로 INVALID). 실제로 beat 데드락으로 2.7일 묶여 있던 클레임 하나가
+        Heimdall 시즌패스 지급 전체를 세웠다.
+
+        mock_claim 의 created_at 은 2023-01-01 이다 — 그 값이 넘어가면 실패한다.
+        """
+        mock_session = Mock()
+        mock_session_factory.return_value = mock_session
+        mock_session.scalars.return_value = [mock_claim]
+        mock_session.scalar.return_value = 10
+
+        mock_account = Mock()
+        mock_account.address = "0x8bA11bEf1DB41F3118f7478cCfcbE7f1Af4650fa"
+        mock_account.pubkey.hex.return_value = "00" * 32
+        mock_account.sign_tx.return_value = b"mock_signature"
+        mock_account_class.return_value = mock_account
+
+        mock_gql = Mock()
+        mock_gql.get_next_nonce.return_value = 11
+        mock_gql.stage.return_value = (True, "", "mock_tx_hash")
+        mock_gql_client.return_value = mock_gql
+        mock_create_tx.return_value = b"unsigned"
+
+        before = datetime.now(tz=timezone.utc)
+        consume_claim_message(mock_message)
+        after = datetime.now(tz=timezone.utc)
+
+        passed = mock_create_tx.call_args.kwargs["timestamp"]
+        assert (
+            passed != mock_claim.created_at
+        ), "클레임 생성 시각을 그대로 쓰면 지연된 재시도가 만료된 tx 를 만든다"
+        assert passed.tzinfo is not None, "naive 로 넘기면 strftime 이 'Z' 를 거짓으로 붙인다"
+        assert before <= passed <= after
