@@ -37,13 +37,21 @@ app.conf.update(
     #   flower 도 안 잃는다 — 결과는 워커의 `task-succeeded` **이벤트**로 가고(celery 소스상
     #   ignore_result 와 무관하다), 결과 백엔드를 거치지 않는다.
     task_ignore_result=True,
-    # 위 설정이 발행 경로를 막아도 백엔드 객체 자체는 남는다. 원격 Redis 라 끊김이 상시이므로,
-    #   어떤 경로로든 붙을 때 무한 대기하지 않도록 타임아웃을 못 박는다. 기본값은 전부 None
-    #   = 영원히 블록이고, 그래서 위 데드락이 스스로 풀릴 길이 없었다.
+    # ⚠️ ignore_result 가 막는 건 **등록된 Task 의 apply_async 경로**(= beat)뿐이다.
+    #   celery 의 send_task 는 conf 를 안 보고 options 만 보므로(`options.pop(...)`),
+    #   send_task 호출부에는 인자로 따로 넘겨야 한다(api·tracker 의 send_to_worker 참고).
+    #
+    # 아래는 그 뒤에 남는 방어선. 이 값들은 **결과 백엔드 커넥션 전용**이다
+    #   (브로커는 RabbitMQ 이고 broker_transport_options 를 따로 본다).
+    #   기본값이 전부 None = 영원히 블록이라, 그래서 위 데드락이 스스로 풀릴 길이 없었다.
     redis_socket_timeout=5.0,
     redis_socket_connect_timeout=5.0,
     redis_socket_keepalive=True,
     redis_retry_on_timeout=True,
+    # beat 의 tick 주기를 고정한다. 기본값(300초)이면 beat 이 다음 due 까지 자느라
+    #   스케줄 파일 갱신이 들쭉날쭉해서, 9c-infra 의 beat liveness probe 가 임계값을
+    #   900초로 크게 잡아야 한다. 60초로 고정하면 420초까지 좁힐 수 있다.
+    beat_max_loop_interval=60,
     timezone="UTC",
     enable_utc=True,
     worker_concurrency=4,

@@ -49,7 +49,13 @@ def send_to_worker(task_name: str, message: Dict[str, Any]) -> str:
 
         queue = "claim_queue"
 
-        task = celery_app.send_task(task_name, args=[message], queue=queue)
+        # ⚠️ ignore_result 는 **여기서 명시해야** 한다. celery 의 send_task 는
+        #   `options.pop('ignore_result', False)` 라 conf.task_ignore_result 를 읽지 않는다
+        #   (conf 를 보는 건 등록된 Task 의 apply_async 뿐이다). 이걸 빼면 요청 1건마다
+        #   결과 백엔드에 PubSub SUBSCRIBE 가 걸려 재진입 데드락 경로가 살아 있다.
+        task = celery_app.send_task(
+            task_name, args=[message], queue=queue, ignore_result=True
+        )
         logger.info(
             f"Task sent to Celery worker: {task_name}", task_id=task.id, queue=queue
         )
