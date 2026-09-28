@@ -1,6 +1,7 @@
 # Receive message from SQS and send season pass reward
 import hashlib
 import json
+from datetime import datetime, timezone
 
 import structlog
 from app.config import config
@@ -98,7 +99,24 @@ def consume_claim_message(message: ClaimMessage):
             avatar_addr=claim.avatar_addr,
             claim_data=claim.reward_list,
             memo=memo,
-            timestamp=claim.created_at,
+            # ⚠️ 클레임 생성 시각이 아니라 **지금**이어야 한다. 이 값은 tx 의 t 필드로
+            #   들어가고 체인은 너무 과거인 tx 를 스테이징에서 거부한다. 클레임이 만들어진
+            #   직후에 처리되면 둘이 같아서 티가 안 나지만, 재시도가 늦어지면 태어날 때부터
+            #   만료된 tx 가 된다 — 그리고 그 tx 가 nonce 를 선점하므로 **뒤따르는 클레임이
+            #   전부 막힌다**(구멍 뒤의 tx 는 스테이징에서 밀려나 차례로 INVALID 가 된다).
+            #
+            #   2026-09-29 Heimdall 지급 정지가 이것이었다. beat 데드락으로 2.7일 묶여 있던
+            #   클레임이 풀려나면서 2.7일 전 타임스탬프를 단 tx 를 만들었고, 그게 거부되며
+            #   nonce 1794589 에 구멍이 생겨 뒤의 클레임이 전부 섰다.
+            #
+            #   평소에 이게 안 터진 건 transaction.py 의 strftime 이 tzinfo 를 버리고 'Z' 를
+            #   붙여서다 — created_at 이 KST(+09)로 와서 모든 tx 가 실제보다 9시간 미래로
+            #   찍혔고, 그 우연한 여유분이 유일한 완충이었다. 즉 생성 후 9시간이 지나서
+            #   처리되는 클레임은 원래부터 전부 만료된 tx 가 됐다.
+            #
+            #   now(tz=utc) 를 쓰면 strftime 결과도 진짜 UTC 가 되어 두 문제가 같이 없어진다.
+            #   같은 저장소의 burn_asset_task 가 이미 이렇게 한다.
+            timestamp=datetime.now(tz=timezone.utc),
         )
 
         # AWS KMS로 서명 생성
