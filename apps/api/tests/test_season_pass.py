@@ -9,6 +9,7 @@ from shared.models.season_pass import Exp, Level, SeasonPass
 def test_current_season_endpoint_compatibility(test_session):
     """기존 season_pass/current 엔드포인트 호환성 확인"""
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -82,6 +83,7 @@ def test_current_season_endpoint_compatibility(test_session):
 def test_current_season_endpoint_world_clear_pass(test_session):
     """World Clear Pass의 repeat_last_reward 동작 확인"""
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -120,6 +122,7 @@ def test_current_season_endpoint_world_clear_pass(test_session):
 def test_current_season_endpoint_courage_pass(test_session):
     """Courage Pass의 repeat_last_reward 동작 확인"""
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -158,6 +161,7 @@ def test_current_season_endpoint_courage_pass(test_session):
 def test_level_info_endpoint(test_session):
     """level 엔드포인트 동작 확인"""
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -202,6 +206,7 @@ def test_level_info_endpoint(test_session):
 def test_exp_info_endpoint(test_session):
     """exp 엔드포인트 동작 확인"""
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -317,3 +322,127 @@ def test_schema_backward_compatibility():
     assert schema.end_timestamp is not None
     assert len(schema.reward_list) == 1
     assert schema.repeat_last_reward == True
+
+
+def _make_season(sess, id_, index, start, end):
+    sess.add(
+        SeasonPass(
+            id=id_,
+            pass_type=PassType.COURAGE_PASS,
+            season_index=index,
+            start_timestamp=start,
+            end_timestamp=end,
+            instant_exp=0,
+            reward_list=[],
+        )
+    )
+    sess.commit()
+
+
+def _get_current(client, **params):
+    return client.get(
+        "/api/season-pass/current",
+        params={
+            "planet_id": PlanetID.ODIN_INTERNAL.value.decode(),
+            "pass_type": PassType.COURAGE_PASS.value,
+            **params,
+        },
+    )
+
+
+@pytest.mark.usefixtures("test_session")
+def test_current_season_at_selects_season_by_given_time(test_session):
+    """`at` 을 주면 그 시각의 시즌 — IAP 가 고정 SKU 결제를 결제 시각 시즌에 귀속시킨다."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    client = TestClient(app)
+    now = datetime.now(tz=timezone.utc)
+    boundary = now - timedelta(days=1)
+    _make_season(test_session, 9981, 981, boundary - timedelta(days=30), boundary)
+    _make_season(test_session, 9982, 982, boundary, now + timedelta(days=30))
+
+    # 지금(기본값)은 새 시즌
+    assert _get_current(client).json()["season_index"] == 982
+    # 경계 전 시각 → 지난 시즌
+    before = (boundary - timedelta(hours=1)).isoformat()
+    assert _get_current(client, at=before).json()["season_index"] == 981
+    # 경계 순간은 양쪽에 걸린다 → 기존 규칙(desc(id))대로 나중 시즌
+    assert _get_current(client, at=boundary.isoformat()).json()["season_index"] == 982
+
+
+@pytest.mark.usefixtures("test_session")
+def test_current_season_at_outside_any_season_is_404(test_session):
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    # 시즌 없음은 전역 Exception 핸들러가 404 로 바꾼다 — TestClient 가 먼저 다시 던지지 않게.
+    client = TestClient(app, raise_server_exceptions=False)
+    now = datetime.now(tz=timezone.utc)
+    _make_season(
+        test_session, 9983, 983, now - timedelta(days=1), now + timedelta(days=1)
+    )
+
+    far_past = (now - timedelta(days=400)).isoformat()
+    resp = _get_current(client, at=far_past)
+    assert resp.status_code == 404
+
+
+@pytest.mark.usefixtures("test_session")
+def test_current_season_at_requires_timezone(test_session):
+    """offset 없는 시각은 거절한다 — 경계가 UTC 라 로컬 시각으로 해석하면 시즌이 어긋난다."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    client = TestClient(app)
+    resp = _get_current(client, at="2026-10-01T00:00:00")
+    assert resp.status_code == 422
+
+
+@pytest.mark.usefixtures("test_session")
+def test_current_season_at_rejects_future(test_session):
+    """공개 전 시즌 reward_list 노출 방지 — 인증 없는 엔드포인트라 미래 `at` 은 400."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    now = datetime.now(tz=timezone.utc)
+    _make_season(
+        test_session, 9984, 984, now + timedelta(days=1), now + timedelta(days=30)
+    )
+
+    resp = _get_current(client, at=(now + timedelta(days=2)).isoformat())
+    assert resp.status_code == 400
+    # 시계 차이 정도(수 초)는 받는다.
+    _make_season(
+        test_session, 9985, 985, now - timedelta(days=1), now + timedelta(days=1)
+    )
+    near = (now + timedelta(seconds=30)).isoformat()
+    assert _get_current(client, at=near).json()["season_index"] == 985
+
+
+@pytest.mark.usefixtures("test_session")
+def test_current_season_at_end_boundary_is_inclusive(test_session):
+    """다음 시즌이 없을 때 끝 경계 순간까지는 그 시즌이다(양 끝 inclusive 규칙)."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    client = TestClient(app)
+    now = datetime.now(tz=timezone.utc)
+    end = now - timedelta(hours=1)
+    _make_season(test_session, 9986, 986, end - timedelta(days=30), end)
+
+    assert _get_current(client, at=end.isoformat()).json()["season_index"] == 986
+
+
+def test_get_pass_rejects_naive_at():
+    from shared.enums import PassType as PT
+    from shared.utils.season_pass import get_pass
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        get_pass(None, PT.COURAGE_PASS, validate_current=True, at=datetime(2026, 10, 1))

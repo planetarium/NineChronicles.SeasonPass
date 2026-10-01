@@ -2,11 +2,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 import jwt
-from sqlalchemy import and_, desc, or_, select
-from sqlalchemy.orm import joinedload
-
 from shared.enums import PassType
 from shared.models.season_pass import Level, SeasonPass
+from sqlalchemy import and_, desc, or_, select
+from sqlalchemy.orm import joinedload
 
 
 def get_pass(
@@ -15,14 +14,21 @@ def get_pass(
     season_index: int = None,
     validate_current: bool = False,
     include_exp: bool = False,
+    at: Optional[datetime] = None,
 ) -> Optional[SeasonPass]:
+    """
+    `validate_current` 는 `at`(기본: 지금) 시각에 진행 중인 시즌만 고른다.
+    `at` 은 tz-aware 여야 한다 — 시즌 경계가 UTC 로 저장돼 있다.
+    """
     stmt = select(SeasonPass).where(SeasonPass.pass_type == pass_type)
 
     if season_index is not None:
         stmt = stmt.where(SeasonPass.season_index == season_index)
 
     if validate_current:
-        now = datetime.now(tz=timezone.utc)
+        if at is not None and at.tzinfo is None:
+            raise ValueError("`at` must be timezone-aware")
+        now = at or datetime.now(tz=timezone.utc)
         stmt = stmt.where(
             or_(  # match least one of following conditions
                 # All time infinite
@@ -66,7 +72,9 @@ def get_max_level(sess, pass_type: PassType) -> Tuple[Level, int]:
     # World clear pass does not have repeating reward
     if pass_type == PassType.WORLD_CLEAR_PASS:
         max_level = sess.scalar(
-            select(Level).where(Level.pass_type == pass_type).order_by(desc(Level.level))
+            select(Level)
+            .where(Level.pass_type == pass_type)
+            .order_by(desc(Level.level))
         )
         return max_level, 0
 
