@@ -15,6 +15,9 @@ them, yet every INSERT/UPDATE paid to maintain them:
   Every lookup filters planet_id + season_pass_id + avatar_addr, which is
   covered by user_season_pass_unique. avatar_season is kept.
 
+A BRIN index on action_history(season_id) is added so the season_pass FK
+check (admin delete_season_pass) doesn't full-scan action_history.
+
 Production already dropped them by hand (DROP INDEX CONCURRENTLY,
 2026-10-08), so upgrade() is IF EXISTS and is a no-op there.
 """
@@ -34,11 +37,20 @@ def upgrade() -> None:
     op.execute("DROP INDEX IF EXISTS ix_action_history_action")
     op.execute("DROP INDEX IF EXISTS ix_user_season_pass_agent_addr")
     op.execute("DROP INDEX IF EXISTS ix_user_season_pass_avatar_addr")
+    # action_history.season_id is an FK to season_pass.id; without an index
+    # leading with season_id, DELETE FROM season_pass full-scans action_history.
+    # BRIN is tiny and ~free on insert. On prod create it beforehand with
+    # CREATE INDEX CONCURRENTLY so this is a no-op.
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS brin_action_history_season_id "
+        "ON action_history USING brin (season_id)"
+    )
 
 
 def downgrade() -> None:
     # Slow on large tables (action_history is tens of GB) and blocks writes
     # while building. Prefer CREATE INDEX CONCURRENTLY by hand if needed.
+    op.execute("DROP INDEX IF EXISTS brin_action_history_season_id")
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_user_season_pass_avatar_addr "
         "ON user_season_pass (avatar_addr)"

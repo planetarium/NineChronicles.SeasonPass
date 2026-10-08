@@ -52,9 +52,14 @@ class ActionHistory(AutoIdMixin, TimeStampMixin, Base):
     count = Column(Integer, nullable=False)
     exp = Column(Integer, nullable=False)
 
-    # Write-only audit log: nothing reads it, so no secondary indexes.
-    # idx_season_avatar / ix_action_history_action were dropped (migration
-    # 3b7e1c9d2f40) -- they were never scanned but cost write I/O on every insert.
+    # Write-only audit log: nothing reads it. idx_season_avatar /
+    # ix_action_history_action were dropped (migration 3b7e1c9d2f40) -- never
+    # scanned but cost write I/O on every insert. The BRIN on season_id stays so
+    # the FK check on DELETE FROM season_pass is not a full heap scan
+    # (season_id correlates with insertion order, so BRIN is tiny and cheap).
+    __table_args__ = (
+        Index("brin_action_history_season_id", "season_id", postgresql_using="brin"),
+    )
 
 
 class AdventureBossHistory(AutoIdMixin, TimeStampMixin, Base):
