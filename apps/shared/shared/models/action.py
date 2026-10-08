@@ -48,11 +48,13 @@ class ActionHistory(AutoIdMixin, TimeStampMixin, Base):
     tx_id = Column(Text, nullable=False)
     agent_addr = Column(Text, nullable=False)
     avatar_addr = Column(Text, nullable=False)
-    action = Column(ENUM(ActionType), nullable=False, index=True)
+    action = Column(ENUM(ActionType), nullable=False)
     count = Column(Integer, nullable=False)
     exp = Column(Integer, nullable=False)
 
-    __table_args__ = (Index("idx_season_avatar", "season_id", "avatar_addr"),)
+    # Write-only audit log: nothing reads it, so no secondary indexes.
+    # idx_season_avatar / ix_action_history_action were dropped (migration
+    # 3b7e1c9d2f40) -- they were never scanned but cost write I/O on every insert.
 
 
 class AdventureBossHistory(AutoIdMixin, TimeStampMixin, Base):
