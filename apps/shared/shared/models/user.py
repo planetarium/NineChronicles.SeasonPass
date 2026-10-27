@@ -26,8 +26,8 @@ class UserSeasonPass(AutoIdMixin, TimeStampMixin, Base):
         nullable=False,
         doc="An identifier to distinguish network & planet",
     )
-    agent_addr = Column(Text, nullable=False, index=True)
-    avatar_addr = Column(Text, nullable=False, index=True)
+    agent_addr = Column(Text, nullable=False)
+    avatar_addr = Column(Text, nullable=False)
     season_pass_id = Column(Integer, ForeignKey("season_pass.id"), nullable=False)
     season_pass: Mapped["SeasonPass"] = relationship(
         "SeasonPass", foreign_keys=[season_pass_id], backref=backref("user_list")
