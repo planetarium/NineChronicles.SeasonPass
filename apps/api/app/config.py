@@ -32,6 +32,24 @@ class Settings(BaseSettings):
         "0x000000000001",
         "0x000000000003",
     ]
+    # /block-status asks these nodes for the tip too (in addition to gql_url_map,
+    # which the trackers use) and takes the highest answer. A single node
+    # restarting (e.g. the odin validator crashing on NetMQ) must not read as
+    # "tracker lagging".
+    tip_fallback_url_map: dict[str, list[str]] = {
+        "0x000000000000": [
+            "https://odin-rpc-1.nine-chronicles.com/graphql",
+            "https://odin-gql.nine-chronicles.com/graphql",
+        ],
+        "0x000000000001": [
+            "https://heimdall-rpc-1.nine-chronicles.com/graphql",
+            "https://heimdall-gql.nine-chronicles.com/graphql",
+        ],
+    }
+    tip_timeout: float = 2.0
+    block_lag_threshold: int = (
+        150  # blocks the tracker may trail the tip by (unchanged)
+    )
 
     @property
     def converted_gql_url_map(self) -> dict[PlanetID, str]:
