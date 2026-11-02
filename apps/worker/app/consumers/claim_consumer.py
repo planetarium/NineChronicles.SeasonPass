@@ -40,14 +40,7 @@ def consume_claim_message(message: ClaimMessage):
         t_mark = now
 
     sess = scoped_session(sessionmaker(bind=engine))
-    account = Account(config.kms_key_id, config.region_name)
-    lap("kms_init")
-    gql = GQLClient(
-        config.converted_gql_url_map,
-        config.headless_jwt_secret,
-        timeout=config.gql_timeout,
-    )
-    lap("gql_init")
+    outcome = "error"
 
     try:
         claim_dict = {
@@ -60,9 +53,26 @@ def consume_claim_message(message: ClaimMessage):
         use_nonce = False
         claim = claim_dict.get(message.uuid)
         if not claim:
+            outcome = "no_claim"
             logger.error(f"Cannot find claim {message.uuid}")
             return
         lap("db_read_claim")
+
+        # 이미 tx 가 만들어진 claim(beat 재처리가 먼저 처리한 큐 메시지 등)은 할 일이 없다.
+        # KMS·GQL 준비와 nonce 조회 전에 바로 끝낸다.
+        if claim.tx:
+            outcome = "skip_tx_exists"
+            return
+
+        account = Account(config.kms_key_id, config.region_name)
+        lap("kms_init")
+        gql = GQLClient(
+            config.converted_gql_url_map,
+            config.headless_jwt_secret,
+            timeout=config.gql_timeout,
+        )
+        lap("gql_init")
+
         if claim.planet_id not in nonce_dict:
             chain_nonce = gql.get_next_nonce(claim.planet_id, account.address)
             lap("nonce_gql")
@@ -86,10 +96,6 @@ def consume_claim_message(message: ClaimMessage):
             lap("nonce_db")
         else:
             nonce = nonce_dict[claim.planet_id]
-
-        if claim.tx:
-            target_claim_list.append(claim)
-            return
 
         if not claim.nonce:
             claim.nonce = nonce
@@ -166,6 +172,13 @@ def consume_claim_message(message: ClaimMessage):
             sess.add(claim)
             sess.commit()
             lap("commit_staged")
-        logger.info("claim_timing", **timings, total=round(sum(timings.values()), 3))
+        outcome = "staged"
     finally:
+        # 성공·조기 종료·실패 모두 남긴다(시간 숫자와 결과 이름만, 식별 정보 없음).
+        logger.info(
+            "claim_timing",
+            outcome=outcome,
+            **timings,
+            total=round(sum(timings.values()), 3),
+        )
         sess.close()
