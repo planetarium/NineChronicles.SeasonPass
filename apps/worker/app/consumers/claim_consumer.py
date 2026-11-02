@@ -1,6 +1,7 @@
 # Receive message from SQS and send season pass reward
 import hashlib
 import json
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -17,6 +18,20 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
+
+_account = None
+_account_lock = threading.Lock()
+
+
+def _get_account() -> Account:
+    """KMS Account 를 프로세스당 한 번만 만든다(공개키 조회에 메시지당 0.6초가 들었다).
+    공개키·주소는 키가 같으면 변하지 않고, 서명은 매번 KMS 가 한다. 생성 실패는 캐시하지 않는다."""
+    global _account
+    if _account is None:
+        with _account_lock:
+            if _account is None:
+                _account = Account(config.kms_key_id, config.region_name)
+    return _account
 
 
 def consume_claim_message(message: ClaimMessage):
@@ -64,7 +79,7 @@ def consume_claim_message(message: ClaimMessage):
             outcome = "skip_tx_exists"
             return
 
-        account = Account(config.kms_key_id, config.region_name)
+        account = _get_account()
         lap("kms_init")
         gql = GQLClient(
             config.converted_gql_url_map,
