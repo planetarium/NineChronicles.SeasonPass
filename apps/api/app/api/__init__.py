@@ -37,15 +37,13 @@ for view in __all__:
     router.include_router(view.router)
 
 
-def get_tip(url) -> Optional[int]:
+def get_tip(url, token: str) -> Optional[int]:
     """Tip index from one node, or None if it did not answer in time."""
     try:
         resp = requests.post(
             url,
             json={"query": "{ nodeStatus { tip { index } } }"},
-            headers={
-                "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
-            },
+            headers={"Authorization": f"Bearer {token}"},
             timeout=config.tip_timeout,
         )
         if resp.status_code != 200:
@@ -63,7 +61,7 @@ def tip_urls(planet: PlanetID) -> list[str]:
     return list(dict.fromkeys(u for u in urls if u))
 
 
-def get_best_tip(planet: PlanetID) -> Optional[int]:
+def get_best_tip(planet: PlanetID, token: str) -> Optional[int]:
     """Highest tip among the planet's nodes, asked in parallel. A node that is
     restarting is skipped; a node stuck behind is outvoted. None only when no
     node answers at all."""
@@ -71,7 +69,7 @@ def get_best_tip(planet: PlanetID) -> Optional[int]:
     if not urls:
         return None
     with ThreadPoolExecutor(max_workers=len(urls)) as pool:
-        tips = [t for t in pool.map(get_tip, urls) if t is not None]
+        tips = [t for t in pool.map(lambda u: get_tip(u, token), urls) if t is not None]
     return max(tips) if tips else None
 
 
@@ -143,9 +141,11 @@ def block_status(sess=Depends(session)):
     ):
         planets.append(thor_planet)
 
+    # Outside the per-node try: a broken secret should 500, not look like "every node is down".
+    token = create_jwt_token(config.headless_jwt_secret)
     err = False
     for planet in planets:
-        tip = get_best_tip(planet)
+        tip = get_best_tip(planet, token)
         if tip is None:
             # Every node is down — a real outage, still alert, but say so
             # instead of reporting a tracker "lag" of minus the whole chain.
@@ -154,9 +154,11 @@ def block_status(sess=Depends(session)):
             continue
         report = {k.value: tip - v for k, v in get_db_tip(sess, planet).items()}
         result[planet.name] = report
-        # Only a tracker trailing the tip is a problem. A tracker ahead of the
-        # tip just means the node we asked is behind; that is not ours to page on.
-        if any(lag > config.block_lag_threshold for lag in report.values()):
+        # Positive: the tracker trails the tip. Negative: EVERY node that answered
+        # is behind what the tracker already processed (the tracker reads from the
+        # primary, so it can't outrun it) — e.g. a node rolled back after a fork.
+        # Both are real; only a single restarting node no longer trips this.
+        if any(abs(lag) > config.block_lag_threshold for lag in report.values()):
             err = True
 
     return JSONResponse(status_code=503 if err else 200, content=result)

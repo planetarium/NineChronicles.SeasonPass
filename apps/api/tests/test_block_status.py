@@ -3,9 +3,10 @@
 It used to read each planet's tip from ONE node with a 2s timeout and treat a
 failed read as tip 0, so abs(0 - processed) > 150 paged whenever that node
 restarted (the odin validator crashes several times a day on a NetMQ bug).
-Now it asks several nodes in parallel, takes the highest tip, pages only when a
-tracker TRAILS the tip by more than the threshold, and reports "tip
-unavailable" (still 503) only when no node answers at all.
+Now it asks several nodes in parallel and compares against the highest tip, so
+one restarting node no longer pages; a tracker far behind (or every node far
+behind the tracker, e.g. after a fork rollback) still does, and "tip
+unavailable" (503) means no node answered at all.
 """
 import pytest
 import requests
@@ -35,6 +36,8 @@ def nodes(monkeypatch):
     answers = {}
 
     def fake_post(url, **kwargs):
+        if url not in answers:
+            pytest.fail(f"unexpected tip url {url}")
         a = answers[url]
         if isinstance(a, Exception):
             raise a
@@ -109,14 +112,44 @@ def test_tracker_lagging_pages(client, test_session, nodes):
     assert client.get("/api/block-status").status_code == 503
 
 
-def test_tracker_ahead_of_tip_does_not_page(client, test_session, nodes):
-    """A node behind the tracker used to page through abs()."""
+def test_tracker_slightly_ahead_is_fine(client, test_session, nodes):
     _blocks(test_session, PlanetID.ODIN, 1000)
     _blocks(test_session, PlanetID.HEIMDALL, 500)
-    nodes.update({ODIN_PRIMARY: 700, ODIN_FALLBACK: "500", HEIMDALL_PRIMARY: 500})
+    nodes.update({ODIN_PRIMARY: 990, ODIN_FALLBACK: "500", HEIMDALL_PRIMARY: 500})
     resp = client.get("/api/block-status")
     assert resp.status_code == 200, resp.text
+    assert set(resp.json()["ODIN"].values()) == {-10}
+
+
+def test_every_node_far_behind_tracker_pages(client, test_session, nodes):
+    """All nodes rolled back below what the tracker processed (fork recovery)."""
+    _blocks(test_session, PlanetID.ODIN, 1000)
+    _blocks(test_session, PlanetID.HEIMDALL, 500)
+    nodes.update({ODIN_PRIMARY: 700, ODIN_FALLBACK: 690, HEIMDALL_PRIMARY: 500})
+    resp = client.get("/api/block-status")
+    assert resp.status_code == 503
     assert set(resp.json()["ODIN"].values()) == {-300}
+
+
+def test_no_block_rows_is_ok(client, test_session, nodes):
+    nodes.update({ODIN_PRIMARY: 10, ODIN_FALLBACK: 10, HEIMDALL_PRIMARY: 10})
+    resp = client.get("/api/block-status")
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"ODIN": {}, "HEIMDALL": {}}
+
+
+def test_internal_stage_asks_primary_only(client, test_session, nodes, monkeypatch):
+    monkeypatch.setattr(config, "stage", "internal")
+    internal = {
+        "0x100000000000": "https://odin-internal.example/graphql",
+        "0x100000000001": "https://heimdall-internal.example/graphql",
+    }
+    monkeypatch.setattr(config, "gql_url_map", internal)
+    _blocks(test_session, PlanetID.ODIN_INTERNAL, 1000)
+    nodes.update({internal["0x100000000000"]: 1001, internal["0x100000000001"]: 5})
+    resp = client.get("/api/block-status")
+    assert resp.status_code == 200, resp.text
+    assert set(resp.json()["ODIN_INTERNAL"].values()) == {1}
 
 
 def test_all_nodes_down_is_reported_as_such(client, test_session, nodes):
