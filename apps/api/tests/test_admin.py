@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import jwt
 import pytest
@@ -628,7 +629,7 @@ def test_burn_asset_success(client, valid_token, monkeypatch):
         assert message["planet_id"] == "0x000000000000"  # 기본값
         return "mock_task_id_123"
 
-    monkeypatch.setattr("app.celery.send_to_worker", mock_send_to_worker)
+    monkeypatch.setattr("app.api.admin.send_to_worker", mock_send_to_worker)
 
     response = client.post(
         "/api/admin/burn-asset",
@@ -657,7 +658,7 @@ def test_burn_asset_with_default_values(client, valid_token, monkeypatch):
         assert message["planet_id"] == "0x000000000000"  # 기본값
         return "mock_task_id_456"
 
-    monkeypatch.setattr("app.celery.send_to_worker", mock_send_to_worker)
+    monkeypatch.setattr("app.api.admin.send_to_worker", mock_send_to_worker)
 
     response = client.post(
         "/api/admin/burn-asset",
@@ -682,7 +683,7 @@ def test_burn_asset_with_custom_planet_id(client, valid_token, monkeypatch):
         assert message["planet_id"] == "0x000000000001"  # HEIMDALL
         return "mock_task_id_789"
 
-    monkeypatch.setattr("app.celery.send_to_worker", mock_send_to_worker)
+    monkeypatch.setattr("app.api.admin.send_to_worker", mock_send_to_worker)
 
     response = client.post(
         "/api/admin/burn-asset",
@@ -740,7 +741,7 @@ def test_burn_asset_worker_error(client, valid_token, monkeypatch):
     def mock_send_to_worker(task_name, message):
         raise Exception("Worker task failed")
 
-    monkeypatch.setattr("app.celery.send_to_worker", mock_send_to_worker)
+    monkeypatch.setattr("app.api.admin.send_to_worker", mock_send_to_worker)
 
     response = client.post(
         "/api/admin/burn-asset",
@@ -769,11 +770,12 @@ def test_burn_asset_different_currencies(client, valid_token, monkeypatch):
             assert "owner" not in message
             assert message["ticker"] == test_case["ticker"]
             assert "decimal_places" not in message  # decimal_places는 제거됨
-            assert message["amount"] == test_case["amount"]
+            # str(Decimal("0.00000001")) is "1E-8"; the worker reads it back with Decimal(), so compare values
+            assert Decimal(message["amount"]) == Decimal(test_case["amount"])
             assert message["planet_id"] == "0x000000000000"  # 기본값
             return f"mock_task_id_{i}"
 
-        monkeypatch.setattr("app.celery.send_to_worker", mock_send_to_worker)
+        monkeypatch.setattr("app.api.admin.send_to_worker", mock_send_to_worker)
 
         response = client.post(
             "/api/admin/burn-asset",

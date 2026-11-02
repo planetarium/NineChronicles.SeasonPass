@@ -1,95 +1,75 @@
+name: Test
+# Unit tests on every PR and on main. The previous test.yml was a workflow_call that
+# nothing called (and still pointed at the old common/ layout), so no tests ran in CI.
+# apps/worker tests are not wired yet: most of them are out of date with the worker code.
+
 on:
-  workflow_call:
-    inputs:
-      environment:
-        required: true
-        type: string
-    secrets:
-      SLACK_WEBHOOK_URL:
-        required: true
-      HEADLESS_GQL_JWT_SECRET:
-        required: true
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  api:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    timeout-minutes: 20
     services:
       postgres:
-        image: postgres
+        image: postgres:15
         env:
-          POSTGRES_USER: github_actions
-          POSTGRES_PASSWORD: f8bf4c09239
+          # apps/api/tests/conftest.py connects to postgres:postgres@localhost:5432/season_pass_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: season_pass_test
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
         ports:
           - 5432:5432
+    defaults:
+      run:
+        working-directory: apps/api
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+      - uses: snok/install-poetry@v1
         with:
           version: 1.8.4
           virtualenvs-in-project: true
-
-      - name: Cache Poetry
-        id: cache-poetry
-        uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
-          path: .venv
-          key: poetry-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          path: apps/api/.venv
+          key: api-venv-${{ runner.os }}-${{ hashFiles('apps/api/poetry.lock', 'apps/shared/**/*.py', 'apps/shared/pyproject.toml') }}
+      - run: poetry install --no-interaction
+      - name: pytest
+        run: poetry run python -m pytest tests -q
 
-      - name: Install dependencies
-        run: |
-          poetry install
-
-      - name: Check alembic schema
-        env:
-          POSTGRES_USER: github_actions
-          POSTGRES_PASSWORD: f8bf4c09239
-          POSTGRES_DB: season_pass_test
-          DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
-          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
-          JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
-          REGION_NAME: us-east-2
-          SQS_URL: https://test-queue.us-east-2.amazonaws.com/000000000000/test-queue
-          MQ_HOST: localhost
-        run: |
-          source $VENV
-          pushd common
-          cp alembic.ini.example alembic.ini
-          sed -i "s/sqlalchemy.url = postgresql:\/\/\[ID\]:\[PW\]@\[HOST\]\/\[DATABASE\]/sqlalchemy.url = postgresql:\/\/${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost\/${POSTGRES_DB}/" alembic.ini
-          alembic upgrade head
-          popd
-
-      - name: Unit test
-        env:
-          STAGE: test
-          ODIN_GQL_URL: https://odin-jwt.nine-chronicles.com/graphql
-          HEIMDALL_GQL_URL: https://heimdall-jwt.nine-chronicles.com/graphql
-          DB_URI: postgresql://github_actions:f8bf4c09239@localhost/season_pass_test
-          HEADLESS_GQL_JWT_SECRET: ${{ secrets.HEADLESS_GQL_JWT_SECRET }}
-          JWT_TOKEN_SECRET: ${{ secrets.JWT_TOKEN_SECRET }}
-          MQ_HOST: localhost
-        run: |
-          source $VENV
-          python -m pytest tests
-
-      - name: Slack Notification on Failure
-        id: slack_notification
-        uses: ./.github/workflows/slack_message.yml
-        if: ${{ failure() }}
+  shared:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/shared
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          type: failure
-          environment: ${{ inputs.environment }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          python-version: "3.11"
+      - uses: snok/install-poetry@v1
+        with:
+          version: 1.8.4
+          virtualenvs-in-project: true
+      - uses: actions/cache@v4
+        with:
+          path: apps/shared/.venv
+          key: shared-venv-${{ runner.os }}-${{ hashFiles('apps/shared/poetry.lock') }}
+      - run: poetry install --no-interaction
+      - name: pytest
+        run: poetry run python -m pytest tests -q
