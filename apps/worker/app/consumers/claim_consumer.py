@@ -1,6 +1,7 @@
 # Receive message from SQS and send season pass reward
 import hashlib
 import json
+import time
 from datetime import datetime, timezone
 
 import structlog
@@ -28,13 +29,25 @@ def consume_claim_message(message: ClaimMessage):
     To create brand-new Tx, you should erase former nonce before send new message.
     """
 
+    # 병목 측정용: 구간별 소요 시간(초)을 끝에 한 줄로 남긴다. 동작은 바꾸지 않는다.
+    timings = {}
+    t_mark = time.perf_counter()
+
+    def lap(name: str):
+        nonlocal t_mark
+        now = time.perf_counter()
+        timings[name] = round(now - t_mark, 3)
+        t_mark = now
+
     sess = scoped_session(sessionmaker(bind=engine))
     account = Account(config.kms_key_id, config.region_name)
+    lap("kms_init")
     gql = GQLClient(
         config.converted_gql_url_map,
         config.headless_jwt_secret,
         timeout=config.gql_timeout,
     )
+    lap("gql_init")
 
     try:
         claim_dict = {
@@ -49,9 +62,12 @@ def consume_claim_message(message: ClaimMessage):
         if not claim:
             logger.error(f"Cannot find claim {message.uuid}")
             return
+        lap("db_read_claim")
         if claim.planet_id not in nonce_dict:
+            chain_nonce = gql.get_next_nonce(claim.planet_id, account.address)
+            lap("nonce_gql")
             nonce = max(
-                gql.get_next_nonce(claim.planet_id, account.address),
+                chain_nonce,
                 (
                     sess.scalar(
                         select(Claim.nonce)
@@ -67,6 +83,7 @@ def consume_claim_message(message: ClaimMessage):
                 + 1,
             )
             nonce_dict[claim.planet_id] = nonce
+            lap("nonce_db")
         else:
             nonce = nonce_dict[claim.planet_id]
 
@@ -119,8 +136,11 @@ def consume_claim_message(message: ClaimMessage):
             timestamp=datetime.now(tz=timezone.utc),
         )
 
+        lap("build_unsigned")
+
         # AWS KMS로 서명 생성
         signature = account.sign_tx(unsigned_tx)
+        lap("kms_sign")
 
         # GQL 의존성 제거: 로컬에서 signed transaction 생성
         signed_tx = create_signed_tx(unsigned_tx, signature)
@@ -133,9 +153,11 @@ def consume_claim_message(message: ClaimMessage):
         if use_nonce:
             nonce_dict[claim.planet_id] += 1
         sess.commit()
+        lap("commit_tx")
 
         for claim in target_claim_list:
             success, msg, _ = gql.stage(claim.planet_id, bytes.fromhex(claim.tx))
+            lap("stage_gql")
             if not success:
                 message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
                 logger.error(message)
@@ -143,5 +165,7 @@ def consume_claim_message(message: ClaimMessage):
             claim.tx_status = TxStatus.STAGED
             sess.add(claim)
             sess.commit()
+            lap("commit_staged")
+        logger.info("claim_timing", **timings, total=round(sum(timings.values()), 3))
     finally:
         sess.close()
