@@ -102,3 +102,28 @@ jobs:
       - run: poetry install --no-interaction
       - name: pytest
         run: poetry run python -m pytest tests -q
+
+  tracker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/tracker
+    env:
+      TRACKER_ARENA_SERVICE_JWT_PUBLIC_KEY: dGVzdA==  # required by Settings; tests patch a real key in
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: snok/install-poetry@v1
+        with:
+          version: 1.8.4
+          virtualenvs-in-project: true
+      - uses: actions/cache@v4
+        with:
+          path: apps/tracker/.venv
+          key: tracker-venv-${{ runner.os }}-${{ hashFiles('apps/tracker/poetry.lock', 'apps/shared/**/*.py', 'apps/shared/pyproject.toml') }}
+      - run: poetry install --no-interaction
+      - name: pytest
+        run: poetry run python -m pytest tests -q
