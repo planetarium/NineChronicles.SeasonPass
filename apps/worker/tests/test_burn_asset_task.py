@@ -1,314 +1,153 @@
+"""process_burn_asset — builds, signs (KMS) and stages a burn_asset tx.
+
+Every external dependency is mocked by the `env` fixture: KMS (Account), the
+headless GraphQL client, the DB session, and the module-level structlog logger.
+The task creates `logger` at import time, so it is patched directly — patching
+structlog.get_logger afterwards would not reach it. Tests must never construct a
+real Account: that calls AWS KMS with whatever credentials the runner has.
+"""
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from app.tasks import burn_asset_task
 from app.tasks.burn_asset_task import get_decimal_places_for_ticker, process_burn_asset
 
+ADDRESS = "0x" + "12" * 20
+PUBKEY = bytes.fromhex(
+    "02" + "ab" * 32
+)  # compressed secp256k1 public key, as Account.pubkey returns
+SUCCESS = "Burn asset transaction processed and staged successfully"
 
-class TestBurnAssetTask:
-    """Burn Asset Task 테스트 클래스"""
 
-    def test_get_decimal_places_for_ticker(self):
-        """티커별 decimal places 테스트"""
-        assert get_decimal_places_for_ticker("NCG") == 2
-        assert get_decimal_places_for_ticker("CRYSTAL") == 18
-        assert get_decimal_places_for_ticker("MEAD") == 18
-        assert get_decimal_places_for_ticker("GOLD") == 0  # 기본값
-        assert get_decimal_places_for_ticker("UNKNOWN") == 0  # 기본값
-        assert get_decimal_places_for_ticker("ncg") == 2  # 대소문자 구분 없음
+@pytest.fixture
+def env():
+    with patch.object(burn_asset_task, "logger") as logger, patch.object(
+        burn_asset_task, "Account"
+    ) as account_cls, patch.object(
+        burn_asset_task, "GQLClient"
+    ) as gql_cls, patch.object(
+        burn_asset_task, "scoped_session"
+    ) as session_cls:
+        account = MagicMock()
+        account.address = ADDRESS
+        account.pubkey = PUBKEY
+        account.sign_tx.return_value = b"\x30" * 70
+        account_cls.return_value = account
 
-    def test_process_burn_asset_success(self):
-        """정상적인 burn asset 처리 테스트"""
-        message = {
-            "ticker": "NCG",
-            "amount": "10.5",
-            "memo": "Test burn asset",
-            "planet_id": "0x000000000000",
-        }
+        gql = MagicMock()
+        gql.get_next_nonce.return_value = 123
+        gql.stage.return_value = (True, "Success", None)
+        gql_cls.return_value = gql
 
-        with patch(
-            "app.tasks.burn_asset_task.structlog.get_logger"
-        ) as mock_logger, patch(
-            "app.tasks.burn_asset_task.Account"
-        ) as mock_account_class, patch(
-            "app.tasks.burn_asset_task.GQLClient"
-        ) as mock_gql_class, patch(
-            "app.tasks.burn_asset_task.scoped_session"
-        ) as mock_session:
+        sess = MagicMock()
+        sess.scalar.return_value = 100
+        session_cls.return_value = sess
 
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
+        yield SimpleNamespace(
+            logger=logger, account_cls=account_cls, account=account, gql=gql, sess=sess
+        )
 
-            mock_account = MagicMock()
-            mock_account.address = "0x1234567890abcdef1234567890abcdef12345678"
-            mock_account.pubkey.hex.return_value = (
-                "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-            )
-            mock_account.sign_tx.return_value = b"mock_signature"
-            mock_account_class.return_value = mock_account
 
-            mock_gql = MagicMock()
-            mock_gql.get_next_nonce.return_value = 123
-            mock_gql.stage.return_value = (True, "Success", None)
-            mock_gql_class.return_value = mock_gql
+def test_get_decimal_places_for_ticker():
+    assert get_decimal_places_for_ticker("NCG") == 2
+    assert get_decimal_places_for_ticker("CRYSTAL") == 18
+    assert get_decimal_places_for_ticker("MEAD") == 18
+    assert get_decimal_places_for_ticker("GOLD") == 0  # default
+    assert get_decimal_places_for_ticker("UNKNOWN") == 0
+    assert get_decimal_places_for_ticker("ncg") == 2  # case-insensitive
 
-            # Mock DB session
-            mock_sess = MagicMock()
-            mock_sess.scalar.return_value = 100  # DB에서 가져온 nonce
-            mock_session.return_value = mock_sess
 
-            result = process_burn_asset(message)
+def test_success(env):
+    message = {
+        "ticker": "NCG",
+        "amount": "10.5",
+        "memo": "Test burn asset",
+        "planet_id": "0x000000000000",
+    }
 
-            # 로그 호출 확인
-            assert mock_logger_instance.info.call_count >= 2
-            assert mock_logger_instance.error.call_count == 0
+    assert process_burn_asset(message) == SUCCESS
 
-            # 결과 확인
-            assert result == "Burn asset transaction processed and staged successfully"
+    env.account.sign_tx.assert_called_once()
+    env.gql.stage.assert_called_once()
+    planet, signed_tx = env.gql.stage.call_args.args
+    assert planet.value == b"0x000000000000"
+    assert isinstance(signed_tx, bytes) and signed_tx
+    assert env.logger.info.call_count >= 2
+    env.logger.error.assert_not_called()
 
-    def test_process_burn_asset_with_default_values(self):
-        """기본값을 사용한 burn asset 처리 테스트"""
-        message = {
-            "ticker": "CRYSTAL",
-            "amount": "5.0"
-            # memo, planet_id는 기본값 사용
-        }
 
-        with patch(
-            "app.tasks.burn_asset_task.structlog.get_logger"
-        ) as mock_logger, patch(
-            "app.tasks.burn_asset_task.Account"
-        ) as mock_account_class, patch(
-            "app.tasks.burn_asset_task.GQLClient"
-        ) as mock_gql_class, patch(
-            "app.tasks.burn_asset_task.scoped_session"
-        ) as mock_session:
+def test_default_memo_and_planet(env):
+    assert process_burn_asset({"ticker": "CRYSTAL", "amount": "5.0"}) == SUCCESS
+    planet, _ = env.gql.stage.call_args.args
+    assert planet.value == b"0x000000000000"  # ODIN by default
 
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
 
-            mock_account = MagicMock()
-            mock_account.address = "0x1234567890abcdef1234567890abcdef12345678"
-            mock_account.pubkey.hex.return_value = (
-                "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-            )
-            mock_account.sign_tx.return_value = b"mock_signature"
-            mock_account_class.return_value = mock_account
+@pytest.mark.parametrize(
+    "ticker,amount",
+    [
+        ("NCG", "100.25"),
+        ("CRYSTAL", "1000.123456789012345678"),
+        ("MEAD", "50.5"),
+        ("GOLD", "7"),
+    ],
+)
+def test_different_currencies(env, ticker, amount):
+    with patch.object(
+        burn_asset_task,
+        "create_burn_asset_unsigned_tx",
+        wraps=burn_asset_task.create_burn_asset_unsigned_tx,
+    ) as build:
+        assert process_burn_asset({"ticker": ticker, "amount": amount}) == SUCCESS
+    kw = build.call_args.kwargs
+    assert (kw["ticker"], kw["amount"], kw["decimal_places"]) == (
+        ticker,
+        amount,
+        get_decimal_places_for_ticker(ticker),
+    )
+    assert kw["owner"] == ADDRESS and kw["public_key"] == PUBKEY.hex()
 
-            mock_gql = MagicMock()
-            mock_gql.get_next_nonce.return_value = 456
-            mock_gql.stage.return_value = (True, "Success", None)
-            mock_gql_class.return_value = mock_gql
 
-            # Mock DB session
-            mock_sess = MagicMock()
-            mock_sess.scalar.return_value = None  # DB에 nonce가 없는 경우
-            mock_session.return_value = mock_sess
+@pytest.mark.parametrize(
+    "gql_nonce,db_nonce,expected", [(200, 150, 200), (100, 200, 201), (5, None, 5)]
+)
+def test_nonce_is_max_of_node_and_db(env, gql_nonce, db_nonce, expected):
+    env.gql.get_next_nonce.return_value = gql_nonce
+    env.sess.scalar.return_value = db_nonce
+    with patch.object(
+        burn_asset_task,
+        "create_burn_asset_unsigned_tx",
+        wraps=burn_asset_task.create_burn_asset_unsigned_tx,
+    ) as build:
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+    assert build.call_args.kwargs["nonce"] == expected
 
-            result = process_burn_asset(message)
 
-            # 로그 호출 확인
-            assert mock_logger_instance.info.call_count >= 2
-            assert result == "Burn asset transaction processed and staged successfully"
+def test_staging_failure_raises_and_logs(env):
+    env.gql.stage.return_value = (False, "Staging failed", None)
+    with pytest.raises(Exception) as exc_info:
+        process_burn_asset({"ticker": "NCG", "amount": "10.5"})
+    assert "Failed to stage burn asset tx" in str(exc_info.value)
+    assert env.logger.error.call_count >= 1
 
-    def test_process_burn_asset_missing_required_fields(self):
-        """필수 필드 누락 테스트"""
-        message = {
-            "amount": "10.5"
-            # ticker 필드 누락
-        }
 
-        with patch("app.tasks.burn_asset_task.structlog.get_logger") as mock_logger:
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
+def test_missing_ticker_raises(env):
+    with pytest.raises(Exception):
+        process_burn_asset({"amount": "10.5"})
+    assert env.logger.error.call_count >= 1
+    env.gql.stage.assert_not_called()
 
-            with pytest.raises(Exception):
-                process_burn_asset(message)
 
-            # 에러 로그 호출 확인
-            assert mock_logger_instance.error.call_count >= 1
+def test_invalid_amount_raises(env):
+    with pytest.raises(Exception):
+        process_burn_asset({"ticker": "NCG", "amount": "invalid_amount"})
+    assert env.logger.error.call_count >= 1
+    env.account.sign_tx.assert_not_called()
+    env.gql.stage.assert_not_called()
 
-    def test_process_burn_asset_invalid_amount(self):
-        """잘못된 amount 값 테스트"""
-        message = {
-            "ticker": "NCG",
-            "amount": "invalid_amount",
-            "memo": "Test burn asset",
-        }
 
-        with patch("app.tasks.burn_asset_task.structlog.get_logger") as mock_logger:
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
-
-            with pytest.raises(Exception):
-                process_burn_asset(message)
-
-            # 에러 로그 호출 확인
-            assert mock_logger_instance.error.call_count >= 1
-
-    def test_process_burn_asset_different_currencies(self):
-        """다양한 통화에 대한 테스트"""
-        test_cases = [
-            {
-                "ticker": "NCG",
-                "amount": "10.5",
-                "memo": "NCG burn test",
-                "planet_id": "0x000000000000",
-            },
-            {
-                "ticker": "CRYSTAL",
-                "amount": "100",
-                "memo": "CRYSTAL burn test",
-                "planet_id": "0x000000000001",
-            },
-            {
-                "ticker": "GOLD",
-                "amount": "0.00000001",
-                "memo": "GOLD burn test",
-                "planet_id": "0x000000000000",
-            },
-        ]
-
-        with patch(
-            "app.tasks.burn_asset_task.structlog.get_logger"
-        ) as mock_logger, patch(
-            "app.tasks.burn_asset_task.Account"
-        ) as mock_account_class, patch(
-            "app.tasks.burn_asset_task.GQLClient"
-        ) as mock_gql_class, patch(
-            "app.tasks.burn_asset_task.scoped_session"
-        ) as mock_session:
-
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
-
-            mock_account = MagicMock()
-            mock_account.address = "0x1234567890abcdef1234567890abcdef12345678"
-            mock_account.pubkey.hex.return_value = (
-                "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-            )
-            mock_account.sign_tx.return_value = b"mock_signature"
-            mock_account_class.return_value = mock_account
-
-            mock_gql = MagicMock()
-            mock_gql.get_next_nonce.return_value = 789
-            mock_gql.stage.return_value = (True, "Success", None)
-            mock_gql_class.return_value = mock_gql
-
-            # Mock DB session
-            mock_sess = MagicMock()
-            mock_sess.scalar.return_value = 500  # DB에서 가져온 nonce
-            mock_session.return_value = mock_sess
-
-            for test_case in test_cases:
-                result = process_burn_asset(test_case)
-                assert (
-                    result == "Burn asset transaction processed and staged successfully"
-                )
-
-    def test_process_burn_asset_staging_failure(self):
-        """스테이징 실패 테스트"""
-        message = {"ticker": "NCG", "amount": "10.5", "planet_id": "0x000000000000"}
-
-        with patch(
-            "app.tasks.burn_asset_task.structlog.get_logger"
-        ) as mock_logger, patch(
-            "app.tasks.burn_asset_task.Account"
-        ) as mock_account_class, patch(
-            "app.tasks.burn_asset_task.GQLClient"
-        ) as mock_gql_class, patch(
-            "app.tasks.burn_asset_task.scoped_session"
-        ) as mock_session:
-
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
-
-            mock_account = MagicMock()
-            mock_account.address = "0x1234567890abcdef1234567890abcdef12345678"
-            mock_account.pubkey.hex.return_value = (
-                "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-            )
-            mock_account.sign_tx.return_value = b"mock_signature"
-            mock_account_class.return_value = mock_account
-
-            mock_gql = MagicMock()
-            mock_gql.get_next_nonce.return_value = 123
-            mock_gql.stage.return_value = (False, "Staging failed", None)
-            mock_gql_class.return_value = mock_gql
-
-            # Mock DB session
-            mock_sess = MagicMock()
-            mock_sess.scalar.return_value = 100
-            mock_session.return_value = mock_sess
-
-            with pytest.raises(Exception) as exc_info:
-                process_burn_asset(message)
-
-            assert "Failed to stage burn asset tx" in str(exc_info.value)
-            assert mock_logger_instance.error.call_count >= 1
-
-    def test_process_burn_asset_account_error(self):
-        """Account 생성 중 오류 발생 테스트"""
-        message = {"ticker": "NCG", "amount": "10.5"}
-
-        with patch(
-            "app.tasks.burn_asset_task.structlog.get_logger"
-        ) as mock_logger, patch(
-            "app.tasks.burn_asset_task.Account"
-        ) as mock_account_class:
-
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
-
-            # Account 생성 시 예외 발생하도록 모킹
-            mock_account_class.side_effect = Exception("Account creation failed")
-
-            with pytest.raises(Exception):
-                process_burn_asset(message)
-
-            # 에러 로그 호출 확인
-            assert mock_logger_instance.error.call_count >= 1
-
-    def test_process_burn_asset_nonce_calculation(self):
-        """Nonce 계산 로직 테스트"""
-        message = {"ticker": "NCG", "amount": "10.5", "planet_id": "0x000000000000"}
-
-        with patch(
-            "app.tasks.burn_asset_task.structlog.get_logger"
-        ) as mock_logger, patch(
-            "app.tasks.burn_asset_task.Account"
-        ) as mock_account_class, patch(
-            "app.tasks.burn_asset_task.GQLClient"
-        ) as mock_gql_class, patch(
-            "app.tasks.burn_asset_task.scoped_session"
-        ) as mock_session:
-
-            mock_logger_instance = MagicMock()
-            mock_logger.return_value = mock_logger_instance
-
-            mock_account = MagicMock()
-            mock_account.address = "0x1234567890abcdef1234567890abcdef12345678"
-            mock_account.pubkey.hex.return_value = (
-                "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-            )
-            mock_account.sign_tx.return_value = b"mock_signature"
-            mock_account_class.return_value = mock_account
-
-            # GQL nonce가 DB nonce보다 큰 경우
-            mock_gql = MagicMock()
-            mock_gql.get_next_nonce.return_value = 200  # GQL nonce
-            mock_gql.stage.return_value = (True, "Success", None)
-            mock_gql_class.return_value = mock_gql
-
-            mock_sess = MagicMock()
-            mock_sess.scalar.return_value = 150  # DB nonce
-            mock_session.return_value = mock_sess
-
-            result = process_burn_asset(message)
-            assert result == "Burn asset transaction processed and staged successfully"
-
-            # DB nonce가 GQL nonce보다 큰 경우
-            mock_gql.get_next_nonce.return_value = 100  # GQL nonce
-            mock_sess.scalar.return_value = 200  # DB nonce
-
-            result = process_burn_asset(message)
-            assert result == "Burn asset transaction processed and staged successfully"
+def test_account_error_raises(env):
+    env.account_cls.side_effect = Exception("Account creation failed")
+    with pytest.raises(Exception, match="Account creation failed"):
+        process_burn_asset({"ticker": "NCG", "amount": "10.5"})
+    env.gql.stage.assert_not_called()
