@@ -1,7 +1,6 @@
 name: Test
 # Unit tests on every PR and on main. The previous test.yml was a workflow_call that
 # nothing called (and still pointed at the old common/ layout), so no tests ran in CI.
-# apps/worker tests are not wired yet: most of them are out of date with the worker code.
 
 on:
   pull_request:
@@ -70,6 +69,36 @@ jobs:
         with:
           path: apps/shared/.venv
           key: shared-venv-${{ runner.os }}-${{ hashFiles('apps/shared/poetry.lock') }}
+      - run: poetry install --no-interaction
+      - name: pytest
+        run: poetry run python -m pytest tests -q
+
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/worker
+    env:
+      # Settings requires it; tests mock Account so KMS is never called. Dummy AWS
+      # credentials make sure an unmocked call fails instead of reaching AWS.
+      WORKER_KMS_KEY_ID: test-key
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: snok/install-poetry@v1
+        with:
+          version: 1.8.4
+          virtualenvs-in-project: true
+      - uses: actions/cache@v4
+        with:
+          path: apps/worker/.venv
+          key: worker-venv-${{ runner.os }}-${{ hashFiles('apps/worker/poetry.lock', 'apps/shared/**/*.py', 'apps/shared/pyproject.toml') }}
       - run: poetry install --no-interaction
       - name: pytest
         run: poetry run python -m pytest tests -q
