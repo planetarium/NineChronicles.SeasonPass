@@ -1,5 +1,7 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import requests
 from fastapi import APIRouter, Depends
@@ -35,22 +37,40 @@ for view in __all__:
     router.include_router(view.router)
 
 
-def get_tip(url) -> int:
-    resp = requests.post(
-        url,
-        json={"query": "{ nodeStatus { tip { index } } }"},
-        headers={
-            "Authorization": f"Bearer {create_jwt_token(config.headless_jwt_secret)}"
-        },
-        timeout=2,
-    )
-    if resp.status_code != 200:
-        return 0
+def get_tip(url, token: str) -> Optional[int]:
+    """Tip index from one node, or None if it did not answer in time."""
     try:
-        return resp.json()["data"]["nodeStatus"]["tip"]["index"]
+        resp = requests.post(
+            url,
+            json={"query": "{ nodeStatus { tip { index } } }"},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=config.tip_timeout,
+        )
+        if resp.status_code != 200:
+            logging.warning(f"Tip from {url}: HTTP {resp.status_code}")
+            return None
+        return int(resp.json()["data"]["nodeStatus"]["tip"]["index"])
     except Exception as e:
-        logging.warning(f"Error occurred while getting {url}: {e}")
-        return 0
+        logging.warning(f"Error occurred while getting tip from {url}: {e}")
+        return None
+
+
+def tip_urls(planet: PlanetID) -> list[str]:
+    urls = [config.converted_gql_url_map.get(planet)]
+    urls += config.tip_fallback_url_map.get(planet.value.decode(), [])
+    return list(dict.fromkeys(u for u in urls if u))
+
+
+def get_best_tip(planet: PlanetID, token: str) -> Optional[int]:
+    """Highest tip among the planet's nodes, asked in parallel. A node that is
+    restarting is skipped; a node stuck behind is outvoted. None only when no
+    node answers at all."""
+    urls = tip_urls(planet)
+    if not urls:
+        return None
+    with ThreadPoolExecutor(max_workers=len(urls)) as pool:
+        tips = [t for t in pool.map(lambda u: get_tip(u, token), urls) if t is not None]
+    return max(tips) if tips else None
 
 
 def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
@@ -110,37 +130,36 @@ def block_status(sess=Depends(session)):
     stage = config.stage
     result = {}
 
-    odin_planet = PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL
-    odin_tip = get_tip(config.converted_gql_url_map[odin_planet])
-    odin_blocks = get_db_tip(sess, odin_planet)
-    result[odin_planet.name] = {k.value: odin_tip - v for k, v in odin_blocks.items()}
-
-    heimdall_planet = (
-        PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL
-    )
-    heimdall_tip = get_tip(config.converted_gql_url_map[heimdall_planet])
-    heimdall_blocks = get_db_tip(sess, heimdall_planet)
-    result[heimdall_planet.name] = {
-        k.value: heimdall_tip - v for k, v in heimdall_blocks.items()
-    }
-
+    planets = [
+        PlanetID.ODIN if stage == "mainnet" else PlanetID.ODIN_INTERNAL,
+        PlanetID.HEIMDALL if stage == "mainnet" else PlanetID.HEIMDALL_INTERNAL,
+    ]
     thor_planet = PlanetID.THOR if stage == "mainnet" else PlanetID.THOR_INTERNAL
     if (
         thor_planet in config.converted_gql_url_map
         and thor_planet.value.decode() in config.enabled_planets
     ):
-        thor_tip = get_tip(config.converted_gql_url_map[thor_planet])
-        thor_blocks = get_db_tip(sess, thor_planet)
-        result[thor_planet.name] = {
-            k.value: thor_tip - v for k, v in thor_blocks.items()
-        }
+        planets.append(thor_planet)
 
+    # Outside the per-node try: a broken secret should 500, not look like "every node is down".
+    token = create_jwt_token(config.headless_jwt_secret)
     err = False
-    for planet, report in result.items():
-        for pass_type, divergence in report.items():
-            if abs(divergence) > 150:  # ~ 5min with 8 sec block internal
-                err = True
-                break
+    for planet in planets:
+        tip = get_best_tip(planet, token)
+        if tip is None:
+            # Every node is down — a real outage, still alert, but say so
+            # instead of reporting a tracker "lag" of minus the whole chain.
+            result[planet.name] = {"error": "tip unavailable"}
+            err = True
+            continue
+        report = {k.value: tip - v for k, v in get_db_tip(sess, planet).items()}
+        result[planet.name] = report
+        # Positive: the tracker trails the tip. Negative: EVERY node that answered
+        # is behind what the tracker already processed (the tracker reads from the
+        # primary, so it can't outrun it) — e.g. a node rolled back after a fork.
+        # Both are real; only a single restarting node no longer trips this.
+        if any(abs(lag) > config.block_lag_threshold for lag in report.values()):
+            err = True
 
     return JSONResponse(status_code=503 if err else 200, content=result)
 
