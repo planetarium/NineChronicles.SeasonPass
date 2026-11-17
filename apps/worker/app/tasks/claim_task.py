@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import structlog
 from app.celery_app import app
@@ -12,6 +12,11 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
+
+
+def configured_planet_ids() -> List[bytes]:
+    """`gql_url_map` 에 접속 주소가 있는 플래닛. claim.planet_id 와 같은 bytes 형태."""
+    return [planet_id.encode() for planet_id in config.gql_url_map]
 
 
 @app.task(
@@ -66,12 +71,13 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
     try:
         now = datetime.now(tz=timezone.utc)
         claim_ids = (
-            sess.query(Claim.uuid)
+            sess.query(Claim.uuid, Claim.planet_id)
             .filter(
                 Claim.created_at <= now - timedelta(minutes=5),
                 Claim.reward_list != [],
                 Claim.tx.is_(None),
                 Claim.nonce.is_(None),
+                Claim.planet_id.in_(configured_planet_ids()),
             )
             .order_by(Claim.created_at.asc())
             .limit(100)
@@ -82,9 +88,27 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
             logger.info("No claim to retry")
             return
 
-        for claim_id in claim_ids:
-            claim_message = ClaimMessage(uuid=claim_id[0])
-            consume_claim_message(claim_message)
+        # 한 건이 실패해도(노드가 내려간 플래닛 등) 뒤의 클레임은 계속 처리한다. 예전엔 첫 실패에서
+        # 묶음 전체를 재시도해, 맨 앞의 thor 클레임 하나가 2026-11-17 인터널 오딘 복구를 막았다.
+        # 실패한 건은 다음 beat(5분)에 다시 고른다. 실패한 플래닛의 남은 건은 이번엔 건너뛴다 —
+        # stage 실패가 이어지면 nonce 만 줄줄이 할당돼 구멍 뒤에 갇히고, 실행도 길어진다.
+        failed = 0
+        failed_planets = set()
+        for uuid, planet_id in claim_ids:
+            if planet_id in failed_planets:
+                continue
+            try:
+                consume_claim_message(ClaimMessage(uuid=uuid))
+            except Exception as e:
+                failed += 1
+                failed_planets.add(planet_id)
+                logger.error("Error retrying claim", uuid=uuid, exc_info=e)
+        if failed:
+            logger.error(
+                "Retry claim finished with failures",
+                failed=failed,
+                total=len(claim_ids),
+            )
     except Exception as e:
         logger.error("Error processing retry claim", exc_info=e)
         self.retry(exc=e)
