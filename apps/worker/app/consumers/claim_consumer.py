@@ -1,6 +1,5 @@
 # Receive message from SQS and send season pass reward
 import hashlib
-import json
 import threading
 import time
 from datetime import datetime, timezone
@@ -8,6 +7,7 @@ from datetime import datetime, timezone
 import structlog
 from app.config import config
 from app.utils.aws import Account
+from app.utils.claim_memo import build_claim_memo
 from shared.enums import TxStatus
 from shared.models.user import Claim
 from shared.schemas.message import ClaimMessage
@@ -118,15 +118,10 @@ def consume_claim_message(message: ClaimMessage):
         claim.tx_status = TxStatus.CREATED
 
         # GQL 의존성 제거: 로컬에서 unsigned transaction 생성
-        memo = json.dumps(
-            {
-                "season_pass": {
-                    "n": claim.normal_levels,
-                    "p": claim.premium_levels,
-                    "t": "claim",
-                    "tp": claim.season_pass.pass_type.value,
-                }
-            }
+        memo = build_claim_memo(
+            claim.normal_levels,
+            claim.premium_levels,
+            claim.season_pass.pass_type.value,
         )
 
         unsigned_tx = create_grant_items_unsigned_tx(
