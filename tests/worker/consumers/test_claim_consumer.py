@@ -1,5 +1,4 @@
 import hashlib
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -318,18 +317,7 @@ class TestClaimConsumer:
         # 함수 실행
         consume_claim_message(mock_message)
 
-        # 검증 - memo 형식 확인
-        expected_memo = json.dumps(
-            {
-                "season_pass": {
-                    "n": [1, 2, 3],
-                    "p": [4, 5],
-                    "t": "claim",
-                    "tp": "CouragePass",
-                }
-            }
-        )
-
+        # memo 형식은 apps/worker/tests/test_claim_memo.py 에서 확인한다.
         # 실제 memo는 함수 내부에서 생성되므로, 트랜잭션이 성공적으로 생성되었는지만 확인
         assert mock_claim.tx is not None
         assert mock_claim.tx_status == TxStatus.STAGED
