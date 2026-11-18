@@ -22,4 +22,4 @@ WORKDIR /app/apps/worker
 
 RUN poetry install --no-root
 
-CMD ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=1"]

@@ -8,6 +8,7 @@ import structlog
 from app.config import config
 from app.utils.aws import Account
 from app.utils.claim_memo import build_claim_memo
+from app.utils.nonce_lock import lock_planet_nonce
 from shared.enums import TxStatus
 from shared.models.user import Claim
 from shared.schemas.message import ClaimMessage
@@ -58,9 +59,15 @@ def consume_claim_message(message: ClaimMessage):
     outcome = "error"
 
     try:
+        # FOR UPDATE: API 가 보낸 메시지와 beat 재처리(retry_claim)가 같은 claim 을 동시에 잡으면
+        # 둘 다 tx 가 없다고 보고 각자 서명해 같은 nonce 로 tx 두 개를 stage 했다. 행 잠금으로
+        # 뒤에 온 쪽은 앞의 commit 을 기다렸다가 tx 가 채워진 행을 다시 읽고 아래에서 끝난다.
+        # 잠금은 tx 를 적는 commit(또는 실패 시 close 의 rollback)에서 풀린다.
         claim_dict = {
             x.uuid: x
-            for x in sess.scalars(select(Claim).where(Claim.uuid == message.uuid))
+            for x in sess.scalars(
+                select(Claim).where(Claim.uuid == message.uuid).with_for_update()
+            )
         }
         target_claim_list = []
         nonce_dict = {}
@@ -88,6 +95,13 @@ def consume_claim_message(message: ClaimMessage):
         )
         lap("gql_init")
 
+        # 서로 다른 claim 이 같은 플래닛 nonce 를 동시에 계산하지 않게, nonce 계산부터 tx 를 적는
+        # commit 까지 플래닛 잠금을 쥔다(DB 최대 nonce 는 commit 뒤에야 다음 계산에 보인다).
+        # 예전엔 (planet_id, nonce) 유일 제약이 서명까지 마친 뒤 commit 에서야 충돌을 잡았다.
+        # 잠금을 쥔 채 nonce GQL·KMS 서명(수 초)을 하지만 워커 동시 처리가 1이라 감수한다.
+        lock_planet_nonce(sess, claim.planet_id)
+        lap("nonce_lock")
+
         if claim.planet_id not in nonce_dict:
             chain_nonce = gql.get_next_nonce(claim.planet_id, account.address)
             lap("nonce_gql")
@@ -112,7 +126,8 @@ def consume_claim_message(message: ClaimMessage):
         else:
             nonce = nonce_dict[claim.planet_id]
 
-        if not claim.nonce:
+        # nonce 0 도 배정된 값이다(`not claim.nonce` 는 0 을 비었다고 보고 새 nonce 를 줬다).
+        if claim.nonce is None:
             claim.nonce = nonce
             use_nonce = True
         claim.tx_status = TxStatus.CREATED

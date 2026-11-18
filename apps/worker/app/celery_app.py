@@ -1,8 +1,7 @@
 import structlog
+from app.config import config
 from celery import Celery
 from kombu import Exchange, Queue
-
-from app.config import config
 
 logger = structlog.get_logger(__name__)
 
@@ -54,7 +53,10 @@ app.conf.update(
     beat_max_loop_interval=60,
     timezone="UTC",
     enable_utc=True,
-    worker_concurrency=4,
+    # 같은 서명 키로 nonce 를 순서대로 매기므로 한 번에 하나만 처리한다. 실제 실행 인자
+    #   (9c-infra 차트, Dockerfile.Worker)도 --concurrency=1 이다. 코드의 잠금(claim 행·플래닛
+    #   advisory lock)은 이 값이 바뀌거나 파드가 겹칠 때를 위한 방어선이다.
+    worker_concurrency=1,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
@@ -65,16 +67,23 @@ app.conf.update(
     task_create_missing_queues=True,
     task_default_delivery_mode="persistent",
     worker_direct=True,
+    # expires: 워커가 멈췄다 돌아오면 5분마다 쌓인 재처리 작업이 한꺼번에 돌지 않게, 다음
+    #   주기(300초)가 오기 전에 실행되지 못한 작업은 버린다. 다음 beat 이 같은 일을 다시 넣는다.
+    #   celery 의 self.retry 는 원래 요청의 만료 시각(절대 시각)을 그대로 물려받는다
+    #   (Context.as_execution_options 의 'expires'). 그래서 발행 240초 뒤를 넘는 재시도는 실행
+    #   직전에 버려진다 — 다음 주기가 대신하므로 의도한 동작이다.
+    #   주의: 동시 처리 1 이라 앞 작업(retry_claim 최대 100건)이 240초를 넘기면 같은 주기의
+    #   retry_stage 가 버려진다. 버려짐은 celery 의 info 로그('Discarding revoked task')뿐이다.
     beat_schedule={
         "retry-stage-every-5-minutes": {
             "task": "season_pass.process_retry_stage",
             "schedule": 300.0,
-            "options": {"queue": "claim_queue"},
+            "options": {"queue": "claim_queue", "expires": 240},
         },
         "retry-claim-every-5-minutes": {
             "task": "season_pass.process_retry_claim",
             "schedule": 300.0,
-            "options": {"queue": "claim_queue"},
+            "options": {"queue": "claim_queue", "expires": 240},
         },
     },
 )
