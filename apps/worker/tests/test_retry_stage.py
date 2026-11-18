@@ -6,10 +6,9 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from app.tasks import stage_task
 from shared.enums import TxStatus
 from sqlalchemy.dialects import postgresql
-
-from app.tasks import stage_task
 
 ODIN = b"0x000000000000"
 HEIMDALL = b"0x000000000001"

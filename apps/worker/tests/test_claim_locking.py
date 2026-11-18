@@ -16,6 +16,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from app.consumers import claim_consumer
+from app.tasks import burn_asset_task, claim_task
+from app.utils import nonce_lock
+from app.utils.nonce_lock import planet_nonce_lock_key
 from celery.exceptions import Retry
 from shared.enums import PassType, PlanetID, TxStatus
 from shared.models.base import Base
@@ -25,11 +29,6 @@ from shared.schemas.message import ClaimMessage
 from sqlalchemy import create_engine, make_url, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
-
-from app.consumers import claim_consumer
-from app.tasks import burn_asset_task, claim_task
-from app.utils import nonce_lock
-from app.utils.nonce_lock import planet_nonce_lock_key
 
 DSN = os.environ.get("WORKER_TEST_PG_DSN")
 pytestmark = pytest.mark.skipif(not DSN, reason="WORKER_TEST_PG_DSN 이 없음")
@@ -483,8 +482,8 @@ def test_retry_claim_skips_locked_planet_only(
 
 
 def test_burn_asset_planet_lock_wait_is_bounded(db, short_lock_timeout):
-    # 잠금을 못 잡으면 상한 안에 실패로 끝나고 자동 재시도하지 않는다(소각은 최대 1회). 아직 서명 전이라
-    # 소각되지 않았으므로 사람이 다시 요청하면 그때 한 번 stage 한다.
+    # 잠금을 못 잡으면 상한 안에 서명 전 실패로 끝난다. 서명한 tx 가 나간 적이 없어 자동 재시도해도
+    # 이중 소각이 없으므로 재시도하고, 다음 실행에서 stage 는 한 번만 한다.
     gql = MagicMock()
     gql.get_next_nonce.return_value = CHAIN_NONCE
     gql.stage.return_value = (True, "", None)
@@ -500,19 +499,23 @@ def test_burn_asset_planet_lock_wait_is_bounded(db, short_lock_timeout):
     ), patch.object(burn_asset_task, "GQLClient", return_value=gql), patch.object(
         burn_asset_task, "logger"
     ) as logger, patch.object(
-        burn_asset_task.process_burn_asset, "retry"
+        burn_asset_task.process_burn_asset, "retry", side_effect=Retry("retry")
     ) as retry:
         try:
             t, result = run_bounded(lambda: burn_asset_task.process_burn_asset(message))
-            assert_lock_timeout(t, result)
+            assert not t.is_alive(), "잠금을 상한 없이 기다린다"
+            assert isinstance(result.get("error"), Retry), result
             gql.get_next_nonce.assert_not_called()
             account.sign_tx.assert_not_called()
         finally:
             release(holder, t)
 
-        retry.assert_not_called()
-        assert logger.error.call_args.kwargs["stage_attempted"] is False
+        exc = retry.call_args.kwargs["exc"]
+        assert isinstance(exc, OperationalError) and exc.orig.pgcode == "55P03"
+        assert logger.warning.call_args.kwargs["stage_attempted"] is False
+        logger.error.assert_not_called()
 
+        retry.side_effect = None
         assert burn_asset_task.process_burn_asset(message).startswith(
             "Burn asset transaction processed"
         )

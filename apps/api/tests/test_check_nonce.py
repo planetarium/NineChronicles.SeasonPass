@@ -160,6 +160,8 @@ def test_no_claims_is_ok(client, test_session, node, caplog):
         (_Resp(json_exc=ValueError("Expecting value")), "ValueError"),
         (_Resp({"errors": [{"message": "boom"}]}), "GraphQLError"),
         (_Resp({"data": {"nextTxNonce": None}}), "GraphQLError"),
+        # bool is an int subclass: true would read as nonce 1
+        (_Resp({"data": {"nextTxNonce": True}}), "GraphQLError"),
         (requests.exceptions.ReadTimeout("read timed out"), "ReadTimeout"),
         (
             requests.exceptions.ConnectionError(
@@ -169,7 +171,15 @@ def test_no_claims_is_ok(client, test_session, node, caplog):
         ),
         (_Resp({"data": {"nextTxNonce": 42}}, status_code=502), "HTTPError"),
     ],
-    ids=["not-json", "gql-errors", "null-nonce", "timeout", "conn-error", "http-502"],
+    ids=[
+        "not-json",
+        "gql-errors",
+        "null-nonce",
+        "bool-nonce",
+        "timeout",
+        "conn-error",
+        "http-502",
+    ],
 )
 def test_node_error_is_503_unavailable(
     client, test_session, node, caplog, reply, error

@@ -57,7 +57,13 @@ class Settings(BaseSettings):
     # /check-nonce, gap = DB highest claim nonce − nextTxNonce + 1 (0 when healthy).
     # 503 when a hole (gap >= 1) stays with nextTxNonce not moving for this long. Re-signing
     # (B2) fills holes 20 per round, moving nextTxNonce, so a hole being filled never pages.
-    # 25 = resign_after 15 + beat 5 + 5 for block inclusion.
+    # 25 = resign_after 15 + beat 5 + 5 for block inclusion, which assumes the hole is
+    # re-signed on the first round. B2 also holds a round as normal behaviour — first_observation
+    # after a worker restart, catching_up / validator_lagging around validator restarts (odin
+    # validator-5 3-4 times a day, the 07:00 restart) — and each held round adds a beat (5 min),
+    # so one hold already reaches 25. Provisional: before the mainnet PR, measure "hole first
+    # seen -> re-signed" from the internal (or mainnet dry_run) Resign summary logs and set
+    # API_CHECK_NONCE_STUCK_MINUTES from that. With B2 off, restage ends a hole within ~20 min.
     check_nonce_stuck_minutes: float = 25.0
     # 503 at once above this. The 50-in-progress-claims limit keeps a hole near 51 at most.
     check_nonce_max_gap: int = 60

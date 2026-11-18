@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-
 from app.tasks import burn_asset_task
 from app.tasks.burn_asset_task import get_decimal_places_for_ticker, process_burn_asset
+from celery.exceptions import Retry
 
 ADDRESS = "0x" + "12" * 20
 PUBKEY = bytes.fromhex(
@@ -46,10 +46,12 @@ def env():
         sess.scalar.return_value = 100
         session_cls.return_value = sess
 
-        # A burn must run at most once: the nonce is not recorded anywhere, so an automatic
-        # retry after stage could burn twice. Any call to retry fails the test.
+        # Only a failure before stage may retry (the signed tx never left the process); a
+        # retry after stage could burn twice. retry returns a Retry, as Celery's does.
         with patch.object(
-            process_burn_asset, "retry", side_effect=AssertionError("retry called")
+            process_burn_asset,
+            "retry",
+            side_effect=lambda exc, countdown: Retry(exc=exc),
         ) as retry:
             yield SimpleNamespace(
                 logger=logger,
@@ -59,6 +61,28 @@ def env():
                 sess=sess,
                 retry=retry,
             )
+
+
+def last_attempt(message):
+    """Run as the attempt after the last automatic retry (request.retries == max)."""
+    process_burn_asset.push_request(retries=burn_asset_task.PRE_STAGE_RETRIES)
+    try:
+        return process_burn_asset.run(message)
+    finally:
+        process_burn_asset.pop_request()
+
+
+def assert_retried_before_stage(env):
+    env.retry.assert_called_once()
+    assert (
+        env.retry.call_args.kwargs["countdown"]
+        == burn_asset_task.PRE_STAGE_RETRY_SECONDS
+    )
+    env.gql.stage.assert_not_called()
+    env.logger.error.assert_not_called()
+    call = env.logger.warning.call_args
+    assert "not burned, retrying" in call.args[0]
+    assert call.kwargs["stage_attempted"] is False
 
 
 def error_call(logger):
@@ -152,14 +176,14 @@ def test_staging_failure_raises_and_logs(env):
 
 def test_missing_ticker_raises(env):
     with pytest.raises(Exception):
-        process_burn_asset({"amount": "10.5"})
+        last_attempt({"amount": "10.5"})
     assert env.logger.error.call_count >= 1
     env.gql.stage.assert_not_called()
 
 
 def test_invalid_amount_raises(env):
     with pytest.raises(Exception):
-        process_burn_asset({"ticker": "NCG", "amount": "invalid_amount"})
+        last_attempt({"ticker": "NCG", "amount": "invalid_amount"})
     assert env.logger.error.call_count >= 1
     env.account.sign_tx.assert_not_called()
     env.gql.stage.assert_not_called()
@@ -168,15 +192,15 @@ def test_invalid_amount_raises(env):
 def test_account_error_raises(env):
     env.account_cls.side_effect = Exception("Account creation failed")
     with pytest.raises(Exception, match="Account creation failed"):
-        process_burn_asset({"ticker": "NCG", "amount": "10.5"})
+        last_attempt({"ticker": "NCG", "amount": "10.5"})
     env.gql.stage.assert_not_called()
 
 
-def test_runs_at_most_once():
+def test_task_options():
     # acks_late=False: the worker acks on receipt, so a worker killed after stage does not
     # get the message redelivered (task_reject_on_worker_lost=True globally) and burn again.
     assert process_burn_asset.acks_late is False
-    assert process_burn_asset.max_retries == 0
+    assert process_burn_asset.max_retries == burn_asset_task.PRE_STAGE_RETRIES == 3
 
 
 def test_success_logs_planet(env):
@@ -222,26 +246,50 @@ def test_node_nonce_unavailable_stops_before_signing(env):
     # which can collide with a claim still in the node's queue.
     env.gql.get_next_nonce.return_value = -1
 
-    with pytest.raises(Exception):
+    with pytest.raises(Retry):
         process_burn_asset({"ticker": "NCG", "amount": "1"})
 
     env.account.sign_tx.assert_not_called()
-    env.gql.stage.assert_not_called()
+    assert_retried_before_stage(env)
+    assert env.logger.warning.call_args.kwargs["planet_id"] == "0x000000000000"
+
+
+def test_kms_error_retries_before_stage(env):
+    env.account.sign_tx.side_effect = RuntimeError("KMS throttled")
+
+    with pytest.raises(Retry):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    assert_retried_before_stage(env)
+    assert isinstance(env.retry.call_args.kwargs["exc"], RuntimeError)
+
+
+def test_pre_stage_failure_after_last_retry_logs_error(env):
+    env.gql.get_next_nonce.return_value = -1
+
+    with pytest.raises(RuntimeError, match="nextTxNonce unavailable"):
+        last_attempt({"ticker": "NCG", "amount": "1"})
+
     env.retry.assert_not_called()
+    env.account.sign_tx.assert_not_called()
     event, kw = error_call(env.logger)
-    assert "not burned" in event
+    assert "not burned, safe to request again" in event
     assert kw["stage_attempted"] is False
+    assert kw["retries"] == burn_asset_task.PRE_STAGE_RETRIES
     assert kw["planet_id"] == "0x000000000000"
 
 
-def test_kms_error_is_not_retried(env):
-    env.account.sign_tx.side_effect = RuntimeError("KMS throttled")
+def test_stage_failure_on_a_retried_attempt_is_not_retried(env):
+    # A pre-stage retry that gets as far as stage is under the same rule: no retry after stage.
+    env.gql.stage.side_effect = requests.exceptions.ReadTimeout("read timed out")
+    process_burn_asset.push_request(retries=1)
+    try:
+        with pytest.raises(requests.exceptions.ReadTimeout):
+            process_burn_asset.run({"ticker": "NCG", "amount": "1"})
+    finally:
+        process_burn_asset.pop_request()
 
-    with pytest.raises(RuntimeError, match="KMS throttled"):
-        process_burn_asset({"ticker": "NCG", "amount": "1"})
-
-    env.gql.stage.assert_not_called()
     env.retry.assert_not_called()
     event, kw = error_call(env.logger)
-    assert "not burned" in event
-    assert kw["stage_attempted"] is False and kw["nonce"] == 123
+    assert "MAY HAVE BEEN BURNED" in event
+    assert kw["stage_attempted"] is True and kw["retries"] == 1

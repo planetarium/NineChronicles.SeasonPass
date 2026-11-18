@@ -19,15 +19,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import structlog
-from shared.enums import TxStatus
-from shared.models.season_pass import SeasonPass
-from shared.models.user import Claim, ClaimTxHistory
-from shared.utils._graphql import GQLClient
-from shared.utils.claim_tx_history import history_table_ready
-from sqlalchemy import create_engine, func, select, update
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session, scoped_session, sessionmaker
-
 from app.celery_app import app
 from app.config import config
 from app.tasks.claim_task import configured_planet_ids
@@ -40,6 +31,14 @@ from app.utils.claim_tx import (
 )
 from app.utils.gql import get_next_tx_nonce_once, get_tip_index_once, get_tx_status_once
 from app.utils.nonce_lock import set_lock_timeout
+from shared.enums import TxStatus
+from shared.models.season_pass import SeasonPass
+from shared.models.user import Claim, ClaimTxHistory
+from shared.utils._graphql import GQLClient
+from shared.utils.claim_tx_history import history_table_ready
+from sqlalchemy import create_engine, func, select, update
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session, scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
