@@ -5,14 +5,24 @@ The tracker used to read the row unlocked and write exp/level back as absolute
 values, erasing that deduction so the same repeating reward could be claimed
 again. HTTP (node/CDN) must still happen before the lock is taken (#308).
 
+The concurrent /claim runs the API's real `create_claim`. The tracker venv cannot
+import apps/api (no fastapi, and both apps are the `app` package), so the function
+is lifted from apps/api/app/api/user.py by AST and run against shared's models
+and `get_max_level`. If it starts using another name, `load_create_claim` fails
+with NameError: add the name to its namespace.
+
 Needs Postgres: TRACKER_TEST_PG_DSN, or postgres:postgres@localhost/season_pass_tracker_test.
 Skipped when the default DB is unreachable; never skipped when the env var is set (CI).
 """
+import ast
 import os
 import threading
 import time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from app.consumers import adventure_boss_consumer, courage_consumer
@@ -21,8 +31,9 @@ from shared.enums import ActionType, PassType, PlanetID
 from shared.models.action import ActionHistory, Block
 from shared.models.base import Base
 from shared.models.season_pass import Exp, Level, SeasonPass
-from shared.models.user import UserSeasonPass
+from shared.models.user import Claim, UserSeasonPass
 from shared.schemas.message import TrackerMessage
+from shared.utils.season_pass import get_max_level
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -39,6 +50,36 @@ AVATAR = "0x" + "b" * 40
 # 3 real levels + level 4 for the repeating reward (100 exp per repeat)
 LEVELS = [(1, 0), (2, 100), (3, 200), (4, 300)]
 ACTION_EXP = 10
+REWARDS = [
+    {"level": lvl, "normal": [{"ticker": "CRYSTAL", "amount": 10}], "premium": []}
+    for lvl, _ in LEVELS
+]
+API_USER_PY = Path(__file__).parents[2] / "api" / "app" / "api" / "user.py"
+
+
+def load_create_claim():
+    """apps/api's create_claim, compiled from its source (see module docstring)."""
+    tree = ast.parse(API_USER_PY.read_text(), filename=str(API_USER_PY))
+    (fn,) = [
+        n
+        for n in tree.body
+        if isinstance(n, ast.FunctionDef) and n.name == "create_claim"
+    ]
+    namespace = {
+        "Claim": Claim,
+        "SeasonPass": SeasonPass,
+        "UserSeasonPass": UserSeasonPass,
+        "defaultdict": defaultdict,
+        "get_max_level": get_max_level,
+        "uuid4": uuid4,
+    }
+    exec(
+        compile(ast.Module([fn], type_ignores=[]), str(API_USER_PY), "exec"), namespace
+    )
+    return namespace["create_claim"]
+
+
+create_claim = load_create_claim()
 
 
 @pytest.fixture
@@ -69,7 +110,7 @@ def seed(pass_type: PassType, exp: int, level: int):
                 start_timestamp=now - timedelta(days=1),
                 end_timestamp=now + timedelta(days=1),
                 instant_exp=0,
-                reward_list=[],
+                reward_list=REWARDS,
             )
         )
         s.add_all(
@@ -128,16 +169,22 @@ def wait_lock_waiters(n: int = 1, timeout: float = 10):
 
 
 def run_during_claim(consume, message):
-    """Run the tracker while a /claim transaction holds the row and deducts 3 repeats."""
-    conn = engine.connect()
-    trans = conn.begin()
-    conn.execute(text("SELECT id FROM user_season_pass FOR UPDATE"))
-    # what create_claim does for 3 repeating rewards above max level 3
-    conn.execute(
-        text(
-            "UPDATE user_season_pass SET exp = exp - 300, level = 3, last_normal_claim = 3"
-        )
-    )
+    """Run the tracker while a /claim transaction holds the row and runs create_claim.
+
+    Like /claim: lock the row, create_claim (deducts the repeating rewards), and
+    commit only after the tracker is waiting on the lock.
+    """
+    claim_sess = Session(engine)
+    try:
+        usp = claim_sess.scalar(select(UserSeasonPass).with_for_update())
+        claim = create_claim(claim_sess, claim_sess.get(SeasonPass, 1), usp)
+        claim_sess.flush()
+        # seed() leaves 3 repeats above max level 3: 550 -> 550 - 3 * 100
+        assert claim.normal_levels == [1, 2, 3, 4, 4, 4]
+        assert (usp.exp, usp.level) == (250, 3)
+    except BaseException:
+        claim_sess.close()
+        raise
     error = []
 
     def worker():
@@ -151,8 +198,8 @@ def run_during_claim(consume, message):
         t.start()
         wait_lock_waiters()
     finally:
-        trans.commit()
-        conn.close()
+        claim_sess.commit()
+        claim_sess.close()
     t.join(timeout=30)
     assert not error, error
 
