@@ -426,6 +426,27 @@ def create_claim(sess, target_pass: SeasonPass, user_season: UserSeasonPass) -> 
     return claim
 
 
+INPROGRESS_CLAIM_LIMIT = 50
+
+
+def inprogress_claim_count(sess, planet_id: PlanetID) -> int:
+    """Claims of `planet_id` with rewards that are still STAGED or went INVALID.
+
+    Counted per planet: claim txs are signed with a per-planet nonce, so a nonce
+    hole on one planet stalls only that planet. Counting globally let Odin's
+    stall (2026-11-16, 51 INVALID after the chain halted) refuse Heimdall claims.
+    """
+    return sess.scalar(
+        select(func.count()).where(
+            Claim.planet_id == planet_id,
+            Claim.reward_list != [],
+            or_(
+                Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID
+            ),
+        )
+    )
+
+
 @router.post("/claim", response_model=ClaimResultSchema)
 def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     if request.force:
@@ -469,16 +490,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     if not available["normal"] and not available["premium"]:
         return ClaimResultSchema(user=user_season, reward_list=[])
 
-    inprogress_claim_count = sess.scalar(
-        select(func.count()).where(
-            Claim.reward_list != [],
-            or_(
-                Claim.tx_status == TxStatus.STAGED, Claim.tx_status == TxStatus.INVALID
-            ),
-        )
-    )
-
-    if inprogress_claim_count > 50:
+    if inprogress_claim_count(sess, request.planet_id) > INPROGRESS_CLAIM_LIMIT:
         raise ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
 
     try:
