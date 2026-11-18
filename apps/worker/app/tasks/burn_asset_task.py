@@ -6,6 +6,7 @@ import structlog
 from app.celery_app import app
 from app.config import config
 from app.utils.aws import Account
+from app.utils.nonce_lock import lock_planet_nonce
 from shared.enums import PlanetID
 from shared.models.user import Claim
 from shared.utils._graphql import GQLClient
@@ -72,6 +73,11 @@ def process_burn_asset(self, message: Dict[str, Any]) -> str:
 
         # Get nonce (GQL과 Claim 테이블의 nonce 중 큰 값 사용)
         planet_id_enum = PlanetID(planet_id.encode())
+        # claim 과 같은 서명자 nonce 를 쓰므로 같은 플래닛 잠금을 잡는다. 소각 tx 는 DB 에 nonce 를
+        # 남기지 않아, 다음 nonce 계산이 이 tx 를 보려면 노드 대기열에 들어간 뒤(stage)여야 한다.
+        # 그래서 stage 까지 쥐고, finally 의 sess.close()(rollback)에서 풀린다. 기다림은
+        # LOCK_TIMEOUT 까지이고, 넘기면 아래 except 의 self.retry 로 간다.
+        lock_planet_nonce(sess, planet_id_enum)
         nonce = max(
             gql.get_next_nonce(planet_id_enum, account.address),
             (

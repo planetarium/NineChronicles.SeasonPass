@@ -76,6 +76,21 @@ jobs:
   worker:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          # tests/test_claim_locking.py (row lock / advisory lock need a real Postgres)
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: season_pass_worker_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
     defaults:
       run:
         working-directory: apps/worker
@@ -86,6 +101,7 @@ jobs:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_DEFAULT_REGION: us-east-2
+      WORKER_TEST_PG_DSN: postgresql://postgres:postgres@localhost:5432/season_pass_worker_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
