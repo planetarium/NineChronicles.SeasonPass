@@ -5,14 +5,15 @@ from typing import List
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends
+from psycopg2.errors import LockNotAvailable
 from shared.enums import PassType, PlanetID, TxStatus
 from shared.models.season_pass import SeasonPass
 from shared.models.user import Claim, UserSeasonPass
 from shared.schemas.message import ClaimMessage
 from shared.utils._graphql import GQLClient
 from shared.utils.season_pass import get_level, get_max_level, get_pass
-from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, or_, select, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.celery import send_to_worker
 from app.config import config
@@ -56,6 +57,34 @@ def _fetch_cleared_stage(planet_id: PlanetID, avatar_addr: str) -> int:
         planet_id, avatar_addr, timeout=1
     )
     return cleared_stage
+
+
+# Upper bound on waiting for a user_season_pass row lock. Every holder (/claim,
+# /claim-prev, /upgrade and the trackers) keeps the lock only for DB work, so a
+# normal wait is milliseconds. A longer wait means something is holding the row
+# abnormally (e.g. a manual transaction); without a bound, requests for that row
+# pile up on the API thread pool (25) like the 2026-05~06 lock convoy.
+USP_LOCK_TIMEOUT = "5s"
+
+
+def lock_user_season_pass(sess, stmt) -> UserSeasonPass | None:
+    """`SELECT ... FOR UPDATE` the user_season_pass row of `stmt`.
+
+    Lock-wait timeout surfaces as ServerOverloadError (503), which the client
+    already handles as a retryable claim failure.
+    """
+    # SET LOCAL lasts until this transaction ends, so set it right before locking
+    # (an earlier commit/rollback would have dropped it).
+    sess.execute(text(f"SET LOCAL lock_timeout = '{USP_LOCK_TIMEOUT}'"))
+    try:
+        return sess.scalar(stmt.with_for_update())
+    except OperationalError as e:
+        if isinstance(e.orig, LockNotAvailable):
+            sess.rollback()
+            raise ServerOverloadError(
+                "NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL"
+            ) from e
+        raise
 
 
 def get_default_usp(
@@ -269,14 +298,16 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             f"[{request.planet_id}::{request.avatar_addr}]\n"
             f"Requested season {request.pass_type}:{request.season_index} not found or not current season."
         )
-    target_usp = sess.scalar(
-        select(UserSeasonPass).where(
-            UserSeasonPass.planet_id == request.planet_id,
-            UserSeasonPass.agent_addr == request.agent_addr,
-            UserSeasonPass.avatar_addr == request.avatar_addr,
-            UserSeasonPass.season_pass_id == target_pass.id,
-        )
+    # Lock the row like /claim: two concurrent upgrades (or an upgrade racing the
+    # trackers) would otherwise both pass the duplicate-purchase check below and
+    # create two reward Claims, or overwrite each other's exp.
+    usp_stmt = select(UserSeasonPass).where(
+        UserSeasonPass.planet_id == request.planet_id,
+        UserSeasonPass.agent_addr == request.agent_addr,
+        UserSeasonPass.avatar_addr == request.avatar_addr,
+        UserSeasonPass.season_pass_id == target_pass.id,
     )
+    target_usp = lock_user_season_pass(sess, usp_stmt)
     if not target_usp:
         target_usp = get_default_usp(
             sess,
@@ -288,20 +319,14 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         sess.add(target_usp)
         try:
             sess.commit()
-            sess.refresh(target_usp)
         except IntegrityError:
             logging.warning(
                 f"{request.planet_id.value}::{request.avatar_addr}::{target_pass.id} already exists."
             )
             sess.rollback()
-            target_usp = sess.scalar(
-                select(UserSeasonPass).where(
-                    UserSeasonPass.planet_id == request.planet_id,
-                    UserSeasonPass.agent_addr == request.agent_addr,
-                    UserSeasonPass.avatar_addr == request.avatar_addr,
-                    UserSeasonPass.season_pass_id == target_pass.id,
-                )
-            )
+        # The row now exists but was committed (by us or a concurrent request)
+        # without our lock. Lock it before the checks and changes below.
+        target_usp = lock_user_season_pass(sess, usp_stmt)
 
     # Not Premium and request only premium plus
     if not target_usp.is_premium and not request.is_premium:
@@ -469,14 +494,13 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
                 f"Requested season {request.pass_type}:{request.season_index} does not exist or not active."
             )
 
-    user_season = sess.scalar(
-        select(UserSeasonPass)
-        .where(
+    user_season = lock_user_season_pass(
+        sess,
+        select(UserSeasonPass).where(
             UserSeasonPass.planet_id == request.planet_id,
             UserSeasonPass.avatar_addr == request.avatar_addr,
             UserSeasonPass.season_pass_id == target_pass.id,
-        )
-        .with_for_update()
+        ),
     )
     if not user_season:
         # No action executed about season pass.
@@ -553,12 +577,15 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
             f"Season {target_pass.pass_type}:{target_pass.season_index} finished over one week ago. Cannot claim."
         )
 
-    user_season = sess.scalar(
+    # Lock like /claim: a double tap would otherwise read the same last_*_claim
+    # twice and create (and pay) the same reward Claim twice.
+    user_season = lock_user_season_pass(
+        sess,
         select(UserSeasonPass).where(
             UserSeasonPass.planet_id == request.planet_id,
             UserSeasonPass.season_pass_id == target_pass.id,
             UserSeasonPass.avatar_addr == request.avatar_addr,
-        )
+        ),
     )
     if not user_season:
         raise SeasonNotFoundError(
