@@ -67,11 +67,12 @@ def _fetch_cleared_stage(planet_id: PlanetID, avatar_addr: str) -> int:
 USP_LOCK_TIMEOUT = "5s"
 
 
-def lock_user_season_pass(sess, stmt) -> UserSeasonPass | None:
+def lock_user_season_pass(sess, stmt, **log_context) -> UserSeasonPass | None:
     """`SELECT ... FOR UPDATE` the user_season_pass row of `stmt`.
 
     Lock-wait timeout surfaces as ServerOverloadError (503), which the client
-    already handles as a retryable claim failure.
+    already handles as a retryable claim failure. `log_context` (endpoint, planet,
+    avatar) goes to the 503 log line so a stuck row can be traced.
     """
     # SET LOCAL lasts until this transaction ends, so set it right before locking
     # (an earlier commit/rollback would have dropped it).
@@ -82,7 +83,9 @@ def lock_user_season_pass(sess, stmt) -> UserSeasonPass | None:
         if isinstance(e.orig, LockNotAvailable):
             sess.rollback()
             raise ServerOverloadError(
-                "NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL"
+                "NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL",
+                reason="usp_lock_timeout",
+                **log_context,
             ) from e
         raise
 
@@ -307,7 +310,13 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         UserSeasonPass.avatar_addr == request.avatar_addr,
         UserSeasonPass.season_pass_id == target_pass.id,
     )
-    target_usp = lock_user_season_pass(sess, usp_stmt)
+    target_usp = lock_user_season_pass(
+        sess,
+        usp_stmt,
+        endpoint="upgrade",
+        planet_id=request.planet_id,
+        avatar_addr=request.avatar_addr,
+    )
     if not target_usp:
         target_usp = get_default_usp(
             sess,
@@ -326,7 +335,13 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             sess.rollback()
         # The row now exists but was committed (by us or a concurrent request)
         # without our lock. Lock it before the checks and changes below.
-        target_usp = lock_user_season_pass(sess, usp_stmt)
+        target_usp = lock_user_season_pass(
+            sess,
+            usp_stmt,
+            endpoint="upgrade",
+            planet_id=request.planet_id,
+            avatar_addr=request.avatar_addr,
+        )
 
     # Not Premium and request only premium plus
     if not target_usp.is_premium and not request.is_premium:
@@ -501,6 +516,9 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
             UserSeasonPass.avatar_addr == request.avatar_addr,
             UserSeasonPass.season_pass_id == target_pass.id,
         ),
+        endpoint="claim",
+        planet_id=request.planet_id,
+        avatar_addr=request.avatar_addr,
     )
     if not user_season:
         # No action executed about season pass.
@@ -586,6 +604,9 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
             UserSeasonPass.season_pass_id == target_pass.id,
             UserSeasonPass.avatar_addr == request.avatar_addr,
         ),
+        endpoint="claim-prev",
+        planet_id=request.planet_id,
+        avatar_addr=request.avatar_addr,
     )
     if not user_season:
         raise SeasonNotFoundError(

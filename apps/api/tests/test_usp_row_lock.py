@@ -275,10 +275,17 @@ def test_claim_lock_wait_times_out_as_overload(test_db, send_to_worker, monkeypa
     conn, trans = hold_usp_lock()
     sess = TestingSessionLocal()
     try:
-        with pytest.raises(ServerOverloadError):
+        with pytest.raises(ServerOverloadError) as exc_info:
             user_api.claim_reward(req, sess=sess)
     finally:
         sess.close()
         trans.rollback()
         conn.close()
     assert reward_claims() == 0
+    # 50건 제한 503 과 구별되고, 어느 행이 막혔는지 로그로 알 수 있어야 한다.
+    assert exc_info.value.log_context == {
+        "reason": "usp_lock_timeout",
+        "endpoint": "claim",
+        "planet_id": PlanetID.ODIN,
+        "avatar_addr": AVATAR,
+    }

@@ -4,13 +4,14 @@ from collections import Counter, defaultdict
 from typing import Optional, Tuple
 
 import structlog
-from app.config import config
 from gql.dsl import DSLQuery, dsl_gql
 from shared.enums import PlanetID, TxStatus
 from shared.models.user import Claim
 from shared.utils._graphql import GQLClient
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import scoped_session, sessionmaker
+
+from app.config import config
 
 logger = structlog.get_logger(__name__)
 
@@ -164,7 +165,8 @@ def track_tx():
     # clobber a settled status with a stale GQL result.
     write_sess = scoped_session(sessionmaker(bind=engine))
     try:
-        for claim_id, tx_id, tx_status in updates:
+        # claim id 순으로 쓴다 — 배포 중 tx_tracker 둘이 겹쳐도 서로 다른 순서로 행을 잠가 교착하지 않게.
+        for claim_id, tx_id, tx_status in sorted(updates, key=lambda u: u[0]):
             write_sess.execute(
                 update(Claim)
                 .where(
