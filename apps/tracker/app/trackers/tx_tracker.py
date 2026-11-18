@@ -1,6 +1,6 @@
 import concurrent.futures
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Optional, Tuple
 
 import structlog
@@ -14,7 +14,10 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
 
-BLOCK_LIMIT = 200
+# Picked per planet (at most planets x PLANET_LIMIT per cycle). A single
+# 200-row window ordered by id let a stalled planet's old claims fill it, so the
+# other planets' txs were never looked up until those cleared.
+PLANET_LIMIT = 100
 
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
 
@@ -75,22 +78,26 @@ def track_tx():
     # batch runs untethered to any DB transaction.
     read_sess = scoped_session(sessionmaker(bind=engine))
     try:
-        claim_list = read_sess.scalars(
-            select(Claim)
-            .where(
-                Claim.tx_status.in_(
-                    (
-                        TxStatus.STAGED,
-                        TxStatus.INVALID,
-                    )
+        targets = []  # (claim_id, planet_id, tx_id, old_status)
+        for planet_id in config.converted_gql_url_map:
+            claim_list = read_sess.scalars(
+                select(Claim)
+                .where(
+                    Claim.planet_id == planet_id.value,
+                    Claim.tx_status.in_(
+                        (
+                            TxStatus.STAGED,
+                            TxStatus.INVALID,
+                        )
+                    ),
                 )
+                .order_by(Claim.id)
+                .limit(PLANET_LIMIT)
+            ).fetchall()
+            targets.extend(
+                (claim.id, planet_id, claim.tx_id, claim.tx_status)
+                for claim in claim_list
             )
-            .order_by(Claim.id)
-            .limit(BLOCK_LIMIT)
-        ).fetchall()
-        targets = [
-            (claim.id, PlanetID(claim.planet_id), claim.tx_id) for claim in claim_list
-        ]
     finally:
         read_sess.close()
 
@@ -98,28 +105,55 @@ def track_tx():
         logger.info("No transactions to track", tracker="tx_tracker")
         return
 
-    # Query headless for each tx with no DB transaction held open.
-    result = defaultdict(list)
+    # Query headless for each tx with no DB transaction held open. Each result is
+    # taken on its own: one tx's exception (node timeout, GQL error) used to end
+    # the whole cycle, so no other planet's status got written either. A failed
+    # lookup leaves the claim's status as it is (never NULL or INVALID) and is
+    # asked again next cycle.
+    result = defaultdict(list)  # (old_status, new_status) -> [tx_id]
     updates = []  # (claim_id, tx_id, new_status)
+    failures = defaultdict(lambda: defaultdict(int))  # planet_id -> {exc name: count}
+    failure_sample = {}  # planet_id -> first error message, for diagnosis
     futures = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        for claim_id, planet_id, tx_id in targets:
-            futures[executor.submit(process, planet_id, tx_id)] = claim_id
+        for claim_id, planet_id, tx_id, old_status in targets:
+            futures[executor.submit(process, planet_id, tx_id)] = (
+                claim_id,
+                planet_id,
+                old_status,
+            )
 
         for future in concurrent.futures.as_completed(futures):
-            tx_id, tx_status, msg = future.result()
-            claim_id = futures[future]
-            result[tx_status.name].append(tx_id)
+            claim_id, planet_id, old_status = futures[future]
+            try:
+                tx_id, tx_status, msg = future.result()
+            except Exception as e:
+                failures[planet_id][type(e).__name__] += 1
+                failure_sample.setdefault(planet_id, str(e)[:200])
+                continue
+            result[(old_status, tx_status)].append(tx_id)
             updates.append((claim_id, tx_id, tx_status))
             # if msg:
             #     claim.msg = "\n".join([claim.msg, msg])
+
+    for planet_id, errors in failures.items():
+        logger.error(
+            "Failed to track transactions",
+            tracker="tx_tracker",
+            planet_id=planet_id.value,
+            failed=sum(errors.values()),
+            errors=dict(errors),
+            sample=failure_sample[planet_id],
+        )
 
     logger.info(
         "Transactions found to track",
         tracker="tx_tracker",
         count=len(targets),
-        start_id=targets[0][0],
-        end_id=targets[-1][0],
+        planets={
+            planet_id.value: count
+            for planet_id, count in Counter(t[1] for t in targets).items()
+        },
     )
 
     # Persist the resolved statuses in a fresh, short write transaction. The
@@ -144,16 +178,10 @@ def track_tx():
     finally:
         write_sess.close()
 
-    for status, tx_list in result.items():
-        if status is None:
-            logger.error(
-                "Transactions not able to track",
-                tracker="tx_tracker",
-                count=len(tx_list),
-            )
-            for tx in tx_list:
-                logger.error(tx)
-        elif status == TxStatus.STAGED:
-            logger.info(f"{len(tx_list)} transactions are still staged.")
+    # Keys used to be status-name strings compared against None/TxStatus, which
+    # never matched, so unchanged claims were logged as "changed" every cycle.
+    for (old_status, status), tx_list in result.items():
+        if status == old_status:
+            logger.info(f"{len(tx_list)} transactions are still {status.name}")
         else:
-            logger.info(f"{len(tx_list)} transactions are changed to {status}")
+            logger.info(f"{len(tx_list)} transactions are changed to {status.name}")

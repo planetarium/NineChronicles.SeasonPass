@@ -114,7 +114,14 @@ def check_nonce(planet: str, sess=Depends(session)):
         .order_by(desc(Claim.nonce))
         .limit(1)
     )
-    logging.info(highest_nonce, next_nonce)
+    # Was logging.info(highest_nonce, next_nonce): the int was used as the format
+    # string, so every emitted record raised a "Logging error" traceback instead.
+    logging.info(
+        "check-nonce planet_id=%s highest_nonce=%s next_nonce=%s",
+        planet_id.value.decode(),
+        highest_nonce,
+        next_nonce,
+    )
 
     if highest_nonce > next_nonce + 100:
         return JSONResponse(

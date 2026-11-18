@@ -490,8 +490,15 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
     if not available["normal"] and not available["premium"]:
         return ClaimResultSchema(user=user_season, reward_list=[])
 
-    if inprogress_claim_count(sess, request.planet_id) > INPROGRESS_CLAIM_LIMIT:
-        raise ServerOverloadError("NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL")
+    inprogress = inprogress_claim_count(sess, request.planet_id)
+    if inprogress > INPROGRESS_CLAIM_LIMIT:
+        # Which planet is blocked and by how many rides on the handler's existing
+        # error log line, so a stalled planet does not add a log line per request.
+        raise ServerOverloadError(
+            "NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL",
+            planet_id=request.planet_id.value.decode(),
+            count=inprogress,
+        )
 
     try:
         claim = create_claim(sess, target_pass, user_season)

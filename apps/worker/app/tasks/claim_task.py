@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -12,6 +13,12 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
+
+
+# process_retry_claim 한 번에 새 claim 을 시작하는 시간 상한. 마지막 한 건은 최악 약 30초(잠금 대기
+# 상한, 느린 노드면 GQL 5초 ×2 + KMS)라, 120 + 30 이 claim-worker terminationGracePeriodSeconds(180초)
+# 와 beat expires(240초) 안에 든다.
+RETRY_CLAIM_BUDGET_SEC = 120
 
 
 def configured_planet_ids() -> List[bytes]:
@@ -45,7 +52,13 @@ def process_claim(self, message: Dict[str, Any]) -> str:
         consume_claim_message(claim_message)
         return "Claim message processed successfully"
     except Exception as exc:
-        logger.error("Error processing claim message", message=message, exc_info=exc)
+        # planet_id 는 consume_claim_message 가 claim 을 읽은 뒤 실패하면 예외에 실어 보낸다.
+        logger.error(
+            "Error processing claim message",
+            message=message,
+            planet_id=getattr(exc, "planet_id", None),
+            exc_info=exc,
+        )
         self.retry(exc=exc)
 
 
@@ -70,44 +83,91 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
 
     try:
         now = datetime.now(tz=timezone.utc)
-        claim_ids = (
-            sess.query(Claim.uuid, Claim.planet_id)
-            .filter(
-                Claim.created_at <= now - timedelta(minutes=5),
-                Claim.reward_list != [],
-                Claim.tx.is_(None),
-                Claim.nonce.is_(None),
-                Claim.planet_id.in_(configured_planet_ids()),
-            )
-            .order_by(Claim.created_at.asc())
-            .limit(100)
-            .all()
-        )
-
-        if not claim_ids:
-            logger.info("No claim to retry")
-            return
-
-        # 한 건이 실패해도(노드가 내려간 플래닛 등) 뒤의 클레임은 계속 처리한다. 예전엔 첫 실패에서
+        # 플래닛마다 100건씩 따로 고른다(process_retry_stage 와 같은 방식). 예전엔 모든 플래닛을
+        # created_at 순으로 100건 골라, 한 플래닛에 오래된 건이 100건 넘게 쌓이면 다른 플래닛 건은
+        # 창에 들지 못해 재처리되지 않았다.
+        #
+        # 한 건이 실패해도(노드가 내려간 플래닛 등) 다른 플래닛은 계속 처리한다. 예전엔 첫 실패에서
         # 묶음 전체를 재시도해, 맨 앞의 thor 클레임 하나가 2026-11-17 인터널 오딘 복구를 막았다.
         # 실패한 건은 다음 beat(5분)에 다시 고른다. 실패한 플래닛의 남은 건은 이번엔 건너뛴다 —
         # stage 실패가 이어지면 nonce 만 줄줄이 할당돼 구멍 뒤에 갇히고, 실행도 길어진다.
+        #
+        # 고른 uuid 만 들고 조회 트랜잭션은 바로 끝낸다. 처리는 consume_claim_message 가 자기
+        # 세션으로 하므로, 열어 두면 플래닛 수 × 100건을 처리하는 내내 idle-in-transaction 으로
+        # 남아 autovacuum 을 막는다.
+        # 플래닛을 번갈아 한 건씩 처리하고(라운드로빈), RETRY_CLAIM_BUDGET_SEC 이 지나면 새 claim 을
+        # 시작하지 않는다. 플래닛별로 다 고르면 한 번 실행이 플래닛 수 × 100건까지 늘어 beat 의
+        # expires(240초)·claim-worker 종료 유예(180초)를 넘고, 뒤 플래닛은 매번 잘린다. 남은 건은
+        # 다음 beat 에 다시 고른다.
+        pending = {}
+        for planet_id in configured_planet_ids():
+            rows = (
+                sess.query(Claim.uuid)
+                .filter(
+                    Claim.planet_id == planet_id,
+                    Claim.created_at <= now - timedelta(minutes=5),
+                    Claim.reward_list != [],
+                    Claim.tx.is_(None),
+                    Claim.nonce.is_(None),
+                )
+                .order_by(Claim.created_at.asc())
+                .limit(100)
+                .all()
+            )
+            if rows:
+                pending[planet_id] = [row.uuid for row in rows]
+        sess.commit()
+
+        total = sum(len(uuids) for uuids in pending.values())
         failed = 0
-        failed_planets = set()
-        for uuid, planet_id in claim_ids:
-            if planet_id in failed_planets:
-                continue
-            try:
-                consume_claim_message(ClaimMessage(uuid=uuid))
-            except Exception as e:
-                failed += 1
-                failed_planets.add(planet_id)
-                logger.error("Error retrying claim", uuid=uuid, exc_info=e)
+        failed_planets = []
+        done = 0
+        started = time.monotonic()
+        out_of_time = False
+        for i in range(max((len(uuids) for uuids in pending.values()), default=0)):
+            active = [
+                (planet_id, uuids)
+                for planet_id, uuids in pending.items()
+                if i < len(uuids) and planet_id not in failed_planets
+            ]
+            if not active:
+                break
+            for planet_id, uuids in active:
+                # 건마다 확인한다 — 한 바퀴(플래닛 수만큼)를 다 돌고 확인하면 그만큼 넘친다.
+                if time.monotonic() - started > RETRY_CLAIM_BUDGET_SEC:
+                    out_of_time = True
+                    break
+                uuid = uuids[i]
+                done += 1
+                try:
+                    consume_claim_message(ClaimMessage(uuid=uuid))
+                except Exception as e:
+                    failed += 1
+                    failed_planets.append(planet_id)
+                    logger.error(
+                        "Error retrying claim",
+                        uuid=uuid,
+                        planet_id=planet_id,
+                        exc_info=e,
+                    )
+            if out_of_time:
+                logger.warning(
+                    "Retry claim stopped at time budget",
+                    budget_sec=RETRY_CLAIM_BUDGET_SEC,
+                    done=done,
+                    total=total,
+                )
+                break
+
+        if not total:
+            logger.info("No claim to retry")
+            return
         if failed:
             logger.error(
                 "Retry claim finished with failures",
                 failed=failed,
-                total=len(claim_ids),
+                total=total,
+                planets=failed_planets,
             )
     except Exception as e:
         logger.error("Error processing retry claim", exc_info=e)

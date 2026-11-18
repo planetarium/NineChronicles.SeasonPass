@@ -80,7 +80,8 @@ app.conf.update(
     #   만료 시각이 지난 self.retry 는 발행 때 'has an expiration date in the past' 경고만 남긴다.
     #
     #   claim_queue 하나를 동시 처리 1 로 쓰므로, 앞에 쌓인 일이 240초를 넘기면 이 작업이 사라진다.
-    #   - 같은 주기의 retry_claim(최대 100건)이 240초를 넘기면 뒤의 retry_stage 가 사라진다.
+    #   - 같은 주기의 retry_claim 이 240초를 넘기면 뒤의 retry_stage 가 사라진다. retry_claim 은
+    #     120초(claim_task.RETRY_CLAIM_BUDGET_SEC)가 지나면 새 claim 을 시작하지 않아 보통은 넘지 않는다.
     #   - API 가 넣은 process_claim 이 큐에 몰리면(시즌 시작 등) 큐가 빠질 때까지 매 주기
     #     retry_stage·retry_claim 이 통째로 사라진다. process_claim 에서 stage 만 실패한 claim 은
     #     다시 처리해도 skip_tx_exists 로 끝나 retry_stage 만이 다시 stage 하므로, 그동안 nonce
