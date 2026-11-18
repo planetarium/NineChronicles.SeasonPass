@@ -117,7 +117,8 @@ def test_read_transaction_is_closed_before_processing():
     ):
         claim_task.process_retry_claim.run()
 
-    assert events == ["commit", "thor-1", "thor-2", "commit", "odin-1"]
+    # 모든 플래닛을 고른 뒤 한 번 commit 하고, 플래닛을 번갈아 처리한다.
+    assert events == ["commit", "thor-1", "odin-1", "thor-2"]
     sess.close.assert_called_once()
 
 
@@ -127,3 +128,41 @@ def test_configured_planet_ids_follow_gql_url_map(monkeypatch):
     )
 
     assert claim_task.configured_planet_ids() == [ODIN]
+
+
+HEIMDALL = b"0x100000000001"
+
+
+def test_planets_are_processed_round_robin():
+    # 한 플래닛의 100건을 다 처리한 뒤 다음 플래닛으로 가면, 시간 상한에 걸릴 때 뒤 플래닛이 매번 잘린다.
+    called, _, _, _ = run_retry(
+        {
+            ODIN: ["odin-1", "odin-2", "odin-3"],
+            HEIMDALL: ["hd-1"],
+            THOR: ["thor-1", "thor-2"],
+        },
+        lambda m: None,
+    )
+
+    assert called == ["odin-1", "hd-1", "thor-1", "odin-2", "thor-2", "odin-3"]
+
+
+def test_stops_starting_new_claims_after_time_budget(monkeypatch):
+    # 한 번 실행이 beat expires(240초)·종료 유예(180초)를 넘지 않게 상한 뒤엔 새 claim 을 시작하지 않는다.
+    clock = iter([0, 10, 20, claim_task.RETRY_CLAIM_BUDGET_SEC + 1])
+    monkeypatch.setattr(claim_task.time, "monotonic", lambda: next(clock))
+    called, retry, _, logger = run_retry(
+        {
+            ODIN: ["odin-1", "odin-2", "odin-3", "odin-4"],
+            HEIMDALL: ["hd-1", "hd-2", "hd-3"],
+        },
+        lambda m: None,
+    )
+
+    # 시작(0) 뒤 i=0(10초)·i=1(20초) 확인은 상한 안, i=2 직전 확인에서 상한을 넘는다.
+    assert called == ["odin-1", "hd-1", "odin-2", "hd-2"]
+    retry.assert_not_called()
+    assert any(
+        c.args[0] == "Retry claim stopped at time budget"
+        for c in logger.warning.call_args_list
+    )

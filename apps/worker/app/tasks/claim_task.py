@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -12,6 +13,11 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
+
+
+# process_retry_claim 한 번에 새 claim 을 시작하는 시간 상한. beat expires(240초)와 claim-worker
+# terminationGracePeriodSeconds(180초)보다 짧게 — 마지막 건(최대 수 초)까지 끝나도 유예 안에 든다.
+RETRY_CLAIM_BUDGET_SEC = 150
 
 
 def configured_planet_ids() -> List[bytes]:
@@ -88,9 +94,11 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
         # 고른 uuid 만 들고 조회 트랜잭션은 바로 끝낸다. 처리는 consume_claim_message 가 자기
         # 세션으로 하므로, 열어 두면 플래닛 수 × 100건을 처리하는 내내 idle-in-transaction 으로
         # 남아 autovacuum 을 막는다.
-        total = 0
-        failed = 0
-        failed_planets = []
+        # 플래닛을 번갈아 한 건씩 처리하고(라운드로빈), RETRY_CLAIM_BUDGET_SEC 이 지나면 새 claim 을
+        # 시작하지 않는다. 플래닛별로 다 고르면 한 번 실행이 플래닛 수 × 100건까지 늘어 beat 의
+        # expires(240초)·claim-worker 종료 유예(180초)를 넘고, 뒤 플래닛은 매번 잘린다. 남은 건은
+        # 다음 beat 에 다시 고른다.
+        pending = {}
         for planet_id in configured_planet_ids():
             rows = (
                 sess.query(Claim.uuid)
@@ -105,10 +113,29 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
                 .limit(100)
                 .all()
             )
-            uuids = [row.uuid for row in rows]
-            sess.commit()
-            total += len(uuids)
-            for uuid in uuids:
+            if rows:
+                pending[planet_id] = [row.uuid for row in rows]
+        sess.commit()
+
+        total = sum(len(uuids) for uuids in pending.values())
+        failed = 0
+        failed_planets = []
+        done = 0
+        started = time.monotonic()
+        for i in range(max((len(uuids) for uuids in pending.values()), default=0)):
+            if time.monotonic() - started > RETRY_CLAIM_BUDGET_SEC:
+                logger.warning(
+                    "Retry claim stopped at time budget",
+                    budget_sec=RETRY_CLAIM_BUDGET_SEC,
+                    done=done,
+                    total=total,
+                )
+                break
+            for planet_id, uuids in pending.items():
+                if i >= len(uuids) or planet_id in failed_planets:
+                    continue
+                uuid = uuids[i]
+                done += 1
                 try:
                     consume_claim_message(ClaimMessage(uuid=uuid))
                 except Exception as e:
@@ -120,7 +147,6 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
                         planet_id=planet_id,
                         exc_info=e,
                     )
-                    break
 
         if not total:
             logger.info("No claim to retry")
