@@ -48,7 +48,11 @@ def get_decimal_places_for_ticker(ticker: str) -> int:
 PRE_STAGE_RETRIES = 3
 PRE_STAGE_RETRY_SECONDS = 60
 STAGE_RESENDS = 2
-STAGE_RESEND_SECONDS = 10
+STAGE_RESEND_SECONDS = 5
+# 재전송은 첫 stage 요청부터 이 시간 안에서만 새로 시작한다. 한 번의 stage 는 transport 재시도(retries=2)까지
+# 최악 약 15초라, 잠금을 쥐는 시간이 nonce 잠금 대기 상한(LOCK_TIMEOUT 30초) 안에 든다. 짧은 끊김·LB 전환만
+# 메우고 노드 재시작(수 분)은 메우지 못한다 — 그때는 MAY HAVE BEEN BURNED 로 사람이 확인한다.
+STAGE_RESEND_WINDOW_SECONDS = 15
 ALERT_TIMEOUT_SECONDS = 5
 
 
@@ -91,14 +95,20 @@ def alert_failure(event: str, **fields: Any) -> bool:
 
 
 def stage_signed(gql: GQLClient, planet: PlanetID, signed_tx: bytes, **fields: Any):
-    """gql.stage, sending the same signed bytes again on a transport error. Same bytes, same
-    tx_id: the node keeps one, so a resend cannot burn twice. A node that answered is not
-    asked again."""
+    """gql.stage, sending the same signed bytes again on a transport error (no connection,
+    timeout, HTTP error after the transport's own retries, HTTP >= 400 that is not JSON). Same
+    bytes, same tx_id: the node keeps one, so a resend cannot burn twice. A node that answered
+    (TransportQueryError, or a body that is not GraphQL) is not asked again."""
+    started = time.monotonic()
     for attempt in range(STAGE_RESENDS + 1):
         try:
             return gql.stage(planet, signed_tx)
         except (requests.RequestException, TransportServerError) as e:
-            if attempt == STAGE_RESENDS:
+            elapsed = time.monotonic() - started
+            if (
+                attempt == STAGE_RESENDS
+                or elapsed + STAGE_RESEND_SECONDS >= STAGE_RESEND_WINDOW_SECONDS
+            ):
                 raise
             logger.warning(
                 "Burn asset stage request failed; sending the same signed tx again",

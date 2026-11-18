@@ -15,6 +15,7 @@ from app.config import config
 from app.tasks import burn_asset_task
 from app.tasks.burn_asset_task import get_decimal_places_for_ticker, process_burn_asset
 from celery.exceptions import Retry
+from gql.transport import exceptions as gql_errors
 
 ADDRESS = "0x" + "12" * 20
 PUBKEY = bytes.fromhex(
@@ -301,6 +302,41 @@ def test_stage_rejected_is_not_resent(env):
     env.gql.stage.return_value = (False, "node said no", None)
 
     with pytest.raises(Exception, match="Failed to stage"):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.gql.stage.assert_called_once()
+    env.sleep.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        # gql raises this when the node answers with GraphQL errors: the node said no.
+        gql_errors.TransportQueryError("tx rejected"),
+        # 200 but not a GraphQL body.
+        gql_errors.TransportProtocolError("not a GraphQL response"),
+    ],
+)
+def test_node_answer_is_not_resent(env, error):
+    env.gql.stage.side_effect = error
+
+    with pytest.raises(type(error)):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.gql.stage.assert_called_once()
+    env.sleep.assert_not_called()
+    event, kw = error_call(env.logger)
+    assert "MAY HAVE BEEN BURNED" in event
+
+
+def test_no_resend_past_the_window(env, monkeypatch):
+    # A first stage that already took most of the window (transport retries on timeouts) is not
+    # resent: the planet nonce lock must not be held past the lock wait limit.
+    ticks = iter([0, burn_asset_task.STAGE_RESEND_WINDOW_SECONDS - 1])
+    monkeypatch.setattr(burn_asset_task.time, "monotonic", lambda: next(ticks))
+    env.gql.stage.side_effect = requests.exceptions.ReadTimeout("read timed out")
+
+    with pytest.raises(requests.exceptions.ReadTimeout):
         process_burn_asset({"ticker": "NCG", "amount": "1"})
 
     env.gql.stage.assert_called_once()

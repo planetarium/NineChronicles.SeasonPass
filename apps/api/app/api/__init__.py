@@ -132,10 +132,13 @@ def get_next_nonce(url: str) -> tuple[dict, int]:
 # that closed and reopened at the same nextTxNonce is caught only by the highest nonce going down.
 # _hole_seen: planet_id -> (next_nonce, highest_nonce, first seen at) while gap >= 1.
 # _unavailable_seen: planet_id -> (first, last) failed call of the current failure streak. A
-# failure after a quiet spell longer than check_nonce_unavailable_minutes starts a new streak, so a
-# process that missed the successes in between (another worker answered them) does not fire at once.
+# failure after a quiet spell longer than UNAVAILABLE_STREAK_GAP_FACTOR × check_nonce_unavailable_minutes
+# starts a new streak, so a process that missed the successes in between (another worker answered
+# them) does not fire at once. Trade-off: a longer gap keeps an older failure in the streak; a gap
+# equal to the alert time would let an outage seen by alternating processes never fire.
 _hole_seen: dict[PlanetID, tuple[int, int, float]] = {}
 _unavailable_seen: dict[PlanetID, tuple[float, float]] = {}
+UNAVAILABLE_STREAK_GAP_FACTOR = 2
 _state_lock = threading.Lock()  # sync handlers run on a thread pool
 _now = time.monotonic
 
@@ -168,7 +171,10 @@ def unavailable_seconds(planet_id: PlanetID, failed: bool) -> float:
             _unavailable_seen.pop(planet_id, None)
             return 0
         first, last = _unavailable_seen.get(planet_id, (now, now))
-        if now - last > config.check_nonce_unavailable_minutes * 60:
+        gap = (
+            UNAVAILABLE_STREAK_GAP_FACTOR * config.check_nonce_unavailable_minutes * 60
+        )
+        if now - last > gap:
             first = now
         _unavailable_seen[planet_id] = (first, now)
         return now - first

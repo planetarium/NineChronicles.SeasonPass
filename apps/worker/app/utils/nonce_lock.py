@@ -12,7 +12,8 @@ _NAMESPACE = b"season-pass:signer-nonce:"
 # 없으면 새 워커가 거기서 끝없이 기다리고, 동시 처리 1이라 다른 플래닛 지급까지 모두 멈춘다.
 # 넘기면 lock_not_available(55P03) OperationalError 가 나고, 각 작업의 기존 재시도 경로로 간다
 # (process_claim·burn 은 self.retry 60초 뒤, retry_claim 은 그 플래닛만 이번 차례에 건너뜀).
-# 평소 대기는 앞 처리의 nonce GQL·KMS 서명(각 제한 5초) 정도라 30초면 넉넉하다.
+# 평소 대기는 앞 처리의 nonce GQL·KMS 서명(각 제한 5초) 정도라 30초면 넉넉하다. 소각의 stage 재전송도
+# 최악 약 25초로 이 안에 들게 묶었다(burn_asset_task.STAGE_RESEND_WINDOW_SECONDS).
 LOCK_TIMEOUT = "30s"
 
 

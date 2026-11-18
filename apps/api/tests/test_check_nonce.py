@@ -255,6 +255,27 @@ def test_failure_after_quiet_spell_starts_new_streak(client, test_session, node,
     assert resp.json()["check"]["unavailable_seconds"] == 600
 
 
+@pytest.mark.parametrize(
+    "spacing, continues",
+    [(10 * MIN, True), (20 * MIN, True), (20 * MIN + 1, False)],
+)
+def test_streak_gap_boundary(client, test_session, node, clock, spacing, continues):
+    # Calls spread over processes reach one process less often than the monitor runs, so the
+    # streak survives gaps up to twice the alert time.
+    set_highest(test_session, 41)
+    node.reply = requests.exceptions.ReadTimeout("read timed out")
+    get(client)
+    clock.t += spacing
+
+    resp = get(client)
+    if continues:
+        assert resp.status_code == 503, resp.text
+        assert resp.json()["check"]["unavailable_seconds"] == spacing
+    else:
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["check"]["unavailable_seconds"] == 0
+
+
 def test_unavailable_is_tracked_per_planet(client, test_session, node, clock):
     set_highest(test_session, 41)
     set_highest(test_session, 41, planet_id=PlanetID.HEIMDALL)
