@@ -1,4 +1,5 @@
 import hashlib
+import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict
@@ -9,6 +10,7 @@ from app.celery_app import app
 from app.config import config
 from app.utils.aws import Account
 from app.utils.nonce_lock import lock_planet_nonce
+from gql.transport.exceptions import TransportServerError
 from shared.enums import PlanetID
 from shared.models.user import Claim
 from shared.utils._graphql import GQLClient
@@ -34,7 +36,10 @@ def get_decimal_places_for_ticker(ticker: str) -> int:
 # 새 tx 를 서명해 한 번 더 소각한다. 그래서:
 # - stage 요청 전 실패(잠금 대기 초과 55P03, 노드 nonce 조회 실패, KMS 오류): 서명한 tx 가 프로세스 밖으로
 #   나간 적이 없어 다시 해도 이중 소각이 없다. 일시적 오류를 메우려고 PRE_STAGE_RETRIES 번까지 자동 재시도한다.
-# - stage 요청 뒤 실패: 자동 재시도하지 않는다. 에러 로그(tx_id·nonce)를 보고 사람이 체인을 확인한다.
+# - stage 요청 뒤 실패: 새로 서명하는 재시도는 하지 않는다. 전송 오류(연결·시간 초과·5xx)만 같은 서명 바이트를
+#   STAGE_RESENDS 번 다시 보낸다 — tx_id 가 같아 노드가 하나로 다루므로 이중 소각이 없다. 재전송 동안에도 nonce
+#   잠금을 쥐어 claim 이 같은 nonce 를 가져가지 않게 한다. 그래도 실패하면
+#   에러 로그(tx_id·nonce)를 보고 사람이 체인을 확인한다.
 # acks_late=False: 워커 기본은 task_acks_late + task_reject_on_worker_lost(celery_app.py)라 stage 뒤
 # 워커가 죽으면 메시지가 다시 와서 두 번 소각한다. 받을 때 ack 하는 대가로, 처리 중 워커가 죽으면 그 소각은
 # 사라진다 — "Processing burn asset message" 뒤에 줄이 없으면 사람이 체인을 확인한다.
@@ -42,6 +47,8 @@ def get_decimal_places_for_ticker(ticker: str) -> int:
 # 설정했을 때)으로 알린다. 잘못된 요청(ticker·amount·planet_id)은 다시 해도 소용없어 재시도하지 않는다.
 PRE_STAGE_RETRIES = 3
 PRE_STAGE_RETRY_SECONDS = 60
+STAGE_RESENDS = 2
+STAGE_RESEND_SECONDS = 10
 ALERT_TIMEOUT_SECONDS = 5
 
 
@@ -81,6 +88,25 @@ def alert_failure(event: str, **fields: Any) -> bool:
     except Exception as e:  # noqa: BLE001 — the alert is best effort
         logger.error("Burn asset failure alert not sent", error=type(e).__name__)
         return False
+
+
+def stage_signed(gql: GQLClient, planet: PlanetID, signed_tx: bytes, **fields: Any):
+    """gql.stage, sending the same signed bytes again on a transport error. Same bytes, same
+    tx_id: the node keeps one, so a resend cannot burn twice. A node that answered is not
+    asked again."""
+    for attempt in range(STAGE_RESENDS + 1):
+        try:
+            return gql.stage(planet, signed_tx)
+        except (requests.RequestException, TransportServerError) as e:
+            if attempt == STAGE_RESENDS:
+                raise
+            logger.warning(
+                "Burn asset stage request failed; sending the same signed tx again",
+                error=type(e).__name__,
+                resend=attempt + 1,
+                **fields,
+            )
+            time.sleep(STAGE_RESEND_SECONDS)
 
 
 @app.task(
@@ -195,7 +221,14 @@ def process_burn_asset(self, message: Dict[str, Any]) -> str:
 
         # Stage transaction
         stage_attempted = True
-        success, stage_msg, _ = gql.stage(planet_id_enum, signed_tx)
+        success, stage_msg, _ = stage_signed(
+            gql,
+            planet_id_enum,
+            signed_tx,
+            planet_id=planet_id,
+            nonce=nonce,
+            tx_id=tx_id,
+        )
         if not success:
             raise Exception(
                 f"Failed to stage burn asset tx with nonce {nonce}: {stage_msg}"

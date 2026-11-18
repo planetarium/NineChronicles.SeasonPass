@@ -34,6 +34,8 @@ def env():
     ) as session_cls, patch.object(
         burn_asset_task.requests, "post"
     ) as post, patch.object(
+        burn_asset_task.time, "sleep"
+    ) as sleep, patch.object(
         config, "burn_alert_webhook_url", None
     ):
         account = MagicMock()
@@ -66,6 +68,7 @@ def env():
                 sess=sess,
                 retry=retry,
                 post=post,
+                sleep=sleep,
             )
 
 
@@ -256,17 +259,52 @@ def test_stage_rejected_is_not_retried_and_says_may_have_burned(env):
     assert kw["msg"] == "node said no"
 
 
-def test_stage_timeout_is_not_retried(env):
+def test_stage_timeout_resends_same_tx_then_gives_up(env):
     env.gql.stage.side_effect = requests.exceptions.ReadTimeout("read timed out")
 
     with pytest.raises(requests.exceptions.ReadTimeout):
         process_burn_asset({"ticker": "NCG", "amount": "1"})
 
     env.retry.assert_not_called()
-    env.gql.stage.assert_called_once()
+    # Resent as the same signed bytes (same tx_id); never signed again.
+    assert env.gql.stage.call_count == 1 + burn_asset_task.STAGE_RESENDS
+    assert len({c.args for c in env.gql.stage.call_args_list}) == 1
+    env.account.sign_tx.assert_called_once()
+    assert env.sleep.call_count == burn_asset_task.STAGE_RESENDS
     event, kw = error_call(env.logger)
     assert "MAY HAVE BEEN BURNED" in event
     assert kw["stage_attempted"] is True and kw["tx_id"]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        requests.exceptions.ConnectionError("connection refused"),
+        burn_asset_task.TransportServerError("502 Bad Gateway", 502),
+    ],
+)
+def test_stage_transport_error_then_success(env, error):
+    env.gql.stage.side_effect = [error, (True, "Success", None)]
+
+    assert process_burn_asset({"ticker": "NCG", "amount": "1"}) == SUCCESS
+
+    assert env.gql.stage.call_count == 2
+    first, second = env.gql.stage.call_args_list
+    assert first.args == second.args
+    env.account.sign_tx.assert_called_once()
+    env.retry.assert_not_called()
+    env.logger.error.assert_not_called()
+    assert "sending the same signed tx again" in env.logger.warning.call_args.args[0]
+
+
+def test_stage_rejected_is_not_resent(env):
+    env.gql.stage.return_value = (False, "node said no", None)
+
+    with pytest.raises(Exception, match="Failed to stage"):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.gql.stage.assert_called_once()
+    env.sleep.assert_not_called()
 
 
 def test_node_nonce_unavailable_stops_before_signing(env):

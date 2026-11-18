@@ -234,6 +234,27 @@ def test_answer_ends_unavailable_streak(client, test_session, node, clock):
     assert resp.json()["check"]["unavailable_seconds"] == 0
 
 
+def test_failure_after_quiet_spell_starts_new_streak(client, test_session, node, clock):
+    # Another API worker process may have answered the successes in between: a failure long
+    # after this process's last one must not count from the old streak.
+    set_highest(test_session, 41)
+    node.reply = requests.exceptions.ReadTimeout("read timed out")
+    get(client)
+    clock.t += 3 * 60 * MIN
+
+    resp = get(client)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["check"]["reason"] == "nonce_unavailable_transient"
+    assert resp.json()["check"]["unavailable_seconds"] == 0
+
+    # Failures that keep coming within the window still add up.
+    for _ in range(2):
+        clock.t += 5 * MIN
+        resp = get(client)
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["check"]["unavailable_seconds"] == 600
+
+
 def test_unavailable_is_tracked_per_planet(client, test_session, node, clock):
     set_highest(test_session, 41)
     set_highest(test_session, 41, planet_id=PlanetID.HEIMDALL)

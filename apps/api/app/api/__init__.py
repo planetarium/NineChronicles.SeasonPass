@@ -131,9 +131,11 @@ def get_next_nonce(url: str) -> tuple[dict, int]:
 # 503 can come later than the configured time. Between two calls the state is not seen: a hole
 # that closed and reopened at the same nextTxNonce is caught only by the highest nonce going down.
 # _hole_seen: planet_id -> (next_nonce, highest_nonce, first seen at) while gap >= 1.
-# _unavailable_seen: planet_id -> first failed call of the current failure streak.
+# _unavailable_seen: planet_id -> (first, last) failed call of the current failure streak. A
+# failure after a quiet spell longer than check_nonce_unavailable_minutes starts a new streak, so a
+# process that missed the successes in between (another worker answered them) does not fire at once.
 _hole_seen: dict[PlanetID, tuple[int, int, float]] = {}
-_unavailable_seen: dict[PlanetID, float] = {}
+_unavailable_seen: dict[PlanetID, tuple[float, float]] = {}
 _state_lock = threading.Lock()  # sync handlers run on a thread pool
 _now = time.monotonic
 
@@ -165,7 +167,11 @@ def unavailable_seconds(planet_id: PlanetID, failed: bool) -> float:
         if not failed:
             _unavailable_seen.pop(planet_id, None)
             return 0
-        return now - _unavailable_seen.setdefault(planet_id, now)
+        first, last = _unavailable_seen.get(planet_id, (now, now))
+        if now - last > config.check_nonce_unavailable_minutes * 60:
+            first = now
+        _unavailable_seen[planet_id] = (first, now)
+        return now - first
 
 
 def judge_nonce_gap(gap: int, stuck: float) -> tuple[int, str]:
