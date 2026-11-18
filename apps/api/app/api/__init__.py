@@ -127,25 +127,45 @@ def get_next_nonce(url: str) -> tuple[dict, int]:
     return result, next_nonce
 
 
-# How long a hole has stood with nextTxNonce not moving, per planet, in this process:
-# planet_id -> (next_nonce, first seen at). A restart (or another API worker process) starts
-# from zero, so an alert can come up to stuck_minutes late, never early.
-_hole_seen: dict[PlanetID, tuple[int, float]] = {}
-_hole_lock = threading.Lock()  # sync handlers run on a thread pool
+# Per planet, in this process. A restart (or another API worker process) starts from zero, so a
+# 503 can come later than the configured time. Between two calls the state is not seen: a hole
+# that closed and reopened at the same nextTxNonce is caught only by the highest nonce going down.
+# _hole_seen: planet_id -> (next_nonce, highest_nonce, first seen at) while gap >= 1.
+# _unavailable_seen: planet_id -> first failed call of the current failure streak.
+_hole_seen: dict[PlanetID, tuple[int, int, float]] = {}
+_unavailable_seen: dict[PlanetID, float] = {}
+_state_lock = threading.Lock()  # sync handlers run on a thread pool
 _now = time.monotonic
 
 
-def stuck_seconds(planet_id: PlanetID, gap: int, next_nonce: int) -> float:
+def stuck_seconds(
+    planet_id: PlanetID,
+    gap: Optional[int],
+    next_nonce: int,
+    highest_nonce: Optional[int],
+) -> float:
+    """How long the hole has stood with nextTxNonce not moving. 0 starts a new count: no hole,
+    the node moved, or the DB's highest nonce went down (nonces cleared, e.g. a manual reset)."""
     now = _now()
-    with _hole_lock:
-        if gap < 1:
+    with _state_lock:
+        if gap is None or gap < 1:
             _hole_seen.pop(planet_id, None)
             return 0
         seen = _hole_seen.get(planet_id)
-        if seen is None or seen[0] != next_nonce:
-            _hole_seen[planet_id] = (next_nonce, now)
+        if seen is None or seen[0] != next_nonce or highest_nonce < seen[1]:
+            _hole_seen[planet_id] = (next_nonce, highest_nonce, now)
             return 0
-        return now - seen[1]
+        return now - seen[2]
+
+
+def unavailable_seconds(planet_id: PlanetID, failed: bool) -> float:
+    """How long nonce lookups for the planet have kept failing (0 on the first failure)."""
+    now = _now()
+    with _state_lock:
+        if not failed:
+            _unavailable_seen.pop(planet_id, None)
+            return 0
+        return now - _unavailable_seen.setdefault(planet_id, now)
 
 
 def judge_nonce_gap(gap: int, stuck: float) -> tuple[int, str]:
@@ -164,12 +184,14 @@ def judge_nonce_gap(gap: int, stuck: float) -> tuple[int, str]:
 
 @router.get("/check-nonce")
 def check_nonce(planet: str, sess=Depends(session)):
-    """Assertible pages on the status code (every 5 minutes, odin and heimdall).
+    """Health check for the signer's nonces, read by an external monitor on the status code.
 
     gap = DB highest claim nonce − node nextTxNonce + 1: nonces the DB handed out that the
     node does not know yet. 0 when healthy. 503 when a hole stands without progress for
     check_nonce_stuck_minutes, when gap > check_nonce_max_gap, when the chain is more than
-    check_nonce_max_negative_gap ahead, or when the nonce node gives no answer.
+    check_nonce_max_negative_gap ahead, when the nonce node keeps failing for
+    check_nonce_unavailable_minutes (200 "nonce_unavailable_transient" before that — a node
+    restart alone must not fail the check), or when the planet has no node URL.
     The 200 body keeps the node's {"data": {"nextTxNonce": N}} and adds "check".
     """
     is_mainnet = config.stage == "mainnet"
@@ -188,24 +210,39 @@ def check_nonce(planet: str, sess=Depends(session)):
         "max_gap": config.check_nonce_max_gap,
         "max_negative_gap": config.check_nonce_max_negative_gap,
         "stuck_minutes": config.check_nonce_stuck_minutes,
+        "unavailable_minutes": config.check_nonce_unavailable_minutes,
     }
 
     url = nonce_url(planet_id)
+    if not url:
+        # Configuration, not the node: no waiting.
+        logging.warning(
+            "check-nonce planet_id=%s reason=nonce_unavailable error=NoNodeUrl",
+            planet_key,
+        )
+        check.update(reason="nonce_unavailable", error="NoNodeUrl")
+        return JSONResponse(status_code=503, content={"check": check})
     try:
-        if not url:
-            raise NonceUnavailable("NoNodeUrl", "no GraphQL URL for the planet")
         result, next_nonce = get_next_nonce(url)
     except (NonceUnavailable, requests.RequestException, ValueError) as e:
         error = e.kind if isinstance(e, NonceUnavailable) else type(e).__name__
+        down = int(unavailable_seconds(planet_id, failed=True))
+        if down >= config.check_nonce_unavailable_minutes * 60:
+            status, reason = 503, "nonce_unavailable"
+        else:
+            status, reason = 200, "nonce_unavailable_transient"
         # The message may name the node; it stays in the log, never in the response.
         logging.warning(
-            "check-nonce planet_id=%s reason=nonce_unavailable error=%s: %s",
+            "check-nonce planet_id=%s reason=%s unavailable_seconds=%s error=%s: %s",
             planet_key,
+            reason,
+            down,
             error,
             e,
         )
-        check.update(reason="nonce_unavailable", error=error)
-        return JSONResponse(status_code=503, content={"check": check})
+        check.update(reason=reason, error=error, unavailable_seconds=down)
+        return JSONResponse(status_code=status, content={"check": check})
+    unavailable_seconds(planet_id, failed=False)
 
     highest_nonce = sess.scalar(
         select(Claim.nonce)
@@ -213,11 +250,11 @@ def check_nonce(planet: str, sess=Depends(session)):
         .order_by(desc(Claim.nonce))
         .limit(1)
     )
-    if highest_nonce is None:
-        gap, stuck, status, reason = None, 0, 200, "no_claims"
+    gap = None if highest_nonce is None else highest_nonce - next_nonce + 1
+    stuck = int(stuck_seconds(planet_id, gap, next_nonce, highest_nonce))
+    if gap is None:
+        status, reason = 200, "no_claims"
     else:
-        gap = highest_nonce - next_nonce + 1
-        stuck = int(stuck_seconds(planet_id, gap, next_nonce))
         status, reason = judge_nonce_gap(gap, stuck)
 
     log = logging.info if reason in ("ok", "no_claims") else logging.warning

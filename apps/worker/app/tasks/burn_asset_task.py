@@ -1,7 +1,9 @@
 import hashlib
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict
 
+import requests
 import structlog
 from app.celery_app import app
 from app.config import config
@@ -13,7 +15,6 @@ from shared.utils._graphql import GQLClient
 from shared.utils.transaction import create_burn_asset_unsigned_tx, create_signed_tx
 from sqlalchemy import create_engine, desc, select
 from sqlalchemy.orm import scoped_session, sessionmaker
-
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
@@ -37,9 +38,49 @@ def get_decimal_places_for_ticker(ticker: str) -> int:
 # acks_late=False: 워커 기본은 task_acks_late + task_reject_on_worker_lost(celery_app.py)라 stage 뒤
 # 워커가 죽으면 메시지가 다시 와서 두 번 소각한다. 받을 때 ack 하는 대가로, 처리 중 워커가 죽으면 그 소각은
 # 사라진다 — "Processing burn asset message" 뒤에 줄이 없으면 사람이 체인을 확인한다.
-# 실패를 알리는 수단은 워커 로그뿐이다(백오피스는 큐에 넣는 순간 success, 결과 저장·슬랙 알림 없음).
+# 요청한 쪽은 큐에 넣는 순간 성공을 받으므로, 최종 실패는 에러 로그와 함께 웹훅(burn_alert_webhook_url,
+# 설정했을 때)으로 알린다. 잘못된 요청(ticker·amount·planet_id)은 다시 해도 소용없어 재시도하지 않는다.
 PRE_STAGE_RETRIES = 3
 PRE_STAGE_RETRY_SECONDS = 60
+ALERT_TIMEOUT_SECONDS = 5
+
+
+class BurnRequestError(ValueError):
+    """The request itself is wrong; retrying cannot help. Nothing was signed."""
+
+
+def check_request(ticker: Any, amount: Any, planet_id: Any) -> PlanetID:
+    if not isinstance(ticker, str) or not ticker:
+        raise BurnRequestError("ticker is missing")
+    try:
+        value = Decimal(str(amount))
+    except InvalidOperation:
+        raise BurnRequestError(f"amount is not a number: {amount!r}") from None
+    if not value.is_finite() or value <= 0:
+        raise BurnRequestError(f"amount must be positive: {amount!r}")
+    try:
+        return PlanetID(str(planet_id).encode())
+    except ValueError:
+        raise BurnRequestError(f"unknown planet_id: {planet_id!r}") from None
+
+
+def alert_failure(event: str, **fields: Any) -> bool:
+    """Post a final failure to the alert webhook. True when posted. Never raises: the task's
+    own failure is what must surface. Only names and ids go out, never node addresses."""
+    url = config.burn_alert_webhook_url
+    if not url:
+        return False
+    lines = [f"season-pass burn_asset: {event}"]
+    lines += [f"{k}={v}" for k, v in fields.items()]
+    try:
+        resp = requests.post(
+            url, json={"text": "\n".join(lines)}, timeout=ALERT_TIMEOUT_SECONDS
+        )
+        resp.raise_for_status()
+        return True
+    except Exception as e:  # noqa: BLE001 — the alert is best effort
+        logger.error("Burn asset failure alert not sent", error=type(e).__name__)
+        return False
 
 
 @app.task(
@@ -72,6 +113,7 @@ def process_burn_asset(self, message: Dict[str, Any]) -> str:
 
     try:
         logger.info("Processing burn asset message", message=message)
+        planet_id_enum = check_request(ticker, amount, planet_id)
         amount = str(amount)
         account = Account(config.kms_key_id, config.region_name)
         gql = GQLClient(
@@ -87,7 +129,6 @@ def process_burn_asset(self, message: Dict[str, Any]) -> str:
         owner_hex = account.address
 
         # Get nonce (GQL과 Claim 테이블의 nonce 중 큰 값 사용)
-        planet_id_enum = PlanetID(planet_id.encode())
         # claim 과 같은 서명자 nonce 를 쓰므로 같은 플래닛 잠금을 잡는다. 소각 tx 는 DB 에 nonce 를
         # 남기지 않아, 다음 nonce 계산이 이 tx 를 보려면 노드 대기열에 들어간 뒤(stage)여야 한다.
         # 그래서 stage 까지 쥐고, finally 의 sess.close()(rollback)에서 풀린다. 기다림은
@@ -181,15 +222,15 @@ def process_burn_asset(self, message: Dict[str, Any]) -> str:
             retries=self.request.retries,
         )
         if stage_attempted:
-            logger.error(
+            event = (
                 "Burn asset failed after stage request; MAY HAVE BEEN BURNED, "
-                "check tx_id on chain before requesting again",
-                msg=stage_msg,
-                exc_info=exc,
-                **fields,
+                "check tx_id on chain before requesting again"
             )
-            raise
-        if self.request.retries < PRE_STAGE_RETRIES:
+        elif isinstance(exc, BurnRequestError):
+            event = (
+                "Burn asset request is invalid; not burned, fix it and request again"
+            )
+        elif self.request.retries < PRE_STAGE_RETRIES:
             # 서명한 tx 가 나간 적 없음 — 다시 해도 이중 소각이 없다. 잠금은 finally 의 close 로 풀린다.
             logger.warning(
                 "Burn asset failed before stage; not burned, retrying",
@@ -198,8 +239,13 @@ def process_burn_asset(self, message: Dict[str, Any]) -> str:
                 **fields,
             )
             raise self.retry(exc=exc, countdown=PRE_STAGE_RETRY_SECONDS)
+        else:
+            event = "Burn asset failed before stage; not burned, safe to request again"
+        alerted = alert_failure(event, error=type(exc).__name__, **fields)
         logger.error(
-            "Burn asset failed before stage; not burned, safe to request again",
+            event,
+            msg=stage_msg,
+            alerted=alerted,
             exc_info=exc,
             **fields,
         )

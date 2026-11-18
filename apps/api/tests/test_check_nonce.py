@@ -1,9 +1,9 @@
-"""/api/check-nonce — the only monitor (Assertible, every 5 min) pages on its status code.
+"""/api/check-nonce — an external monitor reads its status code.
 
 gap = DB highest claim nonce − node nextTxNonce + 1. Normal is 0. It used to 503 only when
-highest > next + 100, which the 50-claims-per-planet limit makes unreachable (2026-11-16: gap
-about 50, no alert); node errors and "no claims" ended in 500/204, and the INFO log line is
-dropped in production (root logger stays at WARNING). caplog is left at that level on purpose.
+highest > next + 100, which the 50-claims-per-planet limit makes unreachable; node errors and
+"no claims" ended in 500/204, and the INFO log line is dropped in production (root logger stays
+at WARNING). caplog is left at that level on purpose.
 """
 import logging
 
@@ -70,7 +70,7 @@ def node(monkeypatch):
         "gql_url_map",
         {"0x000000000000": ODIN_URL, "0x000000000001": HEIMDALL_URL},
     )
-    # check_nonce_* and nonce_gql_url_map stay at the app defaults (25 min, 60, 10, {}).
+    # check_nonce_* and nonce_gql_url_map stay at the app defaults (25 min, 60, 10, 10 min, {}).
     return fake
 
 
@@ -83,9 +83,11 @@ def clock(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def reset_hole_state():
-    getattr(api, "_hole_seen", {}).clear()
+    for name in ("_hole_seen", "_unavailable_seen"):
+        getattr(api, name, {}).clear()
     yield
-    getattr(api, "_hole_seen", {}).clear()
+    for name in ("_hole_seen", "_unavailable_seen"):
+        getattr(api, name, {}).clear()
 
 
 def set_highest(sess, highest, planet_id=PlanetID.ODIN, tag=""):
@@ -181,29 +183,76 @@ def test_no_claims_is_ok(client, test_session, node, caplog):
         "http-502",
     ],
 )
-def test_node_error_is_503_unavailable(
-    client, test_session, node, caplog, reply, error
+def test_node_error_is_transient_then_503(
+    client, test_session, node, clock, caplog, reply, error
 ):
     set_highest(test_session, 41)
     node.reply = reply
 
+    # One failed lookup (a node restart) must not fail the check.
+    resp = get(client)
+    assert resp.status_code == 200, resp.text
+    check = resp.json()["check"]
+    assert (check["reason"], check["error"]) == ("nonce_unavailable_transient", error)
+    assert check["unavailable_seconds"] == 0
+    assert ODIN_URL not in resp.text  # node URLs come from a secret
+    assert any(
+        "reason=nonce_unavailable_transient" in m and f"error={error}" in m
+        for m in warnings_(caplog)
+    )
+
+    clock.t += 10 * MIN - 1
+    assert get(client).status_code == 200
+
+    clock.t += 1
     resp = get(client)
 
     assert resp.status_code == 503, resp.text
     check = resp.json()["check"]
-    assert check["reason"] == "nonce_unavailable"
-    assert check["error"] == error
-    assert ODIN_URL not in resp.text  # node URLs come from a secret
-    assert any("reason=nonce_unavailable" in m for m in warnings_(caplog))
+    assert (check["reason"], check["error"]) == ("nonce_unavailable", error)
+    assert check["unavailable_seconds"] == 600
+    assert ODIN_URL not in resp.text
+    assert any(
+        "reason=nonce_unavailable " in m and "unavailable_seconds=600" in m
+        for m in warnings_(caplog)
+    )
 
 
-def test_planet_without_url_is_503_unavailable(client, test_session, node, monkeypatch):
+def test_answer_ends_unavailable_streak(client, test_session, node, clock):
+    set_highest(test_session, 41)
+    node.reply = requests.exceptions.ReadTimeout("read timed out")
+    get(client)
+    clock.t += 9 * MIN
+
+    node.reply = None
+    assert get(client).json()["check"]["reason"] == "ok"
+
+    node.reply = requests.exceptions.ReadTimeout("read timed out")
+    clock.t += 9 * MIN
+    resp = get(client)  # a new streak, counted from now
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["check"]["unavailable_seconds"] == 0
+
+
+def test_unavailable_is_tracked_per_planet(client, test_session, node, clock):
+    set_highest(test_session, 41)
+    set_highest(test_session, 41, planet_id=PlanetID.HEIMDALL)
+    node.reply = requests.exceptions.ReadTimeout("read timed out")
+    get(client)
+    clock.t += 10 * MIN
+    assert get(client, "heimdall").status_code == 200
+    assert get(client).status_code == 503
+
+
+def test_planet_without_url_is_503_at_once(client, test_session, node, monkeypatch):
+    # Configuration, not a node restart: no waiting.
     monkeypatch.setattr(config, "gql_url_map", {"0x000000000001": HEIMDALL_URL})
 
     resp = get(client)
 
     assert resp.status_code == 503, resp.text
-    assert resp.json()["check"]["reason"] == "nonce_unavailable"
+    check = resp.json()["check"]
+    assert (check["reason"], check["error"]) == ("nonce_unavailable", "NoNodeUrl")
     assert node.urls == []
 
 
@@ -256,7 +305,7 @@ def test_hole_without_progress_turns_503_after_stuck_minutes(
 
 def test_progress_resets_stuck_time(client, test_session, node, clock):
     # Re-signing (B2) fills 20 nonces per round: nextTxNonce moves, so a hole that is being
-    # filled must not page even if the gap stays above zero for longer than stuck_minutes.
+    # filled must not fail the check even if the gap stays above zero for longer than stuck_minutes.
     set_highest(test_session, 44)
     get(client)
     clock.t += 25 * MIN
@@ -292,6 +341,40 @@ def test_gap_zero_clears_state(client, test_session, node, clock):
     assert get(client).status_code == 200
     clock.t += 1
     assert get(client).status_code == 503
+
+
+def test_highest_going_down_restarts_count(client, test_session, node, clock):
+    # A manual reset clears nonces (highest goes down) and new claims open a new hole at the
+    # same nextTxNonce between two calls: the new hole is counted from when it is seen.
+    set_highest(test_session, 41)
+    set_highest(test_session, 46)  # gap 5 at next 42
+    get(client)
+    clock.t += 20 * MIN
+
+    test_session.execute(update(Claim).where(Claim.nonce == 46).values(nonce=None))
+    test_session.commit()
+    set_highest(test_session, 43, tag="-new")  # gap 2 at the same next, not seen as 0
+    resp = get(client)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["check"]["stuck_seconds"] == 0
+
+    clock.t += 25 * MIN - 1
+    assert get(client).status_code == 200
+    clock.t += 1
+    assert get(client).status_code == 503
+
+
+def test_no_claims_clears_hole_state(client, test_session, node, clock):
+    set_highest(test_session, 44)  # gap 3
+    get(client)
+    clock.t += 20 * MIN
+    test_session.execute(update(Claim).values(nonce=None))
+    test_session.commit()
+    assert get(client).json()["check"]["reason"] == "no_claims"
+
+    set_highest(test_session, 44, tag="-again")
+    clock.t += 1 * MIN
+    assert get(client).json()["check"]["stuck_seconds"] == 0
 
 
 def test_chain_ahead(client, test_session, node, clock, caplog):

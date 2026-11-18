@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from app.config import config
 from app.tasks import burn_asset_task
 from app.tasks.burn_asset_task import get_decimal_places_for_ticker, process_burn_asset
 from celery.exceptions import Retry
@@ -30,7 +31,11 @@ def env():
         burn_asset_task, "GQLClient"
     ) as gql_cls, patch.object(
         burn_asset_task, "scoped_session"
-    ) as session_cls:
+    ) as session_cls, patch.object(
+        burn_asset_task.requests, "post"
+    ) as post, patch.object(
+        config, "burn_alert_webhook_url", None
+    ):
         account = MagicMock()
         account.address = ADDRESS
         account.pubkey = PUBKEY
@@ -60,6 +65,7 @@ def env():
                 gql=gql,
                 sess=sess,
                 retry=retry,
+                post=post,
             )
 
 
@@ -174,19 +180,41 @@ def test_staging_failure_raises_and_logs(env):
     assert env.logger.error.call_count >= 1
 
 
-def test_missing_ticker_raises(env):
-    with pytest.raises(Exception):
-        last_attempt({"amount": "10.5"})
-    assert env.logger.error.call_count >= 1
-    env.gql.stage.assert_not_called()
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"amount": "10.5"},
+        {"ticker": "", "amount": "10.5"},
+        {"ticker": "NCG", "amount": "invalid_amount"},
+        {"ticker": "NCG", "amount": None},
+        {"ticker": "NCG", "amount": "0"},
+        {"ticker": "NCG", "amount": "-1"},
+        {"ticker": "NCG", "amount": "NaN"},
+        {"ticker": "NCG", "amount": "1", "planet_id": "0x999999999999"},
+    ],
+    ids=[
+        "no-ticker",
+        "empty-ticker",
+        "amount-text",
+        "amount-none",
+        "amount-zero",
+        "amount-negative",
+        "amount-nan",
+        "unknown-planet",
+    ],
+)
+def test_invalid_request_fails_at_once_without_retry(env, message):
+    # Retrying a wrong request cannot help: fail on the first attempt, before any work.
+    with pytest.raises(burn_asset_task.BurnRequestError):
+        process_burn_asset(message)
 
-
-def test_invalid_amount_raises(env):
-    with pytest.raises(Exception):
-        last_attempt({"ticker": "NCG", "amount": "invalid_amount"})
-    assert env.logger.error.call_count >= 1
-    env.account.sign_tx.assert_not_called()
+    env.retry.assert_not_called()
+    env.account_cls.assert_not_called()
+    env.gql.get_next_nonce.assert_not_called()
     env.gql.stage.assert_not_called()
+    event, kw = error_call(env.logger)
+    assert "request is invalid; not burned" in event
+    assert kw["stage_attempted"] is False and kw["retries"] == 0
 
 
 def test_account_error_raises(env):
@@ -293,3 +321,103 @@ def test_stage_failure_on_a_retried_attempt_is_not_retried(env):
     event, kw = error_call(env.logger)
     assert "MAY HAVE BEEN BURNED" in event
     assert kw["stage_attempted"] is True and kw["retries"] == 1
+
+
+WEBHOOK = "https://hooks.example/services/T/B/x"
+
+
+def posted_text(env):
+    env.post.assert_called_once()
+    (url,), kw = env.post.call_args
+    assert url == WEBHOOK
+    assert kw["timeout"] == burn_asset_task.ALERT_TIMEOUT_SECONDS
+    return kw["json"]["text"]
+
+
+def test_failure_after_stage_alerts(env, monkeypatch):
+    # The requester got "success" when the message was queued; the alert is how a person learns.
+    monkeypatch.setattr(config, "burn_alert_webhook_url", WEBHOOK)
+    env.gql.stage.side_effect = requests.exceptions.ReadTimeout("read timed out")
+
+    with pytest.raises(requests.exceptions.ReadTimeout):
+        process_burn_asset(
+            {"ticker": "NCG", "amount": "1", "planet_id": "0x000000000001"}
+        )
+
+    text = posted_text(env)
+    event, kw = error_call(env.logger)
+    assert event in text and "MAY HAVE BEEN BURNED" in text
+    assert f"tx_id={kw['tx_id']}" in text and "nonce=123" in text
+    assert "planet_id=0x000000000001" in text and "stage_attempted=True" in text
+    assert "error=ReadTimeout" in text
+    assert kw["alerted"] is True
+
+
+def test_failure_before_stage_alerts_after_last_retry(env, monkeypatch):
+    monkeypatch.setattr(config, "burn_alert_webhook_url", WEBHOOK)
+    env.gql.get_next_nonce.return_value = -1
+
+    with pytest.raises(RuntimeError):
+        last_attempt({"ticker": "NCG", "amount": "1"})
+
+    text = posted_text(env)
+    assert "not burned, safe to request again" in text
+    assert "stage_attempted=False" in text and "retries=3" in text
+
+
+def test_invalid_request_alerts(env, monkeypatch):
+    monkeypatch.setattr(config, "burn_alert_webhook_url", WEBHOOK)
+
+    with pytest.raises(burn_asset_task.BurnRequestError):
+        process_burn_asset({"ticker": "NCG", "amount": "0"})
+
+    assert "request is invalid" in posted_text(env)
+
+
+def test_retry_does_not_alert(env, monkeypatch):
+    monkeypatch.setattr(config, "burn_alert_webhook_url", WEBHOOK)
+    env.gql.get_next_nonce.return_value = -1
+
+    with pytest.raises(Retry):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.post.assert_not_called()
+
+
+def test_no_webhook_logs_only(env):
+    env.gql.stage.return_value = (False, "node said no", None)
+
+    with pytest.raises(Exception, match="Failed to stage"):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.post.assert_not_called()
+    _, kw = error_call(env.logger)
+    assert kw["alerted"] is False
+
+
+def test_alert_failure_keeps_the_task_failure(env, monkeypatch):
+    monkeypatch.setattr(config, "burn_alert_webhook_url", WEBHOOK)
+    env.post.side_effect = requests.exceptions.ConnectionError(f"{WEBHOOK} refused")
+    env.gql.stage.return_value = (False, "node said no", None)
+
+    with pytest.raises(Exception, match="Failed to stage"):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    events = [c.args[0] for c in env.logger.error.call_args_list]
+    assert events[0] == "Burn asset failure alert not sent"
+    assert "MAY HAVE BEEN BURNED" in events[1]
+    assert env.logger.error.call_args.kwargs["alerted"] is False
+    assert all(WEBHOOK not in str(c) for c in env.logger.error.call_args_list)
+
+
+def test_webhook_error_status_is_not_alerted(env, monkeypatch):
+    monkeypatch.setattr(config, "burn_alert_webhook_url", WEBHOOK)
+    env.post.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "404"
+    )
+    env.gql.stage.return_value = (False, "node said no", None)
+
+    with pytest.raises(Exception, match="Failed to stage"):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    assert env.logger.error.call_args.kwargs["alerted"] is False

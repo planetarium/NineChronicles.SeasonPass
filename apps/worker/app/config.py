@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     kms_key_id: str
     stage: str = "development"
     headless_jwt_secret: Optional[str] = None
+    # 소각(process_burn_asset) 최종 실패를 알릴 Slack incoming webhook 주소(비밀값 — 시크릿으로 넣는다).
+    # 없으면 에러 로그만 남는다.
+    burn_alert_webhook_url: Optional[str] = None
 
     # --- 재서명(B2): 만료된 claim tx 를 같은 nonce 로 다시 서명해 nonce 구멍을 메운다 ---
     # 기본값은 꺼짐 — 이미지만 올려서는 동작이 바뀌지 않는다. 추적기 TRACKER_RESIGN_MODE 와 같은 값을 쓴다
