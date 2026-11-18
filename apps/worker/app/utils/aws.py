@@ -16,13 +16,13 @@ from pyasn1.type.univ import Integer, SequenceOf
 from shared.utils._crypto import ECDSASignatureRecord, SPKIRecord
 
 # 재서명(stage_task) 전용 KMS 클라이언트 설정. 기본값(연결·읽기 60초, legacy 재시도 4번)이면 KMS 한 번이
-# 수 분을 쓸 수 있어 retry_stage 의 시간 상한 계산이 깨진다. 최악: 3번 시도 × (연결 3초 + 읽기 5초) +
-# 재시도 대기(standard, 최대 1초 + 2초) = 27초. stage_task.RETRY_STAGE_BUDGET_SEC 주석의 계산과 맞춘다.
+# 수 분을 쓸 수 있어 retry_stage 의 시간 상한 계산이 깨진다. 최악: 2번 시도 × (연결 3초 + 읽기 5초) +
+# 재시도 대기(standard, 최대 1초) = 17초. stage_task.RETRY_STAGE_BUDGET_SEC 주석의 계산과 맞춘다.
 # consumer 경로(claim_consumer._get_account)는 이 설정을 쓰지 않는다(지금 동작 그대로).
 RESIGN_KMS_CLIENT_CONFIG = Config(
     connect_timeout=3,
     read_timeout=5,
-    retries={"max_attempts": 2, "mode": "standard"},  # 재시도 2번(첫 시도 포함 3번)
+    retries={"max_attempts": 1, "mode": "standard"},  # 재시도 1번(첫 시도 포함 2번)
 )
 
 

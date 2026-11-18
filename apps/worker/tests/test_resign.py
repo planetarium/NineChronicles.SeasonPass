@@ -518,6 +518,22 @@ def test_dry_run_only_logs(world, monkeypatch):
     assert s[key(ODIN)]["resigned"] == []
 
 
+def test_dry_run_continues_past_owner_would(world, monkeypatch):
+    # dry_run 의 구멍 주인 결과 would 는 '멈춤' 조건이 아니다: 위쪽 만료 후보도 would 로 본다.
+    w = world
+    set_config(monkeypatch, resign_mode="dry_run")
+    add_claim(w, 10, age=20)
+    add_claim(w, 11, age=20)
+    w.nodes.set_v(ODIN, 10)
+    warm(w, ODIN)
+
+    s = run(w)
+
+    assert s[key(ODIN)]["would"] == [10, 11]
+    assert history_rows(w) == []
+    w.account.sign_tx.assert_not_called()
+
+
 # --- 시험 6: 조회 실패는 그 플래닛만 보류 ---------------------------------------------------------------
 
 
@@ -1609,3 +1625,30 @@ def test_bound_is_reread_after_restage(world):
     assert s[key(ODIN)]["bound_before_restage"] == 10
     assert s[key(ODIN)]["resigned"] == [11]
     assert claim_row(w, expired.id).tx_id != expired.tx_id
+
+
+def test_bound_reread_failure_holds_and_warns(world):
+    # Bound 를 얻어 만료 건 restage 를 건너뛴 뒤 V 다시 읽기가 실패하면 옛 V 로 진행하지 않고 보류하며,
+    # 그 회차엔 아무도 만료 건을 보내지 않으므로 바로 warning 으로 남긴다.
+    w = world
+    fresh = add_claim(w, 10, age=3)
+    expired = add_claim(w, 11, age=20)
+    w.nodes.set_v(ODIN, 10)
+    warm(w, ODIN)
+
+    def nonce_dies_after_restage(kind, url):
+        if kind == "stage":
+            w.nodes.nonce[STAGE[ODIN]] = TimeoutError("slow")
+
+    w.nodes.hooks.append(nonce_dies_after_restage)
+
+    s = run(w)
+
+    assert claim_row(w, fresh.id).tx_status == TxStatus.STAGED
+    assert s[key(ODIN)]["reason"].startswith("nonce:")
+    assert s[key(ODIN)]["restage_skipped_expired"] == 1
+    assert s[key(ODIN)]["level"] == "warning"
+    assert s[key(ODIN)]["resigned"] == []
+    assert claim_row(w, expired.id).tx_id == expired.tx_id
+    assert history_rows(w) == []
+    w.account.sign_tx.assert_not_called()

@@ -46,8 +46,11 @@ engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
 # 태스크 시작부터 이 시간이 지나면 재서명의 새 플래닛 판단·새 후보를 시작하지 않는다(claim_task 의
 # RETRY_CLAIM_BUDGET_SEC 와 같은 이유). 판단용 조회는 단발(5초)이라 플래닛 판단 하나는 최악 15초(①
 # restage 앞), 계획 직전 V 다시 읽기는 5초다. 후보 하나는 최악 약 67초다: 사전 확인 3회 15초 + KMS 서명
-# 27초(RESIGN_KMS_CLIENT_CONFIG: 연결 3초 + 읽기 5초, 3번 시도, 재시도 대기 최대 1+2초) + 교체 잠금 5초 +
-# stage 20초. 110 + 67 = 177초가 claim-worker 종료 유예(180초)와 beat expires(240초) 안에 든다.
+# 17초(RESIGN_KMS_CLIENT_CONFIG: 연결 3초 + 읽기 5초, 2번 시도, 재시도 대기 최대 1초) + 교체 잠금 5초 +
+# stage 30초(GQLClient.stage: 3번 시도 × (연결 5초 + 읽기 5초), 스키마 미캐시면 더 붙는다).
+# 110 + 67 = 177초가 claim-worker 종료 유예(180초)와 beat expires(240초) 안에 든다. 이 보장은 ① restage 가
+# 110초 안에 끝난다는 전제 위에 있다(restage 자체엔 상한이 없다). 넘겨도 resign_one 은 어느 단계에서 끊겨도
+# 행이 (옛 tx, N) 또는 (새 tx, N, CREATED) 로 남으므로 그 회차만 끊긴다.
 RETRY_STAGE_BUDGET_SEC = 110
 # 재서명 교체 UPDATE 의 행 잠금 대기 상한. consumer 는 claim 하나를 수 초 쥐고 추적기 쓰기는 짧다.
 # 넘기면 그 후보만 raced 로 건너뛴다(다음 회차에 다시 본다).
@@ -753,6 +756,9 @@ def _resign_round(
             bound = _refresh_bound(p, judged, account.address)
             if isinstance(bound, Hold):
                 _count_lookup_failure(p, bound)
+                if summary.restage_skipped_expired:
+                    # 만료 건 restage 를 건너뛴 회차라 이번엔 아무도 다시 보내지 않는다 — 바로 알린다.
+                    bound.warn = True
                 summary.hold(bound)
                 continue
             if bound.v != judged.v:
