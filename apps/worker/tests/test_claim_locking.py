@@ -6,6 +6,8 @@ WORKER_TEST_PG_DSN=postgresql://postgres:postgres@localhost:5432/season_pass_tes
 
 KMS(Account)·노드 GQL 은 가짜로 바꾼다. 첫 서명 호출만 `release` 가 열릴 때까지 붙잡아,
 앞선 처리가 잠금을 쥔 채 KMS 를 기다리는 동안 두 번째 처리가 어떻게 되는지 본다.
+
+시작·끝에 drop_all 을 하므로 DB 이름에 'test' 가 없으면 아무것도 지우지 않고 실패한다.
 """
 import os
 import threading
@@ -15,14 +17,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from app.consumers import claim_consumer
-from app.tasks import burn_asset_task
+from app.tasks import burn_asset_task, claim_task
+from app.utils import nonce_lock
 from app.utils.nonce_lock import planet_nonce_lock_key
+from celery.exceptions import Retry
 from shared.enums import PassType, PlanetID, TxStatus
 from shared.models.base import Base
 from shared.models.season_pass import SeasonPass
 from shared.models.user import Claim
 from shared.schemas.message import ClaimMessage
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, make_url, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 DSN = os.environ.get("WORKER_TEST_PG_DSN")
@@ -34,8 +39,18 @@ CHAIN_NONCE = 5
 WAIT = 0.5
 
 
+def ensure_test_database(dsn):
+    """drop_all 전에 부른다. 다른 작업과 같이 쓰는 DB·실 DB 를 잘못 가리키면 테이블이 다 지워진다."""
+    name = make_url(dsn).database or ""
+    if "test" not in name:
+        pytest.fail(
+            f"WORKER_TEST_PG_DSN 의 DB 이름 {name!r} 에 'test' 가 없어 drop_all 을 하지 않는다"
+        )
+
+
 @pytest.fixture(scope="module")
 def engine():
+    ensure_test_database(DSN)
     eng = create_engine(DSN, pool_size=10)
     Base.metadata.drop_all(eng)
     Base.metadata.create_all(eng)
@@ -293,3 +308,210 @@ def test_burn_asset_waits_for_planet_lock_and_holds_it_until_stage(db):
     assert result["r"].startswith("Burn asset transaction processed")
     assert held_at_stage == [False]  # stage 까지 잠금을 쥔다
     assert try_lock(db, ODIN)  # 끝나면 풀린다
+
+
+def test_refuses_database_without_test_in_name():
+    for dsn in (
+        "postgresql://u:p@db:5432/season_pass",
+        "postgresql://u:p@db:5432/",
+    ):
+        with pytest.raises(pytest.fail.Exception):
+            ensure_test_database(dsn)
+    ensure_test_database("postgresql://u:p@localhost:5432/season_pass_test_c")
+
+
+# --- 잠금 대기 상한 -------------------------------------------------------------
+# 죽은 파드의 DB 세션이 트랜잭션 도중이면 Postgres 가 그 연결을 끊을 때까지 행 잠금·플래닛
+# 잠금이 남는다. 상한이 없으면 새 워커가 거기서 끝없이 기다리고, 동시 처리 1이라 다른 플래닛
+# 지급까지 모두 멈춘다. 시험에서는 상한을 1초로 줄인다.
+LOCK_TIMEOUT_FOR_TEST = "1s"
+DEADLINE = 5  # 상한이 없으면 이 시간 안에 끝나지 않는다
+
+
+@pytest.fixture
+def short_lock_timeout(monkeypatch):
+    monkeypatch.setattr(
+        nonce_lock, "LOCK_TIMEOUT", LOCK_TIMEOUT_FOR_TEST, raising=False
+    )
+
+
+def hold(engine, sql, params):
+    """다른 세션(죽은 파드 역할)이 잠금을 쥔 채 트랜잭션을 열어 둔다."""
+    conn = engine.connect()
+    conn.execute(text(sql), params)
+    return conn
+
+
+def hold_row_lock(engine, uuid):
+    return hold(engine, "SELECT id FROM claim WHERE uuid = :u FOR UPDATE", {"u": uuid})
+
+
+def hold_planet_lock(engine, planet_id):
+    return hold(
+        engine,
+        "SELECT pg_advisory_xact_lock(:k)",
+        {"k": planet_nonce_lock_key(planet_id)},
+    )
+
+
+def run_bounded(fn):
+    """fn 을 따로 돌려 DEADLINE 까지 기다린다. 끝나지 않으면 thread 가 살아 있다."""
+    result = {}
+
+    def target():
+        try:
+            result["value"] = fn()
+        except BaseException as e:  # 시험에서 확인한다
+            result["error"] = e
+
+    t = threading.Thread(target=target, daemon=True)
+    t.start()
+    t.join(DEADLINE)
+    return t, result
+
+
+def release(holder, thread):
+    holder.rollback()
+    holder.close()
+    thread.join(10)
+
+
+def assert_lock_timeout(t, result):
+    assert not t.is_alive(), "잠금을 상한 없이 기다린다"
+    err = result.get("error")
+    assert isinstance(err, OperationalError), result
+    assert err.orig.pgcode == "55P03"  # lock_not_available
+
+
+def test_lock_timeout_is_set():
+    assert nonce_lock.LOCK_TIMEOUT == "30s"
+
+
+def test_claim_row_lock_wait_is_bounded(worker, db, short_lock_timeout):
+    worker.gate.release.set()
+    add_claim(db, "c1")
+    holder = hold_row_lock(db, "c1")
+    try:
+        t, result = run_bounded(
+            lambda: claim_consumer.consume_claim_message(ClaimMessage(uuid="c1"))
+        )
+        assert_lock_timeout(t, result)
+        assert worker.gate.calls == 0
+    finally:
+        release(holder, t)
+
+    # 잠금이 풀리면 정상 처리된다.
+    claim_consumer.consume_claim_message(ClaimMessage(uuid="c1"))
+    c = read_claims(db)["c1"]
+    assert (c.nonce, c.tx_status) == (CHAIN_NONCE, TxStatus.STAGED)
+
+
+def test_planet_lock_wait_is_bounded(worker, db, short_lock_timeout):
+    worker.gate.release.set()
+    add_claim(db, "c1")
+    holder = hold_planet_lock(db, ODIN)
+    try:
+        t, result = run_bounded(
+            lambda: claim_consumer.consume_claim_message(ClaimMessage(uuid="c1"))
+        )
+        assert_lock_timeout(t, result)
+        worker.gql.get_next_nonce.assert_not_called()
+        # 실패한 쪽이 쥐었던 claim 행 잠금도 풀렸다.
+        with db.connect() as conn:
+            conn.execute(text("SELECT id FROM claim FOR UPDATE NOWAIT"))
+            conn.rollback()
+    finally:
+        release(holder, t)
+
+    c = read_claims(db)["c1"]
+    assert (c.nonce, c.tx) == (None, None)
+    claim_consumer.consume_claim_message(ClaimMessage(uuid="c1"))
+    c = read_claims(db)["c1"]
+    assert (c.nonce, c.tx_status) == (CHAIN_NONCE, TxStatus.STAGED)
+
+
+def test_lock_timeout_goes_to_process_claim_retry(worker, db, short_lock_timeout):
+    # process_claim 의 기존 재시도 경로(self.retry, 60초 뒤)로 간다.
+    worker.gate.release.set()
+    add_claim(db, "c1")
+    holder = hold_planet_lock(db, ODIN)
+    with patch.object(
+        claim_task.process_claim, "retry", side_effect=Retry("retry")
+    ) as retry, patch.object(claim_task, "logger"):
+        try:
+            t, result = run_bounded(lambda: claim_task.process_claim({"uuid": "c1"}))
+            assert not t.is_alive(), "잠금을 상한 없이 기다린다"
+            assert isinstance(result.get("error"), Retry), result
+        finally:
+            release(holder, t)
+
+    exc = retry.call_args.kwargs["exc"]
+    assert isinstance(exc, OperationalError) and exc.orig.pgcode == "55P03"
+
+
+def test_retry_claim_skips_locked_planet_only(
+    worker, db, short_lock_timeout, monkeypatch
+):
+    # beat 재처리: 잠긴 플래닛은 이번 차례에 건너뛰고 다른 플래닛은 처리한다.
+    worker.gate.release.set()
+    old = "2026-01-01T00:00:00+00:00"
+    add_claim(db, "odin", planet_id=ODIN)
+    add_claim(db, "heimdall", planet_id=HEIMDALL)
+    with db.begin() as conn:
+        conn.execute(text("UPDATE claim SET created_at = :t"), {"t": old})
+    monkeypatch.setattr(
+        claim_task.config,
+        "gql_url_map",
+        {ODIN.decode(): "http://odin", HEIMDALL.decode(): "http://heimdall"},
+    )
+    holder = hold_planet_lock(db, ODIN)
+    with patch.object(claim_task, "engine", db), patch.object(
+        claim_task, "logger"
+    ), patch.object(claim_task.process_retry_claim, "retry") as retry:
+        try:
+            t, result = run_bounded(lambda: claim_task.process_retry_claim.run())
+            assert not t.is_alive(), "잠금을 상한 없이 기다린다"
+            assert not result.get("error"), result
+        finally:
+            release(holder, t)
+
+    retry.assert_not_called()
+    claims = read_claims(db)
+    assert claims["odin"].tx is None
+    assert claims["heimdall"].tx_status == TxStatus.STAGED
+
+
+def test_burn_asset_planet_lock_wait_is_bounded(db, short_lock_timeout):
+    gql = MagicMock()
+    gql.get_next_nonce.return_value = CHAIN_NONCE
+    gql.stage.return_value = (True, "", None)
+    account = MagicMock()
+    account.address = "0x" + "12" * 20
+    account.pubkey = bytes.fromhex("02" + "ab" * 32)
+    account.sign_tx.return_value = b"\x30" * 70
+    message = {"ticker": "NCG", "amount": "1", "planet_id": ODIN.decode()}
+
+    holder = hold_planet_lock(db, ODIN)
+    with patch.object(burn_asset_task, "engine", db), patch.object(
+        burn_asset_task, "Account", return_value=account
+    ), patch.object(burn_asset_task, "GQLClient", return_value=gql), patch.object(
+        burn_asset_task, "logger"
+    ), patch.object(
+        burn_asset_task.process_burn_asset, "retry", side_effect=Retry("retry")
+    ) as retry:
+        try:
+            t, result = run_bounded(lambda: burn_asset_task.process_burn_asset(message))
+            assert not t.is_alive(), "잠금을 상한 없이 기다린다"
+            assert isinstance(result.get("error"), Retry), result
+            gql.get_next_nonce.assert_not_called()
+        finally:
+            release(holder, t)
+
+        exc = retry.call_args.kwargs["exc"]
+        assert isinstance(exc, OperationalError) and exc.orig.pgcode == "55P03"
+
+        retry.side_effect = None
+        assert burn_asset_task.process_burn_asset(message).startswith(
+            "Burn asset transaction processed"
+        )
+    assert gql.stage.call_count == 1

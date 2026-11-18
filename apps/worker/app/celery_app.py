@@ -72,8 +72,23 @@ app.conf.update(
     #   celery 의 self.retry 는 원래 요청의 만료 시각(절대 시각)을 그대로 물려받는다
     #   (Context.as_execution_options 의 'expires'). 그래서 발행 240초 뒤를 넘는 재시도는 실행
     #   직전에 버려진다 — 다음 주기가 대신하므로 의도한 동작이다.
-    #   주의: 동시 처리 1 이라 앞 작업(retry_claim 최대 100건)이 240초를 넘기면 같은 주기의
-    #   retry_stage 가 버려진다. 버려짐은 celery 의 info 로그('Discarding revoked task')뿐이다.
+    #
+    #   ⚠️ 버려지는 곳은 대개 워커가 아니라 브로커다. celery 의 send_task 는 expires 를 RabbitMQ
+    #   메시지 TTL(options["expiration"], celery/app/base.py)로도 넣는다. 그래서 큐에서 240초 넘게
+    #   기다린 beat 작업은 RabbitMQ 가 지우고 워커 로그에는 아무것도 남지 않는다. 워커의
+    #   'Discarding revoked task' 로그는 워커가 이미 받아 둔 메시지(eta 재시도 등)일 때만 나고,
+    #   만료 시각이 지난 self.retry 는 발행 때 'has an expiration date in the past' 경고만 남긴다.
+    #
+    #   claim_queue 하나를 동시 처리 1 로 쓰므로, 앞에 쌓인 일이 240초를 넘기면 이 작업이 사라진다.
+    #   - 같은 주기의 retry_claim(최대 100건)이 240초를 넘기면 뒤의 retry_stage 가 사라진다.
+    #   - API 가 넣은 process_claim 이 큐에 몰리면(시즌 시작 등) 큐가 빠질 때까지 매 주기
+    #     retry_stage·retry_claim 이 통째로 사라진다. process_claim 에서 stage 만 실패한 claim 은
+    #     다시 처리해도 skip_tx_exists 로 끝나 retry_stage 만이 다시 stage 하므로, 그동안 nonce
+    #     구멍 복구가 늦어진다(expires 가 없을 때는 늦더라도 언젠가 실행됐다).
+    #   굶음 신호: 워커(--loglevel=info)는 끝난 작업마다 celery 의 'Task
+    #   season_pass.process_retry_stage[…] succeeded in …s' 한 줄을 남긴다(재시도면 'retry:').
+    #   retry_stage·retry_claim 의 이 줄이 10분 넘게 없으면 브로커에서 사라지고 있는 것이다.
+    #   별도 저장소에 마지막 실행 시각을 적지 않고 이 로그로 본다.
     beat_schedule={
         "retry-stage-every-5-minutes": {
             "task": "season_pass.process_retry_stage",

@@ -8,7 +8,7 @@ import structlog
 from app.config import config
 from app.utils.aws import Account
 from app.utils.claim_memo import build_claim_memo
-from app.utils.nonce_lock import lock_planet_nonce
+from app.utils.nonce_lock import lock_planet_nonce, set_lock_timeout
 from shared.enums import TxStatus
 from shared.models.user import Claim
 from shared.schemas.message import ClaimMessage
@@ -63,6 +63,8 @@ def consume_claim_message(message: ClaimMessage):
         # 둘 다 tx 가 없다고 보고 각자 서명해 같은 nonce 로 tx 두 개를 stage 했다. 행 잠금으로
         # 뒤에 온 쪽은 앞의 commit 을 기다렸다가 tx 가 채워진 행을 다시 읽고 아래에서 끝난다.
         # 잠금은 tx 를 적는 commit(또는 실패 시 close 의 rollback)에서 풀린다.
+        # 기다림은 LOCK_TIMEOUT 까지다(죽은 파드 세션이 쥔 잠금에 무한히 묶이지 않게, nonce_lock.py).
+        set_lock_timeout(sess)
         claim_dict = {
             x.uuid: x
             for x in sess.scalars(
