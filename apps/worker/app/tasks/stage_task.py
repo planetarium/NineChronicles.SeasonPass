@@ -19,6 +19,15 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import structlog
+from shared.enums import TxStatus
+from shared.models.season_pass import SeasonPass
+from shared.models.user import Claim, ClaimTxHistory
+from shared.utils._graphql import GQLClient
+from shared.utils.claim_tx_history import history_table_ready
+from sqlalchemy import create_engine, func, select, update
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session, scoped_session, sessionmaker
+
 from app.celery_app import app
 from app.config import config
 from app.tasks.claim_task import configured_planet_ids
@@ -31,14 +40,6 @@ from app.utils.claim_tx import (
 )
 from app.utils.gql import get_next_tx_nonce_once, get_tip_index_once, get_tx_status_once
 from app.utils.nonce_lock import set_lock_timeout
-from shared.enums import TxStatus
-from shared.models.season_pass import SeasonPass
-from shared.models.user import Claim, ClaimTxHistory
-from shared.utils._graphql import GQLClient
-from shared.utils.claim_tx_history import history_table_ready
-from sqlalchemy import create_engine, func, select, update
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session, scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
@@ -872,6 +873,7 @@ def process_retry_stage(self, message: Dict[str, Any] = None):
         except Exception as e:
             logger.error("Resign judgement failed", exc_info=e)
             account, bounds = None, {}
+    current_planet = None  # 예외 로그에 어느 플래닛에서 멈췄는지 남긴다
     try:
         now = _utcnow()
         # 플래닛마다 따로 고르고, 실패하면 그 플래닛의 남은 건만 이번 차례에서 건너뛴다(다음 beat 5분 뒤).
@@ -879,6 +881,7 @@ def process_retry_stage(self, message: Dict[str, Any] = None):
         # 플래닛(2026-11-16 오딘 INVALID 51건)이 다른 플래닛의 재스테이징까지 막을 수 있었다.
         failed_planets = []
         for planet_id in planets:
+            current_planet = planet_id
             ok, skipped = _restage_planet(
                 sess,
                 gql,
@@ -892,7 +895,9 @@ def process_retry_stage(self, message: Dict[str, Any] = None):
         if failed_planets:
             logger.error("Retry stage finished with failures", planets=failed_planets)
     except Exception as e:
-        logger.error("Error processing retry stage", exc_info=e)
+        logger.error(
+            "Error processing retry stage", planet_id=current_planet, exc_info=e
+        )
         self.retry(exc=e)
         return
     finally:
