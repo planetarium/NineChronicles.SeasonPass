@@ -482,6 +482,8 @@ def test_retry_claim_skips_locked_planet_only(
 
 
 def test_burn_asset_planet_lock_wait_is_bounded(db, short_lock_timeout):
+    # 잠금을 못 잡으면 상한 안에 서명 전 실패로 끝난다. 서명한 tx 가 나간 적이 없어 자동 재시도해도
+    # 이중 소각이 없으므로 재시도하고, 다음 실행에서 stage 는 한 번만 한다.
     gql = MagicMock()
     gql.get_next_nonce.return_value = CHAIN_NONCE
     gql.stage.return_value = (True, "", None)
@@ -496,7 +498,7 @@ def test_burn_asset_planet_lock_wait_is_bounded(db, short_lock_timeout):
         burn_asset_task, "Account", return_value=account
     ), patch.object(burn_asset_task, "GQLClient", return_value=gql), patch.object(
         burn_asset_task, "logger"
-    ), patch.object(
+    ) as logger, patch.object(
         burn_asset_task.process_burn_asset, "retry", side_effect=Retry("retry")
     ) as retry:
         try:
@@ -504,11 +506,14 @@ def test_burn_asset_planet_lock_wait_is_bounded(db, short_lock_timeout):
             assert not t.is_alive(), "잠금을 상한 없이 기다린다"
             assert isinstance(result.get("error"), Retry), result
             gql.get_next_nonce.assert_not_called()
+            account.sign_tx.assert_not_called()
         finally:
             release(holder, t)
 
         exc = retry.call_args.kwargs["exc"]
         assert isinstance(exc, OperationalError) and exc.orig.pgcode == "55P03"
+        assert logger.warning.call_args.kwargs["stage_attempted"] is False
+        logger.error.assert_not_called()
 
         retry.side_effect = None
         assert burn_asset_task.process_burn_asset(message).startswith(

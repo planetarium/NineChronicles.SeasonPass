@@ -50,6 +50,28 @@ class Settings(BaseSettings):
     block_lag_threshold: int = (
         150  # blocks the tracker may trail the tip by (unchanged)
     )
+    # /check-nonce asks this node for nextTxNonce instead of gql_url_map when set — the same
+    # node the worker reads (WORKER_NONCE_GQL_URL_MAP). An RPC node's queue can hide a nonce
+    # the validator lost. Empty: gql_url_map, as before.
+    nonce_gql_url_map: dict[str, str] = {}
+    # /check-nonce, gap = DB highest claim nonce − nextTxNonce + 1 (0 when healthy).
+    # 503 when a hole (gap >= 1) stays with nextTxNonce not moving for this long. Re-signing
+    # (B2) fills holes 20 per round, moving nextTxNonce, so a hole being filled restarts the count.
+    # 25 = resign_after 15 + beat 5 + 5 for block inclusion, which assumes the hole is
+    # re-signed on the first round. B2 also holds rounds as normal behaviour (first_observation
+    # after a worker restart, catching_up / validator_lagging around validator restarts), and
+    # each held round adds a beat, so one hold already reaches 25. Provisional: measure "hole
+    # first seen -> re-signed" from the Resign summary logs before relying on it, and set
+    # API_CHECK_NONCE_STUCK_MINUTES from that. With B2 off, restage ends a hole within ~20 min.
+    check_nonce_stuck_minutes: float = 25.0
+    # 503 at once above this. The 50-in-progress-claims limit keeps a hole near 51 at most.
+    check_nonce_max_gap: int = 60
+    # 503 when the chain is this far ahead of the DB (each burn makes it 1 ahead until the
+    # next claim). Further means another signer on the key or a used nonce set to NULL.
+    check_nonce_max_negative_gap: int = 10
+    # 503 when the nonce node keeps failing (timeout, HTTP/GraphQL error) for this long; 200
+    # "nonce_unavailable_transient" before that. A single node restart must not fail the check.
+    check_nonce_unavailable_minutes: float = 10.0
 
     @property
     def converted_gql_url_map(self) -> dict[PlanetID, str]:

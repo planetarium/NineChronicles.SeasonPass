@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -82,21 +84,22 @@ def get_db_tip(sess, planet_id: PlanetID) -> dict[PassType, int]:
     return {pass_type: index for pass_type, index in tips}
 
 
-@router.get("/check-nonce")
-def check_nonce(planet: str, sess=Depends(session)):
-    is_mainnet = config.stage == "mainnet"
-    if planet.lower() == "odin":
-        planet_id = PlanetID.ODIN if is_mainnet else PlanetID.ODIN_INTERNAL
-        url = config.converted_gql_url_map[planet_id]
-    elif planet.lower() == "heimdall":
-        planet_id = PlanetID.HEIMDALL if is_mainnet else PlanetID.HEIMDALL_INTERNAL
-        url = config.converted_gql_url_map[planet_id]
-    elif planet.lower() == "thor":
-        planet_id = PlanetID.THOR if is_mainnet else PlanetID.THOR_INTERNAL
-        url = config.converted_gql_url_map[planet_id]
-    else:
-        return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
+class NonceUnavailable(Exception):
+    """The nonce node gave no usable nextTxNonce."""
 
+    def __init__(self, kind: str, detail: str = ""):
+        super().__init__(detail or kind)
+        self.kind = kind
+
+
+def nonce_url(planet_id: PlanetID) -> Optional[str]:
+    key = planet_id.value.decode()
+    return config.nonce_gql_url_map.get(key) or config.gql_url_map.get(key)
+
+
+def get_next_nonce(url: str) -> tuple[dict, int]:
+    """(node body, nextTxNonce). Any failure — timeout, HTTP error, non-JSON, GQL error, no
+    integer — raises NonceUnavailable or a requests exception."""
     resp = requests.post(
         url,
         json={"query": f'query {{ nextTxNonce(address: "{SEASONPASS_ADDRESS}") }}'},
@@ -105,8 +108,153 @@ def check_nonce(planet: str, sess=Depends(session)):
         },
         timeout=config.gql_timeout,
     )
+    if resp.status_code != 200:
+        raise NonceUnavailable("HTTPError", f"HTTP {resp.status_code}")
     result = resp.json()
-    next_nonce = result["data"]["nextTxNonce"]
+    next_nonce = (
+        (result.get("data") or {}).get("nextTxNonce")
+        if isinstance(result, dict)
+        else None
+    )
+    if (
+        not isinstance(result, dict)
+        or result.get("errors")
+        or not isinstance(next_nonce, int)
+        or isinstance(next_nonce, bool)
+    ):
+        errors = result.get("errors") if isinstance(result, dict) else None
+        raise NonceUnavailable("GraphQLError", str(errors or "no nextTxNonce"))
+    return result, next_nonce
+
+
+# Per planet, in this process. A restart (or another API worker process) starts from zero, so a
+# 503 can come later than the configured time. Between two calls the state is not seen: a hole
+# that closed and reopened at the same nextTxNonce is caught only by the highest nonce going down.
+# _hole_seen: planet_id -> (next_nonce, highest_nonce, first seen at) while gap >= 1.
+# _unavailable_seen: planet_id -> (first, last) failed call of the current failure streak. A
+# failure after a quiet spell longer than UNAVAILABLE_STREAK_GAP_FACTOR × check_nonce_unavailable_minutes
+# starts a new streak, so a process that missed the successes in between (another worker answered
+# them) does not fire at once. Trade-off: a longer gap keeps an older failure in the streak; a gap
+# equal to the alert time would let an outage seen by alternating processes never fire.
+_hole_seen: dict[PlanetID, tuple[int, int, float]] = {}
+_unavailable_seen: dict[PlanetID, tuple[float, float]] = {}
+UNAVAILABLE_STREAK_GAP_FACTOR = 2
+_state_lock = threading.Lock()  # sync handlers run on a thread pool
+_now = time.monotonic
+
+
+def stuck_seconds(
+    planet_id: PlanetID,
+    gap: Optional[int],
+    next_nonce: int,
+    highest_nonce: Optional[int],
+) -> float:
+    """How long the hole has stood with nextTxNonce not moving. 0 starts a new count: no hole,
+    the node moved, or the DB's highest nonce went down (nonces cleared, e.g. a manual reset)."""
+    now = _now()
+    with _state_lock:
+        if gap is None or gap < 1:
+            _hole_seen.pop(planet_id, None)
+            return 0
+        seen = _hole_seen.get(planet_id)
+        if seen is None or seen[0] != next_nonce or highest_nonce < seen[1]:
+            _hole_seen[planet_id] = (next_nonce, highest_nonce, now)
+            return 0
+        return now - seen[2]
+
+
+def unavailable_seconds(planet_id: PlanetID, failed: bool) -> float:
+    """How long nonce lookups for the planet have kept failing (0 on the first failure)."""
+    now = _now()
+    with _state_lock:
+        if not failed:
+            _unavailable_seen.pop(planet_id, None)
+            return 0
+        first, last = _unavailable_seen.get(planet_id, (now, now))
+        gap = (
+            UNAVAILABLE_STREAK_GAP_FACTOR * config.check_nonce_unavailable_minutes * 60
+        )
+        if now - last > gap:
+            first = now
+        _unavailable_seen[planet_id] = (first, now)
+        return now - first
+
+
+def judge_nonce_gap(gap: int, stuck: float) -> tuple[int, str]:
+    if gap > config.check_nonce_max_gap:
+        return 503, "gap_too_large"
+    if gap < -config.check_nonce_max_negative_gap:
+        return 503, "chain_ahead_too_far"
+    if gap >= 1 and stuck >= config.check_nonce_stuck_minutes * 60:
+        return 503, "hole_stuck"
+    if gap >= 1:
+        return 200, "pending"
+    if gap < 0:
+        return 200, "chain_ahead"
+    return 200, "ok"
+
+
+@router.get("/check-nonce")
+def check_nonce(planet: str, sess=Depends(session)):
+    """Health check for the signer's nonces, read by an external monitor on the status code.
+
+    gap = DB highest claim nonce − node nextTxNonce + 1: nonces the DB handed out that the
+    node does not know yet. 0 when healthy. 503 when a hole stands without progress for
+    check_nonce_stuck_minutes, when gap > check_nonce_max_gap, when the chain is more than
+    check_nonce_max_negative_gap ahead, when the nonce node keeps failing for
+    check_nonce_unavailable_minutes (200 "nonce_unavailable_transient" before that — a node
+    restart alone must not fail the check), or when the planet has no node URL.
+    The 200 body keeps the node's {"data": {"nextTxNonce": N}} and adds "check".
+    """
+    is_mainnet = config.stage == "mainnet"
+    if planet.lower() == "odin":
+        planet_id = PlanetID.ODIN if is_mainnet else PlanetID.ODIN_INTERNAL
+    elif planet.lower() == "heimdall":
+        planet_id = PlanetID.HEIMDALL if is_mainnet else PlanetID.HEIMDALL_INTERNAL
+    elif planet.lower() == "thor":
+        planet_id = PlanetID.THOR if is_mainnet else PlanetID.THOR_INTERNAL
+    else:
+        return JSONResponse(status_code=400, content=f"{planet} is not valid planet.")
+    planet_key = planet_id.value.decode()
+    check = {
+        "planet": planet.lower(),
+        "planet_id": planet_key,
+        "max_gap": config.check_nonce_max_gap,
+        "max_negative_gap": config.check_nonce_max_negative_gap,
+        "stuck_minutes": config.check_nonce_stuck_minutes,
+        "unavailable_minutes": config.check_nonce_unavailable_minutes,
+    }
+
+    url = nonce_url(planet_id)
+    if not url:
+        # Configuration, not the node: no waiting.
+        logging.warning(
+            "check-nonce planet_id=%s reason=nonce_unavailable error=NoNodeUrl",
+            planet_key,
+        )
+        check.update(reason="nonce_unavailable", error="NoNodeUrl")
+        return JSONResponse(status_code=503, content={"check": check})
+    try:
+        result, next_nonce = get_next_nonce(url)
+    except (NonceUnavailable, requests.RequestException, ValueError) as e:
+        error = e.kind if isinstance(e, NonceUnavailable) else type(e).__name__
+        down = int(unavailable_seconds(planet_id, failed=True))
+        if down >= config.check_nonce_unavailable_minutes * 60:
+            status, reason = 503, "nonce_unavailable"
+        else:
+            status, reason = 200, "nonce_unavailable_transient"
+        # The message may name the node; it stays in the log, never in the response.
+        logging.warning(
+            "check-nonce planet_id=%s reason=%s unavailable_seconds=%s error=%s: %s",
+            planet_key,
+            reason,
+            down,
+            error,
+            e,
+        )
+        check.update(reason=reason, error=error, unavailable_seconds=down)
+        return JSONResponse(status_code=status, content={"check": check})
+    unavailable_seconds(planet_id, failed=False)
 
     highest_nonce = sess.scalar(
         select(Claim.nonce)
@@ -114,22 +262,32 @@ def check_nonce(planet: str, sess=Depends(session)):
         .order_by(desc(Claim.nonce))
         .limit(1)
     )
-    # Was logging.info(highest_nonce, next_nonce): the int was used as the format
-    # string, so every emitted record raised a "Logging error" traceback instead.
-    logging.info(
-        "check-nonce planet_id=%s highest_nonce=%s next_nonce=%s",
-        planet_id.value.decode(),
+    gap = None if highest_nonce is None else highest_nonce - next_nonce + 1
+    stuck = int(stuck_seconds(planet_id, gap, next_nonce, highest_nonce))
+    if gap is None:
+        status, reason = 200, "no_claims"
+    else:
+        status, reason = judge_nonce_gap(gap, stuck)
+
+    log = logging.info if reason in ("ok", "no_claims") else logging.warning
+    log(
+        "check-nonce planet_id=%s highest_nonce=%s next_nonce=%s gap=%s "
+        "stuck_seconds=%s reason=%s",
+        planet_key,
         highest_nonce,
         next_nonce,
+        gap,
+        stuck,
+        reason,
     )
-
-    if highest_nonce > next_nonce + 100:
-        return JSONResponse(
-            status_code=503,
-            content=f"highest_nonce: {highest_nonce}, next_nonce: {next_nonce}",
-        )
-
-    return JSONResponse(status_code=200, content=result)
+    check.update(
+        highest_nonce=highest_nonce,
+        next_nonce=next_nonce,
+        gap=gap,
+        stuck_seconds=stuck,
+        reason=reason,
+    )
+    return JSONResponse(status_code=status, content={**result, "check": check})
 
 
 @router.get("/block-status")
