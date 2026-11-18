@@ -1,5 +1,5 @@
 import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import bencodex
 from shared.enums import PlanetID
@@ -42,11 +42,32 @@ def create_unsigned_tx(
             # Signer
             b"s": bytes.fromhex(address),
             # Timestamp
-            b"t": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            b"t": timestamp.strftime(TX_TIMESTAMP_FORMAT),
             # Updated addresses
             b"u": [],
         }
     )
+
+
+TX_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
+
+def tx_timestamp(tx_hex: Optional[str]) -> Optional[datetime.datetime]:
+    """tx(서명 여부 무관, hex)의 t 필드(서명 시각, UTC). 읽지 못하면 None.
+
+    노드는 tx 를 받은 시각이 아니라 이 값으로 만료를 판단한다(tx 수명)."""
+    if not tx_hex:
+        return None
+    try:
+        decoded = bencodex.loads(bytes.fromhex(tx_hex))
+        raw = decoded[b"t"]
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        return datetime.datetime.strptime(raw, TX_TIMESTAMP_FORMAT).replace(
+            tzinfo=datetime.timezone.utc
+        )
+    except Exception:
+        return None
 
 
 def append_signature_to_unsigned_tx(unsigned_tx: bytes, signature: bytes) -> bytes:
