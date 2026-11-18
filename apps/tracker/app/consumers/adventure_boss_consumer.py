@@ -2,6 +2,10 @@ from collections import defaultdict
 from datetime import datetime
 
 import structlog
+from app.config import config
+from app.utils.exp import apply_exp
+from app.utils.gql import get_explore_floor
+from app.utils.season_pass import apply_exp, fetch_adv_boss_history, verify_season_pass
 from shared.enums import ActionType, PassType, PlanetID
 from shared.models.action import AdventureBossHistory, Block
 from shared.models.season_pass import Level
@@ -9,11 +13,6 @@ from shared.schemas.message import TrackerMessage
 from shared.utils.season_pass import get_pass
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import scoped_session, sessionmaker
-
-from app.config import config
-from app.utils.exp import apply_exp
-from app.utils.gql import get_explore_floor
-from app.utils.season_pass import apply_exp, fetch_adv_boss_history, verify_season_pass
 
 AP_PER_ACTION = 2
 logger = structlog.get_logger(__name__)
@@ -60,7 +59,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
 
         block_index = message.block
         planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-        
+
         existing_block = sess.scalar(
             select(Block).where(
                 Block.planet_id == planet_id,
@@ -83,7 +82,7 @@ def consume_adventure_boss_message(message: TrackerMessage):
                 return
 
             existing_block.last_processed_index = block_index
-            
+
             logger.info(
                 f"Skip adv.boss exp for {planet_id.name} : #{block_index} before season starts."
             )
@@ -103,9 +102,6 @@ def consume_adventure_boss_message(message: TrackerMessage):
             )
             return
 
-        user_season_dict = verify_season_pass(
-            sess, planet_id, current_pass, message.action_data
-        )
         all_avatar_dict = defaultdict(set)
         for type_id, action_data in message.action_data.items():
             if type_id in ("explore_adventure_boss", "sweep_adventure_boss"):
@@ -118,19 +114,10 @@ def consume_adventure_boss_message(message: TrackerMessage):
                 sess, planet_id, season_index, list(avatars)
             )
 
+        # Resolve every count_base first: floors come from the node over HTTP, and
+        # the user_season_pass rows locked below must not stay locked across that.
         for type_id, action_data in message.action_data.items():
-            if type_id == "wanted":
-                apply_exp(
-                    sess,
-                    planet_id,
-                    user_season_dict,
-                    ActionType.WANTED,
-                    current_pass.exp_dict[ActionType.WANTED],
-                    level_dict,
-                    block_index,
-                    action_data,
-                )
-            elif type_id == "sweep_adventure_boss":
+            if type_id == "sweep_adventure_boss":
                 # Use existing explore data: sweep only can reach to explored floor
                 for action in action_data:
                     explore_data = explore_dict.get(action["season_index"], {}).get(
@@ -150,16 +137,6 @@ def consume_adventure_boss_message(message: TrackerMessage):
                             timeout=config.gql_timeout,
                         )
                         action["count_base"] = current_floor
-                apply_exp(
-                    sess,
-                    planet_id,
-                    user_season_dict,
-                    ActionType.RUSH,
-                    current_pass.exp_dict[ActionType.RUSH],
-                    level_dict,
-                    block_index,
-                    action_data,
-                )
             elif type_id == "explore_adventure_boss":
                 # Get floor data before explore
                 for action in action_data:
@@ -198,21 +175,36 @@ def consume_adventure_boss_message(message: TrackerMessage):
                         )
                         action["count_base"] = AP_PER_ACTION * min(current_floor + 1, 5)
                     sess.add(explore_data)
-                apply_exp(
-                    sess,
-                    planet_id,
-                    user_season_dict,
-                    ActionType.CHALLENGE,
-                    current_pass.exp_dict[ActionType.CHALLENGE],
-                    level_dict,
-                    block_index,
-                    action_data,
-                )
+
+        # Lock the rows and add exp to their latest values, then commit right away.
+        # Unlocked, the commit overwrote exp/level with values read earlier and
+        # erased a concurrent /claim's repeating-reward deduction (paid twice).
+        user_season_dict = verify_season_pass(
+            sess, planet_id, current_pass, message.action_data, for_update=True
+        )
+        for type_id, action_data in message.action_data.items():
+            action_type = {
+                "wanted": ActionType.WANTED,
+                "sweep_adventure_boss": ActionType.RUSH,
+                "explore_adventure_boss": ActionType.CHALLENGE,
+            }.get(type_id)
+            if action_type is None:
+                continue
+            apply_exp(
+                sess,
+                planet_id,
+                user_season_dict,
+                action_type,
+                current_pass.exp_dict[action_type],
+                level_dict,
+                block_index,
+                action_data,
+            )
 
         sess.add_all(list(user_season_dict.values()))
-        
+
         existing_block.last_processed_index = block_index
-        
+
         sess.commit()
         logger.info(
             f"All {len(user_season_dict.values())} adv.boss exp for block {planet_id.name}:{message.block} applied."

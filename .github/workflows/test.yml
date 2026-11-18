@@ -122,11 +122,27 @@ jobs:
   tracker:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: season_pass_tracker_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
     defaults:
       run:
         working-directory: apps/tracker
     env:
       TRACKER_ARENA_SERVICE_JWT_PUBLIC_KEY: dGVzdA==  # required by Settings; tests patch a real key in
+      # tests/test_usp_row_lock.py (row-lock races need a real DB); set here so it never skips in CI
+      TRACKER_TEST_PG_DSN: postgresql://postgres:postgres@localhost:5432/season_pass_tracker_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

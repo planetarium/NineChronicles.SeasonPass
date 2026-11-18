@@ -1,4 +1,4 @@
-"""handle_sweep: a sweep reports used AP; real play count = used AP // (stage CostAP × stake coefficient%)."""
+"""fetch_sweep_counts + handle_sweep: a sweep reports used AP; real play count = used AP // (stage CostAP × stake coefficient%)."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -38,6 +38,15 @@ def run(monkeypatch):
             courage_consumer, "get_stage_cost_ap", return_value=cost_ap
         ) as cost:
             ap.get_ap_coef.return_value = coef
+            data = [
+                {
+                    "agent_addr": "0xagent",
+                    "avatar_addr": "0xavatar",
+                    "count_base": count_base,
+                    "stage_id": stage_id,
+                }
+            ]
+            counts = courage_consumer.fetch_sweep_counts(PlanetID.ODIN, data)
             courage_consumer.handle_sweep(
                 sess,
                 PlanetID.ODIN,
@@ -45,14 +54,8 @@ def run(monkeypatch):
                 10,
                 LEVELS,
                 1,
-                [
-                    {
-                        "agent_addr": "0xagent",
-                        "avatar_addr": "0xavatar",
-                        "count_base": count_base,
-                        "stage_id": stage_id,
-                    }
-                ],
+                data,
+                counts,
             )
         return u, sess, cost
 
