@@ -595,6 +595,12 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
     if not user_season.is_premium:
         raise NotPremiumError(f"Prev. season claim is only allowed for premium users.")
 
+    # Same short-circuit as /claim: the second of a double tap finds nothing
+    # left and must not leave an empty Claim row behind.
+    available = user_season.available_rewards(sess)
+    if not available["normal"] and not available["premium"]:
+        return ClaimResultSchema(user=user_season, reward_list=[])
+
     # Claim
     try:
         claim = create_claim(sess, target_pass, user_season)

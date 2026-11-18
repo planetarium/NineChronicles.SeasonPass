@@ -153,6 +153,37 @@ def test_claim_prev_double_request_creates_one_claim(test_db, send_to_worker):
     with TestingSessionLocal() as s:
         usp = s.scalar(select(UserSeasonPass))
         assert (usp.last_normal_claim, usp.last_premium_claim) == (3, 3)
+    # the second request found nothing left: no empty Claim row either
+    with TestingSessionLocal() as s:
+        assert s.scalar(select(func.count()).select_from(Claim)) == 1
+    assert sorted(len(r.reward_list) for r in results) == [0, 1]
+
+
+def test_claim_prev_with_nothing_left_creates_no_claim(test_db, send_to_worker):
+    """Like /claim: nothing to reward returns at once, without an empty Claim row."""
+    seed(
+        prev=True,
+        usp=dict(
+            is_premium=True, level=3, exp=250, last_normal_claim=3, last_premium_claim=3
+        ),
+    )
+    req = ClaimRequestSchema(
+        planet_id=PlanetID.ODIN,
+        agent_addr=AGENT,
+        avatar_addr=AVATAR,
+        pass_type=PassType.COURAGE_PASS,
+        season_index=1,
+        prev=True,
+    )
+
+    with TestingSessionLocal() as s:
+        result = user_api.claim_prev_reward(req, sess=s)
+        assert result.reward_list == []
+        assert result.user.level == 3
+
+    with TestingSessionLocal() as s:
+        assert s.scalar(select(func.count()).select_from(Claim)) == 0
+    send_to_worker.assert_not_called()
 
 
 def upgrade_request(**kwargs):
