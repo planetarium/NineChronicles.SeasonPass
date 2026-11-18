@@ -5,12 +5,14 @@ left 51 INVALID Odin claims and the global count refused Heimdall claims too.
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from fastapi.testclient import TestClient
 from shared.enums import PassType, PlanetID, TxStatus
 from shared.models.season_pass import Level, SeasonPass
 from shared.models.user import Claim, UserSeasonPass
 
 from app.api import user as user_api
 from app.exceptions import ServerOverloadError
+from main import app
 
 AGENT = "0xc1a20000000000000000000000000000000000a1"
 AVATAR = "0xc1a20000000000000000000000000000000000a2"
@@ -89,9 +91,11 @@ def test_same_planet_over_limit_is_refused(client, test_session, claimable):
     _stuck(test_session, PlanetID.HEIMDALL, 26)
     _stuck(test_session, PlanetID.HEIMDALL, 25, TxStatus.STAGED)
 
-    # main.py maps this to 503; TestClient re-raises instead of calling the handler.
     with pytest.raises(ServerOverloadError):
         _claim(client, PlanetID.HEIMDALL)
+    # The default TestClient re-raises; without that the app answers 503 (main.py).
+    with TestClient(app, raise_server_exceptions=False) as raw:
+        assert _claim(raw, PlanetID.HEIMDALL).status_code == 503
 
 
 def test_same_planet_at_limit_is_allowed(client, test_session, claimable):
