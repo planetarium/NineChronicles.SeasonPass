@@ -2,6 +2,7 @@
 are STAGED or INVALID. The count is per planet: on 2026-11-16 Odin's chain halt
 left 51 INVALID Odin claims and the global count refused Heimdall claims too.
 """
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -125,3 +126,20 @@ def test_inprogress_claim_count_per_planet(test_session):
     assert user_api.inprogress_claim_count(test_session, PlanetID.ODIN) == 5
     assert user_api.inprogress_claim_count(test_session, PlanetID.HEIMDALL) == 1
     assert user_api.inprogress_claim_count(test_session, PlanetID.THOR) == 0
+
+
+def test_refusal_log_names_planet_and_count(client, test_session, claimable, caplog):
+    # Rides on the exception handler's existing error line; the 503 body is still
+    # the client's L10n key.
+    _stuck(test_session, PlanetID.HEIMDALL, 51)
+    caplog.set_level(logging.ERROR)
+
+    with TestClient(app, raise_server_exceptions=False) as raw:
+        resp = _claim(raw, PlanetID.HEIMDALL)
+
+    assert resp.status_code == 503
+    assert resp.json() == "NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL"
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert errors == [
+        "NOTIFICATION_SEASONPASS_REWARD_CLAIMED_FAIL planet_id=0x000000000001 count=51"
+    ]

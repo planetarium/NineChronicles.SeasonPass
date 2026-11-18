@@ -59,7 +59,11 @@ def log_incoming_url(request: Request, call_next):
 
 @app.exception_handler(Exception)
 def handle_exceptions(request: Request, e: Exception):
-    logging.error(e)
+    log_context = getattr(e, "log_context", None)
+    if log_context:
+        logging.error("%s %s", e, " ".join(f"{k}={v}" for k, v in log_context.items()))
+    else:
+        logging.error(e)
     if type(e) in (SeasonNotFoundError, UserNotFoundError):
         status_code = HTTP_404_NOT_FOUND
     elif type(e) in (InvalidSeasonError, NotPremiumError):

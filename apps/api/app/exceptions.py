@@ -12,7 +12,12 @@ class InvalidSeasonError(Exception):
 
 
 class ServerOverloadError(Exception):
-    pass
+    """`log_context` is appended only to the handler's error log line (main.py);
+    the response body stays str(e), which the client uses as an L10n key."""
+
+    def __init__(self, message: str = "", **log_context: Any):
+        super().__init__(message)
+        self.log_context = log_context
 
 
 class UserNotFoundError(Exception):
