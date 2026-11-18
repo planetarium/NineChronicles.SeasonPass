@@ -21,23 +21,22 @@ DEFAULT_AP_PER_ADVENTURE = 5
 logger = structlog.get_logger(__name__)
 
 engine = create_engine(str(config.pg_dsn))
-ap_coef = StakeAPCoef(
-    jwt_secret=config.headless_jwt_secret, timeout=config.gql_timeout
-)
+ap_coef = StakeAPCoef(jwt_secret=config.headless_jwt_secret, timeout=config.gql_timeout)
 coef_dict = {}
 
 
-def handle_sweep(
-    sess,
-    planet_id: PlanetID,
-    user_season_dict: Dict[str, UserSeasonPass],
-    exp: int,
-    level_dict: Dict[int, int],
-    block_index: int,
-    action_data: List[Dict],
-):
+SWEEP_TYPE_ID = "hack_and_slash_sweep10"
+
+
+def fetch_sweep_counts(planet_id: PlanetID, action_data: List[Dict]) -> List[int]:
+    """Real play count of each sweep: used AP // (stage CostAP x stake coefficient%).
+
+    Does every HTTP call of sweep handling (stake sheet / stakeState from the node,
+    StageSheet from the CDN), so the caller runs it BEFORE locking user_season_pass.
+    """
     gql_url = config.gql_url_map[planet_id.decode()]
     ap_coef.set_url(gql_url=gql_url)
+    counts = []
     for d in action_data:
         coef = coef_dict.get(d["agent_addr"])
         if not coef:
@@ -64,8 +63,21 @@ def handle_sweep(
             if stage_id
             else DEFAULT_AP_PER_ADVENTURE
         )
-        real_count = d["count_base"] // (cost_ap * coef / 100)
+        counts.append(d["count_base"] // (cost_ap * coef / 100))
+    return counts
 
+
+def handle_sweep(
+    sess,
+    planet_id: PlanetID,
+    user_season_dict: Dict[str, UserSeasonPass],
+    exp: int,
+    level_dict: Dict[int, int],
+    block_index: int,
+    action_data: List[Dict],
+    real_counts: List[int],
+):
+    for d, real_count in zip(action_data, real_counts):
         if exp * real_count < 0:
             logger.warning(
                 f"[Report] Account {d['agent_addr']} may abuse sweep with count: {real_count}"
@@ -124,6 +136,13 @@ def consume_courage_message(message: TrackerMessage):
         }
     }
     """
+    block_index = message.block
+    planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
+    # HTTP first, before any DB work: the user_season_pass rows are locked below
+    # and must not stay locked across node/CDN round-trips.
+    sweep_data = message.action_data.get(SWEEP_TYPE_ID)
+    sweep_counts = fetch_sweep_counts(planet_id, sweep_data) if sweep_data else []
+
     sess = scoped_session(sessionmaker(bind=engine))
 
     try:
@@ -140,9 +159,6 @@ def consume_courage_message(message: TrackerMessage):
             ).fetchall()
         }
 
-        block_index = message.block
-        planet_id = PlanetID(bytes(message.planet_id, "utf-8"))
-
         existing_block = sess.scalar(
             select(Block).where(
                 Block.planet_id == planet_id,
@@ -156,8 +172,11 @@ def consume_courage_message(message: TrackerMessage):
             )
             return
 
+        # Lock the rows and add exp to their latest values, then commit right away.
+        # Unlocked, the commit overwrote exp/level with values read earlier and
+        # erased a concurrent /claim's repeating-reward deduction (paid twice).
         user_season_dict = verify_season_pass(
-            sess, planet_id, current_pass, message.action_data
+            sess, planet_id, current_pass, message.action_data, for_update=True
         )
         for type_id, action_data in message.action_data.items():
             if (
@@ -192,7 +211,7 @@ def consume_courage_message(message: TrackerMessage):
                     action_data,
                 )
                 logger.info(f"{len(action_data)} Arena applied.")
-            elif "hack_and_slash_sweep10" == type_id:
+            elif SWEEP_TYPE_ID == type_id:
                 handle_sweep(
                     sess,
                     planet_id,
@@ -201,6 +220,7 @@ def consume_courage_message(message: TrackerMessage):
                     level_dict,
                     block_index,
                     action_data,
+                    sweep_counts,
                 )
                 logger.info(f"{len(action_data)} Sweep applied.")
             elif "event_dungeon_battle6" == type_id:

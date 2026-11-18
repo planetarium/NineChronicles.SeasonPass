@@ -1,11 +1,10 @@
 from typing import Dict, List
 
-from sqlalchemy import select
-
 from shared.enums import ActionType, PlanetID
 from shared.models.action import ActionHistory, AdventureBossHistory
 from shared.models.season_pass import SeasonPass
 from shared.models.user import UserSeasonPass
+from sqlalchemy import select, text
 
 
 def apply_exp(
@@ -42,24 +41,42 @@ def apply_exp(
         )
 
 
+# Upper bound on waiting for user_season_pass row locks held by the API (/claim,
+# /upgrade, /claim-prev hold them for DB work only, so a normal wait is ms). On
+# timeout the block fails and is retried on the next cycle.
+USP_LOCK_TIMEOUT = "5s"
+
+
 def verify_season_pass(
-    sess, planet_id: PlanetID, current_season: SeasonPass, action_data: Dict[str, List]
+    sess,
+    planet_id: PlanetID,
+    current_season: SeasonPass,
+    action_data: Dict[str, List],
+    for_update: bool = False,
 ) -> Dict[str, UserSeasonPass]:
+    """
+    `for_update` locks the rows until commit, so exp is added to the latest value
+    instead of overwriting what /claim (repeating reward deduction) or /upgrade
+    (instant exp) committed meanwhile. Callers must finish all HTTP calls before
+    this and commit right after applying exp: holding these locks across node/CDN
+    round-trips makes /claim wait (the lock pile-up removed in #308).
+    """
     avatar_list = set()
     for data in action_data.values():
         for d in data:
             avatar_list.add(d["avatar_addr"])
 
-    season_pass_dict = {
-        x.avatar_addr: x
-        for x in sess.scalars(
-            select(UserSeasonPass).where(
-                UserSeasonPass.planet_id == planet_id,
-                UserSeasonPass.season_pass_id == current_season.id,
-                UserSeasonPass.avatar_addr.in_(avatar_list),
-            )
-        ).fetchall()
-    }
+    stmt = select(UserSeasonPass).where(
+        UserSeasonPass.planet_id == planet_id,
+        UserSeasonPass.season_pass_id == current_season.id,
+        UserSeasonPass.avatar_addr.in_(avatar_list),
+    )
+    if for_update:
+        sess.execute(text(f"SET LOCAL lock_timeout = '{USP_LOCK_TIMEOUT}'"))
+        # Fixed lock order so two tracker pods overlapping during a rollout can't deadlock.
+        stmt = stmt.order_by(UserSeasonPass.id).with_for_update()
+
+    season_pass_dict = {x.avatar_addr: x for x in sess.scalars(stmt).fetchall()}
 
     for data in action_data.values():
         for d in data:
