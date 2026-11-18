@@ -444,3 +444,28 @@ def test_without_history_table_tracking_works(db, monkeypatch):
 
     assert row(db, c.id).tx_status == TxStatus.SUCCESS
     assert history_utils.history_table_ready(db) is False
+
+
+# --- 1차 검토 반영: 확정되지 않은 기록 tx 는 claim 을 확정하지 않는다 ------------------------------------------
+
+
+@needs_db
+@pytest.mark.parametrize("mode", ["off", "on"])
+@pytest.mark.parametrize("current", ["INVALID", "STAGING"])
+def test_unsettled_history_tx_does_not_settle_the_claim(db, monkeypatch, mode, current):
+    set_config(monkeypatch, resign_mode=mode)
+    c = add_claim(db, 10, name="T-prime")
+    old = add_history(db, c, "T")
+    node = FakeNode({c.tx_id: current, old.tx_id: "INVALID"})
+
+    track(db, node)
+
+    assert old.tx_id in node.asked  # 기록 tx 도 물었다
+    r = row(db, c.id)
+    assert (r.tx_id, r.tx, r.nonce) == (c.tx_id, c.tx, 10)  # tx 그대로
+    assert r.tx_status not in (TxStatus.SUCCESS, TxStatus.FAILURE)  # 확정 안 함
+    expected = (
+        TxStatus.STAGED if (mode, current) == ("on", "STAGING") else TxStatus.INVALID
+    )
+    assert r.tx_status == expected
+    assert [h for h in history(db) if h[3] == "lost"] == []  # lost 행 없음
