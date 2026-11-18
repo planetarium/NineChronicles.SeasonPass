@@ -10,6 +10,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+
 from app.tasks import burn_asset_task
 from app.tasks.burn_asset_task import get_decimal_places_for_ticker, process_burn_asset
 
@@ -44,9 +46,26 @@ def env():
         sess.scalar.return_value = 100
         session_cls.return_value = sess
 
-        yield SimpleNamespace(
-            logger=logger, account_cls=account_cls, account=account, gql=gql, sess=sess
-        )
+        # A burn must run at most once: the nonce is not recorded anywhere, so an automatic
+        # retry after stage could burn twice. Any call to retry fails the test.
+        with patch.object(
+            process_burn_asset, "retry", side_effect=AssertionError("retry called")
+        ) as retry:
+            yield SimpleNamespace(
+                logger=logger,
+                account_cls=account_cls,
+                account=account,
+                gql=gql,
+                sess=sess,
+                retry=retry,
+            )
+
+
+def error_call(logger):
+    """The single failure log line (event, kwargs)."""
+    assert logger.error.call_count == 1, logger.error.call_args_list
+    call = logger.error.call_args
+    return call.args[0], call.kwargs
 
 
 def test_get_decimal_places_for_ticker():
@@ -151,3 +170,78 @@ def test_account_error_raises(env):
     with pytest.raises(Exception, match="Account creation failed"):
         process_burn_asset({"ticker": "NCG", "amount": "10.5"})
     env.gql.stage.assert_not_called()
+
+
+def test_runs_at_most_once():
+    # acks_late=False: the worker acks on receipt, so a worker killed after stage does not
+    # get the message redelivered (task_reject_on_worker_lost=True globally) and burn again.
+    assert process_burn_asset.acks_late is False
+    assert process_burn_asset.max_retries == 0
+
+
+def test_success_logs_planet(env):
+    process_burn_asset({"ticker": "NCG", "amount": "1", "planet_id": "0x000000000001"})
+    events = {c.args[0]: c.kwargs for c in env.logger.info.call_args_list}
+    created = events["Burn asset transaction created successfully"]
+    staged = events["Burn asset transaction staged successfully"]
+    assert created["planet_id"] == staged["planet_id"] == "0x000000000001"
+    assert created["nonce"] == 123 and created["tx_id"] == staged["tx_id"]
+
+
+def test_stage_rejected_is_not_retried_and_says_may_have_burned(env):
+    env.gql.stage.return_value = (False, "node said no", None)
+
+    with pytest.raises(Exception, match="Failed to stage burn asset tx"):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.retry.assert_not_called()
+    env.gql.stage.assert_called_once()
+    event, kw = error_call(env.logger)
+    assert "MAY HAVE BEEN BURNED" in event
+    assert kw["stage_attempted"] is True
+    assert kw["planet_id"] == "0x000000000000"
+    assert kw["nonce"] == 123 and kw["tx_id"]
+    assert kw["msg"] == "node said no"
+
+
+def test_stage_timeout_is_not_retried(env):
+    env.gql.stage.side_effect = requests.exceptions.ReadTimeout("read timed out")
+
+    with pytest.raises(requests.exceptions.ReadTimeout):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.retry.assert_not_called()
+    env.gql.stage.assert_called_once()
+    event, kw = error_call(env.logger)
+    assert "MAY HAVE BEEN BURNED" in event
+    assert kw["stage_attempted"] is True and kw["tx_id"]
+
+
+def test_node_nonce_unavailable_stops_before_signing(env):
+    # get_next_nonce returns -1 on a GQL error. max(-1, DB+1) used to sign with the DB nonce,
+    # which can collide with a claim still in the node's queue.
+    env.gql.get_next_nonce.return_value = -1
+
+    with pytest.raises(Exception):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.account.sign_tx.assert_not_called()
+    env.gql.stage.assert_not_called()
+    env.retry.assert_not_called()
+    event, kw = error_call(env.logger)
+    assert "not burned" in event
+    assert kw["stage_attempted"] is False
+    assert kw["planet_id"] == "0x000000000000"
+
+
+def test_kms_error_is_not_retried(env):
+    env.account.sign_tx.side_effect = RuntimeError("KMS throttled")
+
+    with pytest.raises(RuntimeError, match="KMS throttled"):
+        process_burn_asset({"ticker": "NCG", "amount": "1"})
+
+    env.gql.stage.assert_not_called()
+    env.retry.assert_not_called()
+    event, kw = error_call(env.logger)
+    assert "not burned" in event
+    assert kw["stage_attempted"] is False and kw["nonce"] == 123

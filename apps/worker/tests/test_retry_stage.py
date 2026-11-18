@@ -6,9 +6,10 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.tasks import stage_task
 from shared.enums import TxStatus
 from sqlalchemy.dialects import postgresql
+
+from app.tasks import stage_task
 
 ODIN = b"0x000000000000"
 HEIMDALL = b"0x000000000001"
@@ -96,3 +97,29 @@ def test_each_planet_is_queried_separately():
         for call in sess.query.return_value.filter.call_args_list
     ]
     assert planets == [[ODIN], [HEIMDALL]]
+
+
+def test_unexpected_error_names_the_planet():
+    # 플래닛 조회 자체가 예외로 끝나면(DB 오류 등) 어느 플래닛에서 멈췄는지 로그에 남긴다.
+    def restage(sess, gql, planet_id, now, skip_expired):
+        if planet_id == HEIMDALL:
+            raise RuntimeError("db gone")
+        return True, 0
+
+    with patch.object(stage_task, "scoped_session"), patch.object(
+        stage_task, "GQLClient"
+    ), patch.object(
+        stage_task, "configured_planet_ids", return_value=[ODIN, HEIMDALL]
+    ), patch.object(
+        stage_task, "_restage_planet", side_effect=restage
+    ), patch.object(
+        stage_task, "logger"
+    ) as logger, patch.object(
+        stage_task.process_retry_stage, "retry"
+    ) as retry:
+        stage_task.process_retry_stage.run()
+
+    retry.assert_called_once()
+    call = logger.error.call_args
+    assert call.args[0] == "Error processing retry stage"
+    assert call.kwargs["planet_id"] == HEIMDALL
