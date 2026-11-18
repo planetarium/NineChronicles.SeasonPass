@@ -23,7 +23,12 @@ URL_MAP = {
 
 def claim(planet_id, claim_id, tx_id, tx_status=TxStatus.STAGED):
     return SimpleNamespace(
-        id=claim_id, planet_id=planet_id.value, tx_id=tx_id, tx_status=tx_status
+        id=claim_id,
+        planet_id=planet_id.value,
+        tx_id=tx_id,
+        tx_status=tx_status,
+        nonce=claim_id,
+        tx=None,
     )
 
 
@@ -44,6 +49,8 @@ def run(monkeypatch):
         with patch.object(
             tx_tracker, "scoped_session", side_effect=[read_sess, write_sess]
         ), patch.object(tx_tracker, "process", side_effect=lookup), patch.object(
+            tx_tracker, "history_table_ready", return_value=False
+        ), patch.object(
             tx_tracker, "logger"
         ) as logger:
             tx_tracker.track_tx()

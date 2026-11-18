@@ -53,9 +53,27 @@ jobs:
   shared:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          # tests/test_claim_tx_history_migration.py runs the alembic migration against a real
+          # Postgres (drops and recreates the public schema, so the DB name must contain "test")
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: season_pass_shared_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
     defaults:
       run:
         working-directory: apps/shared
+    env:
+      SHARED_TEST_PG_DSN: postgresql://postgres:postgres@localhost:5432/season_pass_shared_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

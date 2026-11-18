@@ -41,9 +41,9 @@ def run_consume(stage_result=(False, "node rejected", None), next_nonce=7):
     ), patch.object(claim_consumer, "_get_account", return_value=account), patch.object(
         claim_consumer, "GQLClient", return_value=gql
     ), patch.object(
-        claim_consumer, "build_claim_memo", return_value="memo"
+        claim_consumer, "history_table_ready", return_value=False
     ), patch.object(
-        claim_consumer, "create_grant_items_unsigned_tx", return_value=b"\x00"
+        claim_consumer, "build_unsigned_claim_tx", return_value=b"\x00"
     ), patch.object(
         claim_consumer, "create_signed_tx", return_value=b"\x01"
     ), patch.object(

@@ -7,14 +7,15 @@ from datetime import datetime, timezone
 import structlog
 from app.config import config
 from app.utils.aws import Account
-from app.utils.claim_memo import build_claim_memo
+from app.utils.claim_tx import ClaimTxFields, build_unsigned_claim_tx
 from app.utils.nonce_lock import lock_planet_nonce, set_lock_timeout
 from shared.enums import TxStatus
-from shared.models.user import Claim
+from shared.models.user import Claim, ClaimTxHistory
 from shared.schemas.message import ClaimMessage
 from shared.utils._graphql import GQLClient
-from shared.utils.transaction import create_grant_items_unsigned_tx, create_signed_tx
-from sqlalchemy import create_engine, desc, select
+from shared.utils.claim_tx_history import history_table_ready
+from shared.utils.transaction import create_signed_tx
+from sqlalchemy import create_engine, desc, exists, select
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 logger = structlog.get_logger(__name__)
@@ -33,6 +34,67 @@ def _get_account() -> Account:
             if _account is None:
                 _account = Account(config.kms_key_id, config.region_name)
     return _account
+
+
+def _has_history(sess, claim_id: int) -> bool:
+    """재서명 기록(released 제외)이 있는지. SAVEPOINT 안에서 묻는다 — 실패해도(잠금 시간 초과 등)
+    claim 행을 FOR UPDATE 로 쥔 바깥 트랜잭션은 살아 있고 지급을 이어 간다.
+
+    실패를 "막지 않음"으로 보는 이유: 권한은 history_table_ready 가 미리 확인하므로 남는 실패는
+    일시적인 것뿐이고, 실패를 "막음"으로 보면 잠금 문제 하나로 모든 플래닛의 새 지급이 멈춘다."""
+    try:
+        with sess.begin_nested():
+            return bool(
+                sess.scalar(
+                    select(
+                        exists().where(
+                            ClaimTxHistory.claim_id == claim_id,
+                            ClaimTxHistory.reason.in_(("expired", "lost")),
+                        )
+                    )
+                )
+            )
+    except Exception as e:
+        logger.error(
+            "claim_tx_history check failed; continuing", claim_id=claim_id, exc_info=e
+        )
+        return False
+
+
+def _nonce_reset_blocked(sess, claim) -> bool:
+    """nonce 가 빈 claim 에 새 nonce 를 주면 안 되는지.
+
+    - 상태 기반: consumer 는 tx·nonce·CREATED 를 한 commit 에 적으므로, 상태가 남아 있는데 nonce 가
+      비었으면 tx 가 나간 뒤 사람이 nonce 를 비운 행이다. 기본값 off 에서 동작이 바뀌지 않게
+      on 에서만 막고 dry_run 은 경고만 한다.
+    - 기록 기반: 재서명 기록(released 제외)이 있으면 모드와 상관없이 막는다. 기록 행은 재서명이
+      켜졌을 때만 생기므로 지금 데이터에는 영향이 없다.
+    대응 절차: 9c-ops season-pass.md 의 nonce_reset_blocked."""
+    if claim.tx_status is not None:
+        if config.resign_mode == "on":
+            logger.error(
+                "Refusing to assign a new nonce to a claim whose tx was sent",
+                planet_id=claim.planet_id,
+                claim_id=claim.id,
+                basis="status",
+            )
+            return True
+        if config.resign_mode == "dry_run":
+            logger.warning(
+                "Would refuse nonce reset",
+                planet_id=claim.planet_id,
+                claim_id=claim.id,
+                basis="status",
+            )
+    if history_table_ready(engine) and _has_history(sess, claim.id):
+        logger.error(
+            "Refusing to assign a new nonce to a claim whose tx was sent",
+            planet_id=claim.planet_id,
+            claim_id=claim.id,
+            basis="history",
+        )
+        return True
+    return False
 
 
 def consume_claim_message(message: ClaimMessage):
@@ -90,6 +152,13 @@ def consume_claim_message(message: ClaimMessage):
             outcome = "skip_tx_exists"
             return
 
+        # tx 가 한 번이라도 나간 claim 에 새 nonce 를 주지 않는다(재서명 B2 의 nonce 불변).
+        # 사람이 nonce 를 비우면(예전 복구 습관) 옛 tx 와 새 nonce 의 tx 가 둘 다 블록에 들어가
+        # 같은 보상이 두 번 지급될 수 있다. KMS·GQL 준비 전에 판단한다.
+        if claim.nonce is None and _nonce_reset_blocked(sess, claim):
+            outcome = "nonce_reset_blocked"
+            return
+
         account = _get_account()
         lap("kms_init")
         gql = GQLClient(
@@ -136,48 +205,22 @@ def consume_claim_message(message: ClaimMessage):
             use_nonce = True
         claim.tx_status = TxStatus.CREATED
 
-        # GQL 의존성 제거: 로컬에서 unsigned transaction 생성
-        memo = build_claim_memo(
-            claim.normal_levels,
-            claim.premium_levels,
-            claim.season_pass.pass_type.value,
-        )
-
-        unsigned_tx = create_grant_items_unsigned_tx(
-            planet_id=claim.planet_id,
-            public_key=account.pubkey.hex(),
-            address=account.address,
-            nonce=claim.nonce,
-            avatar_addr=claim.avatar_addr,
-            claim_data=claim.reward_list,
-            memo=memo,
-            # ⚠️ 클레임 생성 시각이 아니라 **지금**이어야 한다. 이 값은 tx 의 t 필드로
-            #   들어가고 체인은 너무 과거인 tx 를 스테이징에서 거부한다. 클레임이 만들어진
-            #   직후에 처리되면 둘이 같아서 티가 안 나지만, 재시도가 늦어지면 태어날 때부터
-            #   만료된 tx 가 된다 — 그리고 그 tx 가 nonce 를 선점하므로 **뒤따르는 클레임이
-            #   전부 막힌다**(구멍 뒤의 tx 는 스테이징에서 밀려나 차례로 INVALID 가 된다).
-            #
-            #   2026-09-29 Heimdall 지급 정지가 이것이었다. beat 데드락으로 2.7일 묶여 있던
-            #   클레임이 풀려나면서 2.7일 전 타임스탬프를 단 tx 를 만들었고, 그게 거부되며
-            #   nonce 1794589 에 구멍이 생겨 뒤의 클레임이 전부 섰다.
-            #
-            #   평소에 이게 안 터진 건 transaction.py 의 strftime 이 tzinfo 를 버리고 'Z' 를
-            #   붙여서다 — created_at 이 KST(+09)로 와서 모든 tx 가 실제보다 9시간 미래로
-            #   찍혔고, 그 우연한 여유분이 유일한 완충이었다. 즉 생성 후 9시간이 지나서
-            #   처리되는 클레임은 원래부터 전부 만료된 tx 가 됐다.
-            #
-            #   now(tz=utc) 를 쓰면 strftime 결과도 진짜 UTC 가 되어 두 문제가 같이 없어진다.
-            #   같은 저장소의 burn_asset_task 가 이미 이렇게 한다.
+        # 메모 → unsigned tx → KMS 서명 → signed tx. 재서명(stage_task)의 build_signed_claim_tx 와
+        # 같은 단계를 claim_timing 구간별로 나눠 부른다. 시각은 언제나 지금이어야 한다(이유는
+        # build_unsigned_claim_tx 주석).
+        unsigned_tx = build_unsigned_claim_tx(
+            ClaimTxFields.from_claim(claim),
+            claim.nonce,
+            account.pubkey,
+            account.address,
             timestamp=datetime.now(tz=timezone.utc),
         )
-
         lap("build_unsigned")
 
         # AWS KMS로 서명 생성
         signature = account.sign_tx(unsigned_tx)
         lap("kms_sign")
 
-        # GQL 의존성 제거: 로컬에서 signed transaction 생성
         signed_tx = create_signed_tx(unsigned_tx, signature)
 
         tx_id = hashlib.sha256(signed_tx).hexdigest()

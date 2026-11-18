@@ -1,4 +1,6 @@
 import hashlib
+import re
+from typing import Optional
 
 from sqlalchemy import text
 
@@ -23,12 +25,19 @@ def planet_nonce_lock_key(planet_id: bytes) -> int:
     return int.from_bytes(digest[:8], "big", signed=True)
 
 
-def set_lock_timeout(sess) -> None:
-    """지금 트랜잭션의 잠금 대기에 LOCK_TIMEOUT 상한을 건다.
+_TIMEOUT_PATTERN = re.compile(r"^[0-9]+(ms|s)$")
+
+
+def set_lock_timeout(sess, timeout: Optional[str] = None) -> None:
+    """지금 트랜잭션의 잠금 대기에 상한(기본 LOCK_TIMEOUT)을 건다.
 
     SET LOCAL 이라 이 트랜잭션(commit·rollback 전까지)에만 걸린다. 잠금을 잡는 문장보다 먼저,
-    같은 트랜잭션 안에서 불러야 한다."""
-    sess.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'"))
+    같은 트랜잭션 안에서 불러야 한다. 재서명의 claim 교체는 더 짧게(5초) 기다린다(stage_task).
+    기본값은 부를 때 읽는다(시험이 LOCK_TIMEOUT 을 바꿀 수 있게)."""
+    value = LOCK_TIMEOUT if timeout is None else timeout
+    if not _TIMEOUT_PATTERN.match(value):
+        raise ValueError(f"invalid lock timeout {value!r}")
+    sess.execute(text(f"SET LOCAL lock_timeout = '{value}'"))
 
 
 def lock_planet_nonce(sess, planet_id: bytes) -> None:
