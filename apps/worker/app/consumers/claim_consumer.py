@@ -57,6 +57,7 @@ def consume_claim_message(message: ClaimMessage):
 
     sess = scoped_session(sessionmaker(bind=engine))
     outcome = "error"
+    planet_id = None
 
     try:
         # FOR UPDATE: API 가 보낸 메시지와 beat 재처리(retry_claim)가 같은 claim 을 동시에 잡으면
@@ -80,6 +81,7 @@ def consume_claim_message(message: ClaimMessage):
             outcome = "no_claim"
             logger.error(f"Cannot find claim {message.uuid}")
             return
+        planet_id = claim.planet_id
         lap("db_read_claim")
 
         # 이미 tx 가 만들어진 claim(beat 재처리가 먼저 처리한 큐 메시지 등)은 할 일이 없다.
@@ -193,7 +195,7 @@ def consume_claim_message(message: ClaimMessage):
             lap("stage_gql")
             if not success:
                 message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
-                logger.error(message)
+                logger.error(message, planet_id=claim.planet_id, nonce=claim.nonce)
                 raise Exception(message)
             claim.tx_status = TxStatus.STAGED
             sess.add(claim)
@@ -201,10 +203,13 @@ def consume_claim_message(message: ClaimMessage):
             lap("commit_staged")
         outcome = "staged"
     finally:
-        # 성공·조기 종료·실패 모두 남긴다(시간 숫자와 결과 이름만, 식별 정보 없음).
+        # 성공·조기 종료·실패 모두 남긴다(시간 숫자·결과 이름·플래닛만, 사용자 식별 정보 없음).
+        # 플래닛은 KMS·nonce 조회 실패처럼 여기서 따로 로그를 남기지 않는 실패가 어느 플래닛인지
+        # 보려고 붙인다(process_claim 의 실패 로그에는 uuid 만 있다).
         logger.info(
             "claim_timing",
             outcome=outcome,
+            planet_id=planet_id,
             **timings,
             total=round(sum(timings.values()), 3),
         )

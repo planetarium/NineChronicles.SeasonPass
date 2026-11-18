@@ -1,8 +1,10 @@
-"""process_retry_claim — 한 플래닛의 실패가 다른 플래닛 클레임 처리를 막지 않는다.
+"""process_retry_claim — 한 플래닛이 다른 플래닛 클레임 재처리를 막지 않는다.
 
 2026-11-17 인터널: 맨 앞의 thor 클레임(노드 DNS 실패)에서 묶음 전체가 재시도로 돌아가
-그 뒤의 오딘 클레임 10건이 다시 만들어지지 못했다.
+그 뒤의 오딘 클레임 10건이 다시 만들어지지 못했다. 또 모든 플래닛을 created_at 순으로 100건
+골라, 한 플래닛에 오래된 건이 100건 넘게 쌓이면 다른 플래닛 건은 창에 들지 못했다.
 """
+from collections import namedtuple
 from unittest.mock import MagicMock, patch
 
 from app.tasks import claim_task
@@ -10,18 +12,27 @@ from app.tasks import claim_task
 THOR = b"0x100000000003"
 ODIN = b"0x100000000000"
 
+Row = namedtuple("Row", "uuid planet_id")
 
-def run_retry(rows, consume):
+
+def run_retry(rows_by_planet, consume):
     sess = MagicMock()
     query = sess.query.return_value.filter.return_value.order_by.return_value
-    query.limit.return_value.all.return_value = rows
+    query.limit.return_value.all.side_effect = [
+        [Row(uuid, planet_id) for uuid in rows]
+        for planet_id, rows in rows_by_planet.items()
+    ]
     with patch.object(claim_task, "scoped_session", return_value=sess), patch.object(
+        claim_task, "configured_planet_ids", return_value=list(rows_by_planet)
+    ), patch.object(
         claim_task, "consume_claim_message", side_effect=consume
-    ) as consume_mock, patch.object(claim_task, "logger"), patch.object(
+    ) as consume_mock, patch.object(
+        claim_task, "logger"
+    ) as logger, patch.object(
         claim_task.process_retry_claim, "retry"
     ) as retry:
         claim_task.process_retry_claim.run()
-    return [c.args[0].uuid for c in consume_mock.call_args_list], retry, sess
+    return [c.args[0].uuid for c in consume_mock.call_args_list], retry, sess, logger
 
 
 def fail_thor(message):
@@ -30,8 +41,8 @@ def fail_thor(message):
 
 
 def test_failed_planet_does_not_block_other_planets():
-    called, retry, _ = run_retry(
-        [("thor-1", THOR), ("odin-1", ODIN), ("odin-2", ODIN)], fail_thor
+    called, retry, _, _ = run_retry(
+        {THOR: ["thor-1"], ODIN: ["odin-1", "odin-2"]}, fail_thor
     )
 
     assert called == ["thor-1", "odin-1", "odin-2"]
@@ -40,21 +51,53 @@ def test_failed_planet_does_not_block_other_planets():
 
 def test_rest_of_failed_planet_is_skipped_this_round():
     # stage 실패가 이어질 때 같은 플래닛에 nonce 가 줄줄이 할당되지 않게 한다.
-    called, _, _ = run_retry(
-        [("thor-1", THOR), ("odin-1", ODIN), ("thor-2", THOR)], fail_thor
+    called, _, _, _ = run_retry(
+        {THOR: ["thor-1", "thor-2"], ODIN: ["odin-1"]}, fail_thor
     )
 
     assert called == ["thor-1", "odin-1"]
 
 
-def test_query_only_selects_configured_planets(monkeypatch):
+def test_each_planet_is_queried_separately():
+    _, _, sess, _ = run_retry({THOR: [], ODIN: []}, fail_thor)
+
+    planets = [
+        [c.right.value for c in call.args if "planet_id" in str(c)]
+        for call in sess.query.return_value.filter.call_args_list
+    ]
+    assert planets == [[THOR], [ODIN]]
+    query = sess.query.return_value.filter.return_value.order_by.return_value
+    assert [c.args for c in query.limit.call_args_list] == [(100,), (100,)]
+
+
+def test_full_window_on_one_planet_does_not_starve_others():
+    # 오딘 오래된 건이 100건이어도 thor 건은 같은 차례에 처리된다.
+    odin = [f"odin-{i}" for i in range(100)]
+
+    called, _, _, _ = run_retry({ODIN: odin, THOR: ["thor-ok"]}, lambda m: None)
+
+    assert "thor-ok" in called
+    assert len(called) == 101
+
+
+def test_failure_log_has_planet_id():
+    _, _, _, logger = run_retry({THOR: ["thor-1"], ODIN: ["odin-1"]}, fail_thor)
+
+    per_claim = [
+        c for c in logger.error.call_args_list if c.args[0] == "Error retrying claim"
+    ]
+    assert [c.kwargs["planet_id"] for c in per_claim] == [THOR]
+    summary = [
+        c
+        for c in logger.error.call_args_list
+        if c.args[0] == "Retry claim finished with failures"
+    ]
+    assert summary[0].kwargs["planets"] == [THOR]
+
+
+def test_configured_planet_ids_follow_gql_url_map(monkeypatch):
     monkeypatch.setattr(
         claim_task.config, "gql_url_map", {ODIN.decode(): "http://odin"}
     )
 
-    _, _, sess = run_retry([], fail_thor)
-
-    criteria = sess.query.return_value.filter.call_args.args
-    planet_filter = [c for c in criteria if "planet_id" in str(c)]
-    assert len(planet_filter) == 1
-    assert planet_filter[0].right.value == [ODIN]
+    assert claim_task.configured_planet_ids() == [ODIN]
