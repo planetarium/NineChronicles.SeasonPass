@@ -1,10 +1,11 @@
 import hashlib
 import logging
-import os
 from base64 import b64decode
 from typing import Optional, Tuple
 
 import boto3
+from app.utils.gql import derive_address
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from Crypto.Hash import keccak
 from eth_account import Account as EthAccount
@@ -14,12 +15,23 @@ from pyasn1.codec.der.encoder import encode as der_encode
 from pyasn1.type.univ import Integer, SequenceOf
 from shared.utils._crypto import ECDSASignatureRecord, SPKIRecord
 
-from app.utils.gql import derive_address
+# 재서명(stage_task) 전용 KMS 클라이언트 설정. 기본값(연결·읽기 60초, legacy 재시도 4번)이면 KMS 한 번이
+# 수 분을 쓸 수 있어 retry_stage 의 시간 상한 계산이 깨진다. 최악: 3번 시도 × (연결 3초 + 읽기 5초) +
+# 재시도 대기(standard, 최대 1초 + 2초) = 27초. stage_task.RETRY_STAGE_BUDGET_SEC 주석의 계산과 맞춘다.
+# consumer 경로(claim_consumer._get_account)는 이 설정을 쓰지 않는다(지금 동작 그대로).
+RESIGN_KMS_CLIENT_CONFIG = Config(
+    connect_timeout=3,
+    read_timeout=5,
+    retries={"max_attempts": 2, "mode": "standard"},  # 재시도 2번(첫 시도 포함 3번)
+)
 
 
 class Account:
-    def __init__(self, kms_key: str, region_name: str):
-        self.client = boto3.client("kms", region_name=region_name)
+    def __init__(
+        self, kms_key: str, region_name: str, client_config: Optional[Config] = None
+    ):
+        # client_config 가 None 이면 boto3 기본값 그대로다(consumer·burn_asset 경로).
+        self.client = boto3.client("kms", region_name=region_name, config=client_config)
         self._kms_key: str = kms_key
         try:
             self.pubkey_der: bytes = self.client.get_public_key(KeyId=self._kms_key)[
@@ -78,7 +90,9 @@ class Account:
             s = max_value_on_curve - s
         return r, s
 
-    def __get_sig_v(self, msg_hash: bytes, r: int, s: int, expected_address: str) -> int:
+    def __get_sig_v(
+        self, msg_hash: bytes, r: int, s: int, expected_address: str
+    ) -> int:
         """
         Given a message hash, r, s and an ethereum address, recover the
         recovery parameter v.

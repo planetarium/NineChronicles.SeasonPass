@@ -4,6 +4,7 @@
 ②~④ 재서명(WORKER_RESIGN_MODE, 기본 off): 노드가 만료로 버린 tx 때문에 서명자 nonce 에 구멍이 생기면
   그 뒤 지급이 모두 멈춘다(2026-11-14·11-17 인터널, 사람이 nonce 를 비우고 검증자를 재시작해 풀었다).
   구멍을 쥔 claim 의 tx 를 **같은 nonce** 로 다시 서명해 사람 손 없이 메운다.
+  순서는 ② → ① → ③④ 다. ② 에서 Bound 를 얻은 플래닛만 ① 이 만료 건을 건너뛴다.
 
 안전성은 "tx 가 한 번이라도 나간 claim 의 nonce 는 바뀌지 않는다"와 (planet_id, nonce) 유일 제약에만
 기댄다. 같은 서명자·같은 nonce 의 tx 는 블록에 하나만 들어가므로 한 claim 을 몇 번 다시 서명해도 지급은
@@ -11,16 +12,17 @@
 옛 tx 가 다른 노드에 남아 먼저 들어가면 tx 추적기가 claim_tx_history 로 그 tx 를 확정한다.
 """
 import hashlib
+import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import structlog
 from app.celery_app import app
 from app.config import config
-from app.consumers import claim_consumer
 from app.tasks.claim_task import configured_planet_ids
+from app.utils.aws import RESIGN_KMS_CLIENT_CONFIG, Account
 from app.utils.claim_tx import (
     ClaimTxFields,
     build_signed_claim_tx,
@@ -42,10 +44,11 @@ logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
 
 # 태스크 시작부터 이 시간이 지나면 재서명의 새 플래닛 판단·새 후보를 시작하지 않는다(claim_task 의
-# RETRY_CLAIM_BUDGET_SEC 와 같은 값·같은 이유). 판단용 조회는 단발(5초)이라 플래닛 판단 하나는 최악 15초,
-# 후보 하나는 최악 약 45초(사전 확인 3회 15초 + KMS 5초 + 교체 잠금 5초 + stage 20초)다.
-# 120 + 45 = 165초가 claim-worker 종료 유예(180초)와 beat expires(240초) 안에 든다.
-RETRY_STAGE_BUDGET_SEC = 120
+# RETRY_CLAIM_BUDGET_SEC 와 같은 이유). 판단용 조회는 단발(5초)이라 플래닛 판단 하나는 최악 15초(①
+# restage 앞), 계획 직전 V 다시 읽기는 5초다. 후보 하나는 최악 약 67초다: 사전 확인 3회 15초 + KMS 서명
+# 27초(RESIGN_KMS_CLIENT_CONFIG: 연결 3초 + 읽기 5초, 3번 시도, 재시도 대기 최대 1+2초) + 교체 잠금 5초 +
+# stage 20초. 110 + 67 = 177초가 claim-worker 종료 유예(180초)와 beat expires(240초) 안에 든다.
+RETRY_STAGE_BUDGET_SEC = 110
 # 재서명 교체 UPDATE 의 행 잠금 대기 상한. consumer 는 claim 하나를 수 초 쥐고 추적기 쓰기는 짧다.
 # 넘기면 그 후보만 raced 로 건너뛴다(다음 회차에 다시 본다).
 RESIGN_LOCK_TIMEOUT = "5s"
@@ -59,10 +62,16 @@ RESTAGE_STATUSES = (TxStatus.CREATED, TxStatus.INVALID)
 _tip_since: Dict[bytes, Tuple[int, datetime]] = {}  # nonce 노드 tip, 그 tip 을 처음 본 시각
 _last_obs: Dict[bytes, Tuple[int, int, datetime]] = {}  # 직전 (nonce 노드 tip, 기준 tip, 시각)
 _not_ours_seen: Dict[bytes, int] = {}  # 직전 회차의 hole_not_ours V
+_lookup_failures: Dict[bytes, int] = {}  # tip:·nonce: 보류가 이어진 회차 수
 _no_reference_warned: set = set()
 
+# tip:·nonce: 보류가 이만큼 이어지면 warning. 그동안 만료 건은 restage 되지만(노드는 받고 버린다)
+# 재서명은 하지 않으므로, 구멍이 있으면 지급이 멈춘 채다.
+LOOKUP_FAILURE_WARN_ROUNDS = 2
+
 # 요약 로그를 warning 으로 남길 보류 사유. 나머지(nothing_pending·hole_fresh·first_observation·
-# chain_stalled·no_reference·tip:…·nonce:…)는 info. hole_not_ours 는 같은 V 가 두 회차 이어질 때만 warning.
+# chain_stalled·no_reference·tip:…·nonce:…)는 info. hole_not_ours 는 같은 V 가 두 회차 이어질 때만,
+# tip:…·nonce:… 는 LOOKUP_FAILURE_WARN_ROUNDS 회차 이어질 때만 warning.
 WARN_REASONS = {
     "hole_manual_row",
     "hole_settled_mismatch",
@@ -85,7 +94,30 @@ def reset_resign_observations() -> None:
     _tip_since.clear()
     _last_obs.clear()
     _not_ours_seen.clear()
+    _lookup_failures.clear()
     _no_reference_warned.clear()
+
+
+# --- KMS 계정(재서명 전용) ----------------------------------------------------------------------------
+
+_resign_account: Optional[Account] = None
+_resign_account_lock = threading.Lock()
+
+
+def _get_resign_account() -> Account:
+    """재서명 전용 KMS 계정. consumer 의 계정(claim_consumer._get_account)과 같은 키지만 클라이언트에
+    짧은 시간 초과·재시도 상한을 둔다(RESIGN_KMS_CLIENT_CONFIG) — 회차 시간 상한 계산이 KMS 최악값에
+    기댄다. consumer 경로의 클라이언트 설정은 바꾸지 않는다. 생성 실패는 캐시하지 않는다."""
+    global _resign_account
+    if _resign_account is None:
+        with _resign_account_lock:
+            if _resign_account is None:
+                _resign_account = Account(
+                    config.kms_key_id,
+                    config.region_name,
+                    client_config=RESIGN_KMS_CLIENT_CONFIG,
+                )
+    return _resign_account
 
 
 # --- 주소 -------------------------------------------------------------------------------------
@@ -116,7 +148,8 @@ def reference_url(planet_id: bytes) -> Optional[str]:
 
 
 def resign_configured(planet_id: bytes) -> bool:
-    """설정만 보고 정하는 정적 판정. 독립 기준 노드가 없는 플래닛은 재서명하지 않고 만료 건도 restage 한다."""
+    """설정만 보고 정하는 정적 판정. 독립 기준 노드가 없는 플래닛은 재서명하지 않는다.
+    만료 건 restage 를 건너뛸지는 이것이 아니라 그 회차에 Bound 를 얻었는지로 정한다."""
     return reference_url(planet_id) is not None
 
 
@@ -132,7 +165,7 @@ def _expired(signed_at: Optional[datetime], now: datetime) -> bool:
 
 @dataclass
 class Hold:
-    """그 플래닛의 이번 회차 재서명을 멈춘다(① restage 는 이미 끝났다)."""
+    """그 플래닛의 이번 회차 재서명을 멈춘다. ② 에서 나오면 ① 은 만료 건도 예전처럼 restage 한다."""
 
     reason: str
     warn: bool = False
@@ -254,8 +287,9 @@ def _restage_planet(sess, gql, planet_id: bytes, now: datetime, skip_expired: bo
 
     조회 직후 필요한 값만 꺼내고 commit 해서, 결과가 비거나 중간에 멈춰도 열린 트랜잭션이 남지 않게
     한다(네트워크 호출 중 idle in transaction 이면 메인넷 역할의 60초 제한에 끊긴다).
-    skip_expired(on 이고 재서명이 구성된 플래닛): 만료된 tx 는 보내지 않는다 — 노드는 "성공"을 돌려주지만
-    버린다. 이 건은 재서명 후보로 넘긴다."""
+    skip_expired(on 이고 이번 회차에 그 플래닛의 Bound 를 얻었을 때만): 만료된 tx 는 보내지 않는다 —
+    노드는 "성공"을 돌려주지만 버린다. 이 건은 재서명 후보로 넘긴다. Bound 를 못 얻은 플래닛(조회 실패·
+    정지·뒤처짐 등)은 재서명이 맡지 않으므로 예전처럼 만료 건도 보낸다."""
     rows = (
         sess.query(Claim.id, Claim.nonce, Claim.tx, Claim.tx_id)
         .filter(
@@ -615,23 +649,39 @@ def resign_one(t: ResignTarget, bound: Bound, mode: str, account, gql) -> str:
     return "resigned"
 
 
-def _resign_round(
-    mode: str, gql, started: float, summaries: Dict[bytes, Summary]
-) -> None:
-    """②~⑤. 플래닛을 번갈아 처리하고 새 일을 시작하기 전마다 시간 상한을 본다(#329 와 같은 방식)."""
+def _count_lookup_failure(planet_id: bytes, verdict: Union[Bound, Hold]) -> None:
+    """tip:·nonce: 보류가 이어지면 warning 으로 올린다. 다른 결과가 나오면 센 것을 지운다."""
+    if isinstance(verdict, Hold) and verdict.reason.startswith(("tip:", "nonce:")):
+        n = _lookup_failures.get(planet_id, 0) + 1
+        _lookup_failures[planet_id] = n
+        verdict.extra["lookup_failures"] = n
+        if n >= LOOKUP_FAILURE_WARN_ROUNDS:
+            verdict.warn = True
+    else:
+        _lookup_failures.pop(planet_id, None)
+
+
+def _hold_with_tips(summary: Summary, hold: Hold) -> None:
+    summary.v_tip = hold.extra.pop("v_tip", summary.v_tip)
+    summary.r_tip = hold.extra.pop("r_tip", summary.r_tip)
+    summary.hold(hold)
+
+
+def _judge_planets(
+    started: float, summaries: Dict[bytes, Summary]
+) -> Tuple[Optional[Account], Dict[bytes, Bound]]:
+    """② 플래닛마다 Bound 를 구한다. ① restage 보다 먼저 돈다 — 만료 건 restage 를 건너뛸지는 이번 회차에
+    재서명이 그 플래닛을 실제로 맡을 수 있는지(Bound)로 정해야 하기 때문이다(정적 판정이면 조회가 실패한
+    플래닛은 restage 도 재서명도 안 돼 조용히 멈춘다). 네트워크만 쓰고 DB 는 쓰지 않는다."""
     planets = list(summaries)
-
-    def elapsed() -> float:
-        return time.monotonic() - started
-
     try:
-        account = claim_consumer._get_account()
+        account = _get_resign_account()
     except Exception as e:
         for p in planets:
             summaries[p].hold(Hold(f"account:{type(e).__name__}", warn=True))
-        return
+        return None, {}
 
-    plans: Dict[bytes, Plan] = {}
+    bounds: Dict[bytes, Bound] = {}
     for p in planets:
         summary = summaries[p]
         if not resign_configured(p):
@@ -643,21 +693,71 @@ def _resign_round(
                 )
             summary.hold(Hold("no_reference"))
             continue
-        if elapsed() > RETRY_STAGE_BUDGET_SEC:
+        if time.monotonic() - started > RETRY_STAGE_BUDGET_SEC:
             summary.hold(Hold("out_of_time"))
             continue
         try:
             bound = resign_bound(p, _utcnow(), account.address)
+        except Exception as e:
+            logger.error(
+                "Resign judgement failed", planet_id=_planet_key(p), exc_info=e
+            )
+            summary.hold(Hold(f"plan:{type(e).__name__}", warn=True))
+            continue
+        _count_lookup_failure(p, bound)
+        if isinstance(bound, Hold):
+            _hold_with_tips(summary, bound)
+            continue
+        summary.bound, summary.v_tip, summary.r_tip = bound.v, bound.v_tip, bound.r_tip
+        bounds[p] = bound
+    return account, bounds
+
+
+def _refresh_bound(planet_id: bytes, bound: Bound, address: str) -> Union[Bound, Hold]:
+    """① restage 동안 V 가 바뀌었을 수 있으니(consumer 의 새 claim, restage 가 메운 구멍) 계획 직전에 V 만
+    다시 읽는다. 정지·뒤처짐 판단(tip)은 ② 의 것을 그대로 쓴다."""
+    try:
+        v = get_next_tx_nonce_once(
+            nonce_url(planet_id),
+            address,
+            config.headless_jwt_secret,
+            config.gql_timeout,
+        )
+    except Exception as e:
+        return Hold(f"nonce:{type(e).__name__}")
+    if not isinstance(v, int) or v < 0:
+        return Hold("nonce:-1")
+    return replace(bound, v=v)
+
+
+def _resign_round(
+    mode: str,
+    gql,
+    started: float,
+    summaries: Dict[bytes, Summary],
+    account,
+    bounds: Dict[bytes, Bound],
+) -> None:
+    """③~⑤. 플래닛을 번갈아 처리하고 새 일을 시작하기 전마다 시간 상한을 본다(#329 와 같은 방식)."""
+
+    def elapsed() -> float:
+        return time.monotonic() - started
+
+    plans: Dict[bytes, Plan] = {}
+    for p, judged in bounds.items():
+        summary = summaries[p]
+        if elapsed() > RETRY_STAGE_BUDGET_SEC:
+            summary.hold(Hold("out_of_time"))
+            continue
+        try:
+            bound = _refresh_bound(p, judged, account.address)
             if isinstance(bound, Hold):
-                summary.v_tip = bound.extra.pop("v_tip", None)
-                summary.r_tip = bound.extra.pop("r_tip", None)
+                _count_lookup_failure(p, bound)
                 summary.hold(bound)
                 continue
-            summary.bound, summary.v_tip, summary.r_tip = (
-                bound.v,
-                bound.v_tip,
-                bound.r_tip,
-            )
+            if bound.v != judged.v:
+                summary.extra["bound_before_restage"] = judged.v
+            summary.bound = bound.v
             plan = plan_resigns(p, bound, _utcnow(), account, summary)
             if isinstance(plan, Hold):
                 summary.hold(plan)
@@ -706,6 +806,11 @@ def _resign_round(
                 summary.settled += 1
             elif result == "raced":
                 summary.raced += 1
+            if t.nonce == plan.bound.v and result not in ("resigned", "would"):
+                # 구멍 주인을 이번에 다시 서명하지 못했다(옛 tx 가 살아 있거나 다른 경로가 바꿈). 위쪽 후보는
+                # 구멍이 메워지기 전엔 들어갈 수 없으니 이번 회차엔 손대지 않는다(헛서명·기록 행 낭비).
+                summary.extra["owner_result"] = result
+                stopped.add(p)
         if out_of_time:
             break
 
@@ -753,6 +858,14 @@ def process_retry_stage(self, message: Dict[str, Any] = None):
 
     planets = configured_planet_ids()
     summaries = {p: Summary(planet_id=p, mode=mode) for p in planets}
+    account, bounds = None, {}
+    if mode != "off":
+        # ② 를 ① 보다 먼저: 만료 건 restage 를 건너뛰는 것은 이번 회차에 Bound 를 얻은 플래닛뿐이다.
+        try:
+            account, bounds = _judge_planets(started, summaries)
+        except Exception as e:
+            logger.error("Resign judgement failed", exc_info=e)
+            account, bounds = None, {}
     try:
         now = _utcnow()
         # 플래닛마다 따로 고르고, 실패하면 그 플래닛의 남은 건만 이번 차례에서 건너뛴다(다음 beat 5분 뒤).
@@ -765,7 +878,7 @@ def process_retry_stage(self, message: Dict[str, Any] = None):
                 gql,
                 planet_id,
                 now,
-                skip_expired=mode == "on" and resign_configured(planet_id),
+                skip_expired=mode == "on" and planet_id in bounds,
             )
             summaries[planet_id].restage_skipped_expired = skipped
             if not ok:
@@ -783,7 +896,8 @@ def process_retry_stage(self, message: Dict[str, Any] = None):
         return
     # 재서명은 어떤 예외로도 self.retry 하지 않는다(restage 를 다시 돌릴 이유가 없다).
     try:
-        _resign_round(mode, gql, started, summaries)
+        if account is not None:
+            _resign_round(mode, gql, started, summaries, account, bounds)
     except Exception as e:
         logger.error("Resign round failed", exc_info=e)
     elapsed = time.monotonic() - started

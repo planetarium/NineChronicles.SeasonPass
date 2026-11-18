@@ -98,7 +98,41 @@ def test_replace_statement_never_sets_nonce():
 
 def test_resign_lock_timeout_is_five_seconds():
     assert stage_task.RESIGN_LOCK_TIMEOUT == "5s"
-    assert stage_task.RETRY_STAGE_BUDGET_SEC == 120
+    assert stage_task.RETRY_STAGE_BUDGET_SEC == 110
+
+
+# --- 재서명 전용 KMS 클라이언트(1차 검토 3) -----------------------------------------------------------
+
+
+def test_resign_account_uses_bounded_kms_client_and_consumer_does_not(monkeypatch):
+    from app.utils import aws
+
+    clients = []
+
+    def fake_client(service, **kwargs):
+        clients.append(kwargs)
+        client = MagicMock()
+        client.get_public_key.side_effect = RuntimeError("stop after client")
+        return client
+
+    monkeypatch.setattr(stage_task, "_resign_account", None, raising=False)
+    monkeypatch.setattr(claim_consumer, "_account", None)
+    with patch.object(aws.boto3, "client", fake_client):
+        with pytest.raises(RuntimeError):
+            stage_task._get_resign_account()
+        with pytest.raises(RuntimeError):
+            claim_consumer._get_account()
+
+    resign_cfg, consumer_cfg = clients[0]["config"], clients[1].get("config")
+    assert consumer_cfg is None  # consumer 는 boto3 기본값 그대로
+    assert resign_cfg.connect_timeout <= 5 and resign_cfg.read_timeout <= 5
+    assert resign_cfg.retries == {"max_attempts": 2, "mode": "standard"}
+    # 시간 상한: 3번 시도 × (연결 + 읽기) + 재시도 대기(1 + 2초)가 후보 하나 최악 계산의 KMS 몫(27초) 안
+    attempts = resign_cfg.retries["max_attempts"] + 1
+    kms_worst = attempts * (resign_cfg.connect_timeout + resign_cfg.read_timeout) + 3
+    assert kms_worst <= 27
+    candidate_worst = 15 + kms_worst + 5 + 20
+    assert stage_task.RETRY_STAGE_BUDGET_SEC + candidate_worst < 180
 
 
 # --- set_lock_timeout 인자 ---------------------------------------------------------------------

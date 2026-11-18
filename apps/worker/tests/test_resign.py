@@ -222,6 +222,9 @@ def world(db, monkeypatch):
         patch.object(stage_task, "GQLClient", return_value=stage_client),
         patch.object(claim_consumer, "GQLClient", return_value=consumer_gql),
         patch.object(claim_consumer, "_get_account", return_value=account),
+        patch.object(
+            stage_task, "_get_resign_account", return_value=account, create=True
+        ),
         patch.object(stage_task, "_utcnow", clock, create=True),
         patch.object(stage_task, "get_tip_index_once", nodes.get_tip, create=True),
         patch.object(
@@ -992,10 +995,11 @@ def test_conditional_replace_skips_raced_rows(world, monkeypatch, race):
     assert history_rows(w, owner.id) == []
     assert s[key(ODIN)]["raced"] == 1
     staged = w.nodes.staged_txs(ODIN)
-    assert all(
-        tx in (bytes.fromhex(claim_row(w, other.id).tx),) for tx in staged
-    ), "교체하지 못한 건의 새 tx 는 stage 하지 않는다"
-    assert s[key(ODIN)]["resigned"] == [11]  # 나머지 후보는 진행
+    assert staged == [], "교체하지 못한 건의 새 tx 는 stage 하지 않는다"
+    # 구멍 주인을 교체하지 못했으니 위쪽 후보도 이번 회차엔 손대지 않는다(1차 검토 4).
+    assert s[key(ODIN)]["resigned"] == []
+    assert s[key(ODIN)]["owner_result"] == "raced"
+    assert claim_row(w, other.id).tx_id == other.tx_id
 
 
 # --- 시험 19: 교체 뒤 stage 실패 -------------------------------------------------------------------
@@ -1172,7 +1176,10 @@ def test_time_budget_stops_new_planet_judgement(world, monkeypatch):
     w.nodes.hooks.append(slow_restage)
     s = run(w)
 
-    assert w.nodes.net_calls() == []  # tip 조회도 시작하지 않았다
+    # ② 판단(tip·nonce)은 ① 보다 먼저 끝났고, ① 이 상한을 넘긴 뒤에는 새 조회(V 다시 읽기·옛 tx 확인)를
+    # 시작하지 않았다.
+    first_stage = next(i for i, c in enumerate(w.nodes.calls) if c[0] == "stage")
+    assert w.nodes.calls[first_stage:] == [("stage", ODIN)]
     assert s[key(HEIMDALL)]["reason"] == "out_of_time"
 
 
@@ -1435,3 +1442,170 @@ def test_released_history_does_not_block(world):
 def test_refuses_database_without_test_in_name():
     with pytest.raises(pytest.fail.Exception):
         ensure_test_database("postgresql://u:p@db:5432/season_pass")
+
+
+# --- 1차 검토 반영: 재서명이 맡을 수 있을 때만 만료 건 restage 를 건너뛴다 ------------------------------------
+
+
+@pytest.mark.parametrize("case", ["bound", "reference_down", "nonce_down"])
+def test_expired_restage_is_skipped_only_when_resign_takes_the_planet(world, case):
+    w = world
+    owner = add_claim(w, 10, age=20)
+    w.nodes.set_v(ODIN, 10)
+    warm(w, ODIN)
+    if case == "reference_down":
+        w.nodes.tip[REFERENCE[ODIN]] = ConnectionError("rpc down")
+    elif case == "nonce_down":
+        w.nodes.nonce[STAGE[ODIN]] = TimeoutError("slow")
+
+    s = run(w)
+
+    if case == "bound":
+        # 이번 회차에 재서명이 맡는다: 만료된 같은 바이트는 보내지 않고 다시 서명한다.
+        assert bytes.fromhex(owner.tx) not in w.nodes.staged_txs(ODIN)
+        assert s[key(ODIN)]["restage_skipped_expired"] == 1
+        assert s[key(ODIN)]["resigned"] == [10]
+    else:
+        # 재서명이 맡지 못하면 예전처럼 restage 한다(조용히 멈추지 않는다).
+        assert w.nodes.staged_txs(ODIN) == [bytes.fromhex(owner.tx)]
+        assert claim_row(w, owner.id).tx_status == TxStatus.STAGED
+        assert claim_row(w, owner.id).tx_id == owner.tx_id
+        assert s[key(ODIN)]["restage_skipped_expired"] == 0
+        assert s[key(ODIN)]["reason"].startswith(("tip:", "nonce:"))
+        assert history_rows(w) == []
+
+
+def test_repeated_lookup_failure_warns(world):
+    w = world
+    add_claim(w, 10, age=20)
+    w.nodes.set_v(ODIN, 10)
+    warm(w, ODIN)
+    w.nodes.tip[REFERENCE[ODIN]] = ConnectionError("rpc down")
+
+    s = run(w)
+    assert (s[key(ODIN)]["reason"], s[key(ODIN)]["level"]) == (
+        "tip:ConnectionError",
+        "info",
+    )
+
+    next_round(w)
+    s = run(w)
+    assert (s[key(ODIN)]["reason"], s[key(ODIN)]["level"]) == (
+        "tip:ConnectionError",
+        "warning",
+    )
+
+    next_round(w)
+    w.nodes.tip[REFERENCE[ODIN]] = w.nodes.tip[STAGE[ODIN]]  # 기준 노드 회복
+    s = run(w)
+    assert s[key(ODIN)]["reason"] == ""
+    assert s[key(ODIN)]["resigned"] == [10]
+
+    next_round(w)
+    w.nodes.nonce[STAGE[ODIN]] = TimeoutError("slow")  # 연속이 끊겼으니 다시 info 부터
+    s = run(w)
+    assert (s[key(ODIN)]["reason"], s[key(ODIN)]["level"]) == (
+        "nonce:TimeoutError",
+        "info",
+    )
+
+
+# --- 1차 검토 반영: 구멍 주인을 재서명하지 못하면 위쪽 후보도 멈춘다 ------------------------------------------
+
+
+@pytest.mark.parametrize("race", ["settled", "raced"])
+def test_upper_candidates_wait_when_owner_is_not_resigned(world, race):
+    w = world
+    owner = add_claim(w, 10, age=20)
+    upper = add_claim(w, 11, age=20)
+    w.nodes.set_v(ODIN, 10)
+    warm(w, ODIN)
+    if race == "settled":
+        w.nodes.status[(REFERENCE[ODIN], owner.tx_id)] = "STAGING"  # 옛 tx 가 살아 있다
+    else:
+
+        def hook(kind, url):
+            if kind == "status" and not getattr(hook, "done", False):
+                hook.done = True
+                with w.db.begin() as conn:
+                    conn.execute(
+                        text("UPDATE claim SET tx_id = 'someone-else' WHERE id = :i"),
+                        {"i": owner.id},
+                    )
+
+        w.nodes.hooks.append(hook)
+
+    s = run(w)
+
+    assert s[key(ODIN)]["resigned"] == []
+    assert s[key(ODIN)]["owner_result"] == race
+    assert claim_row(w, upper.id).tx_id == upper.tx_id
+    assert history_rows(w) == []
+    w.account.sign_tx.assert_called_once() if race == "raced" else (
+        w.account.sign_tx.assert_not_called()
+    )
+    assert not [c for c in w.nodes.calls if c[0] == "status" and c[2] == upper.tx_id]
+
+
+# --- 1차 검토 반영: 첫 후보는 언제나 구멍 주인 ---------------------------------------------------------
+
+
+def test_owner_settled_between_owner_and_candidate_reads_holds(world):
+    from sqlalchemy import event
+
+    w = world
+    owner = add_claim(w, 10, age=20)
+    upper = add_claim(w, 11, age=20)
+    w.nodes.set_v(ODIN, 10)
+    warm(w, ODIN)
+    fired = []
+
+    def after(conn, cursor, statement, parameters, context, executemany):
+        # 주인 확인 직후(상한 집계 읽기)에 추적기가 주인을 확정한다 — 후보 읽기에는 주인이 없다.
+        if (
+            fired
+            or "FROM claim_tx_history" not in statement
+            or "count(" not in statement
+        ):
+            return
+        fired.append(True)
+        with w.db.begin() as other:
+            other.execute(
+                text("UPDATE claim SET tx_status = 'SUCCESS' WHERE id = :i"),
+                {"i": owner.id},
+            )
+
+    event.listen(w.db, "after_cursor_execute", after)
+    try:
+        s = run(w)
+    finally:
+        event.remove(w.db, "after_cursor_execute", after)
+
+    assert fired
+    assert s[key(ODIN)]["reason"] == "hole_owner_changed"
+    assert claim_row(w, upper.id).tx_id == upper.tx_id  # 구멍 위를 먼저 재서명하지 않는다
+    assert history_rows(w) == []
+    w.account.sign_tx.assert_not_called()
+
+
+def test_bound_is_reread_after_restage(world):
+    # ② 는 ① 앞에서 돈다. ① 이 살아 있는 구멍 주인을 다시 보내 V 가 오르면, 계획은 오른 V 로 한다.
+    w = world
+    fresh = add_claim(w, 10, age=3)
+    expired = add_claim(w, 11, age=20)
+    w.nodes.set_v(ODIN, 10)
+    warm(w, ODIN)
+
+    def node_takes_restaged(kind, url):
+        if kind == "stage":
+            w.nodes.set_v(ODIN, 11)
+
+    w.nodes.hooks.append(node_takes_restaged)
+
+    s = run(w)
+
+    assert claim_row(w, fresh.id).tx_status == TxStatus.STAGED
+    assert s[key(ODIN)]["bound"] == 11
+    assert s[key(ODIN)]["bound_before_restage"] == 10
+    assert s[key(ODIN)]["resigned"] == [11]
+    assert claim_row(w, expired.id).tx_id != expired.tx_id
