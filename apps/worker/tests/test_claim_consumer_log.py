@@ -49,8 +49,9 @@ def run_consume(stage_result=(False, "node rejected", None), next_nonce=7):
     ), patch.object(
         claim_consumer, "logger"
     ) as logger:
-        with pytest.raises(Exception):
+        with pytest.raises(Exception) as excinfo:
             claim_consumer.consume_claim_message(ClaimMessage(uuid="u-1"))
+    logger.raised = excinfo.value
     return logger
 
 
@@ -74,3 +75,18 @@ def test_failure_before_stage_still_tells_planet():
     timing = timing_call(logger)
     assert timing.kwargs["outcome"] == "error"
     assert timing.kwargs["planet_id"] == HEIMDALL
+
+
+def test_timing_log_has_uuid():
+    # concurrency=1 이어도 process_claim 실패 로그(uuid)와 claim_timing 을 확실히 잇는 키.
+    logger = run_consume()
+
+    assert timing_call(logger).kwargs["uuid"] == "u-1"
+
+
+def test_raised_error_carries_planet_id():
+    # process_claim 이 실패 로그에 플래닛을 붙일 수 있게 예외에 실어 보낸다.
+    logger = run_consume(next_nonce=ConnectionError("heimdall-rpc down"))
+
+    assert isinstance(logger.raised, ConnectionError)
+    assert logger.raised.planet_id == HEIMDALL

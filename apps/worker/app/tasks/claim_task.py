@@ -45,7 +45,13 @@ def process_claim(self, message: Dict[str, Any]) -> str:
         consume_claim_message(claim_message)
         return "Claim message processed successfully"
     except Exception as exc:
-        logger.error("Error processing claim message", message=message, exc_info=exc)
+        # planet_id 는 consume_claim_message 가 claim 을 읽은 뒤 실패하면 예외에 실어 보낸다.
+        logger.error(
+            "Error processing claim message",
+            message=message,
+            planet_id=getattr(exc, "planet_id", None),
+            exc_info=exc,
+        )
         self.retry(exc=exc)
 
 
@@ -78,6 +84,10 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
         # 묶음 전체를 재시도해, 맨 앞의 thor 클레임 하나가 2026-11-17 인터널 오딘 복구를 막았다.
         # 실패한 건은 다음 beat(5분)에 다시 고른다. 실패한 플래닛의 남은 건은 이번엔 건너뛴다 —
         # stage 실패가 이어지면 nonce 만 줄줄이 할당돼 구멍 뒤에 갇히고, 실행도 길어진다.
+        #
+        # 고른 uuid 만 들고 조회 트랜잭션은 바로 끝낸다. 처리는 consume_claim_message 가 자기
+        # 세션으로 하므로, 열어 두면 플래닛 수 × 100건을 처리하는 내내 idle-in-transaction 으로
+        # 남아 autovacuum 을 막는다.
         total = 0
         failed = 0
         failed_planets = []
@@ -95,9 +105,10 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
                 .limit(100)
                 .all()
             )
-            total += len(rows)
-            for row in rows:
-                uuid = row.uuid
+            uuids = [row.uuid for row in rows]
+            sess.commit()
+            total += len(uuids)
+            for uuid in uuids:
                 try:
                     consume_claim_message(ClaimMessage(uuid=uuid))
                 except Exception as e:

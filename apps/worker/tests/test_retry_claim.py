@@ -95,6 +95,32 @@ def test_failure_log_has_planet_id():
     assert summary[0].kwargs["planets"] == [THOR]
 
 
+def test_read_transaction_is_closed_before_processing():
+    # 고른 뒤 처리하는 동안 조회 트랜잭션을 열어 두지 않는다(idle-in-transaction).
+    # 처리는 consume_claim_message 가 자기 세션으로 한다.
+    events = []
+    sess = MagicMock()
+    sess.commit.side_effect = lambda: events.append("commit")
+    query = sess.query.return_value.filter.return_value.order_by.return_value
+    query.limit.return_value.all.side_effect = [
+        [Row("thor-1", THOR), Row("thor-2", THOR)],
+        [Row("odin-1", ODIN)],
+    ]
+    with patch.object(claim_task, "scoped_session", return_value=sess), patch.object(
+        claim_task, "configured_planet_ids", return_value=[THOR, ODIN]
+    ), patch.object(
+        claim_task,
+        "consume_claim_message",
+        side_effect=lambda m: events.append(m.uuid),
+    ), patch.object(
+        claim_task.process_retry_claim, "retry"
+    ):
+        claim_task.process_retry_claim.run()
+
+    assert events == ["commit", "thor-1", "thor-2", "commit", "odin-1"]
+    sess.close.assert_called_once()
+
+
 def test_configured_planet_ids_follow_gql_url_map(monkeypatch):
     monkeypatch.setattr(
         claim_task.config, "gql_url_map", {ODIN.decode(): "http://odin"}

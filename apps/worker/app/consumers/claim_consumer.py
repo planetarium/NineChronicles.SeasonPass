@@ -194,21 +194,30 @@ def consume_claim_message(message: ClaimMessage):
             success, msg, _ = gql.stage(claim.planet_id, bytes.fromhex(claim.tx))
             lap("stage_gql")
             if not success:
-                message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
-                logger.error(message, planet_id=claim.planet_id, nonce=claim.nonce)
-                raise Exception(message)
+                # message(ClaimMessage)를 덮어쓰지 않는다 — finally 의 claim_timing 이 uuid 를 쓴다.
+                error_message = f"Failed to stage tx with nonce {claim.nonce}: {msg}"
+                logger.error(
+                    error_message, planet_id=claim.planet_id, nonce=claim.nonce
+                )
+                raise Exception(error_message)
             claim.tx_status = TxStatus.STAGED
             sess.add(claim)
             sess.commit()
             lap("commit_staged")
         outcome = "staged"
+    except Exception as exc:
+        # process_claim 의 실패 로그("Error processing claim message")가 어느 플래닛인지 남길 수
+        # 있게 예외에 실어 보낸다. claim 을 읽기 전에 실패하면 None 이다.
+        exc.planet_id = planet_id
+        raise
     finally:
-        # 성공·조기 종료·실패 모두 남긴다(시간 숫자·결과 이름·플래닛만, 사용자 식별 정보 없음).
-        # 플래닛은 KMS·nonce 조회 실패처럼 여기서 따로 로그를 남기지 않는 실패가 어느 플래닛인지
-        # 보려고 붙인다(process_claim 의 실패 로그에는 uuid 만 있다).
+        # 성공·조기 종료·실패 모두 남긴다(시간 숫자·결과 이름·플래닛·claim uuid 만, 아바타 주소 같은
+        # 사용자 식별 정보 없음). 플래닛은 KMS·nonce 조회 실패처럼 여기서 따로 로그를 남기지 않는
+        # 실패가 어느 플래닛인지 보려고, uuid 는 process_claim 실패 로그와 짝을 지으려고 붙인다.
         logger.info(
             "claim_timing",
             outcome=outcome,
+            uuid=message.uuid,
             planet_id=planet_id,
             **timings,
             total=round(sum(timings.values()), 3),
