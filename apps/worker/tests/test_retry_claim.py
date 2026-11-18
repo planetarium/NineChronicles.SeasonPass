@@ -5,6 +5,7 @@
 골라, 한 플래닛에 오래된 건이 100건 넘게 쌓이면 다른 플래닛 건은 창에 들지 못했다.
 """
 from collections import namedtuple
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from app.tasks import claim_task
@@ -149,20 +150,37 @@ def test_planets_are_processed_round_robin():
 
 def test_stops_starting_new_claims_after_time_budget(monkeypatch):
     # 한 번 실행이 beat expires(240초)·종료 유예(180초)를 넘지 않게 상한 뒤엔 새 claim 을 시작하지 않는다.
-    clock = iter([0, 10, 20, claim_task.RETRY_CLAIM_BUDGET_SEC + 1])
-    monkeypatch.setattr(claim_task.time, "monotonic", lambda: next(clock))
+    # 건마다 50초가 걸린다고 치면 0·50·100초에 시작한 세 건까지만 처리하고 150초에는 시작하지 않는다.
+    clock = [0]
+    monkeypatch.setattr(claim_task, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+
+    def consume(message):
+        clock[0] += 50
+
     called, retry, _, logger = run_retry(
         {
             ODIN: ["odin-1", "odin-2", "odin-3", "odin-4"],
             HEIMDALL: ["hd-1", "hd-2", "hd-3"],
         },
-        lambda m: None,
+        consume,
     )
 
-    # 시작(0) 뒤 i=0(10초)·i=1(20초) 확인은 상한 안, i=2 직전 확인에서 상한을 넘는다.
-    assert called == ["odin-1", "hd-1", "odin-2", "hd-2"]
+    assert called == ["odin-1", "hd-1", "odin-2"]
     retry.assert_not_called()
     assert any(
         c.args[0] == "Retry claim stopped at time budget"
         for c in logger.warning.call_args_list
     )
+
+
+def fail_all(message):
+    raise ConnectionError("node down")
+
+
+def test_all_planets_failed_stops_early():
+    called, retry, _, _ = run_retry(
+        {THOR: ["thor-1", "thor-2"], ODIN: ["odin-1", "odin-2"]}, fail_all
+    )
+
+    assert called == ["thor-1", "odin-1"]
+    retry.assert_not_called()

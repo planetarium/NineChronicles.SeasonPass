@@ -15,9 +15,10 @@ logger = structlog.get_logger(__name__)
 engine = create_engine(str(config.pg_dsn), pool_size=5, max_overflow=5)
 
 
-# process_retry_claim 한 번에 새 claim 을 시작하는 시간 상한. beat expires(240초)와 claim-worker
-# terminationGracePeriodSeconds(180초)보다 짧게 — 마지막 건(최대 수 초)까지 끝나도 유예 안에 든다.
-RETRY_CLAIM_BUDGET_SEC = 150
+# process_retry_claim 한 번에 새 claim 을 시작하는 시간 상한. 마지막 한 건은 최악 약 30초(잠금 대기
+# 상한, 느린 노드면 GQL 5초 ×2 + KMS)라, 120 + 30 이 claim-worker terminationGracePeriodSeconds(180초)
+# 와 beat expires(240초) 안에 든다.
+RETRY_CLAIM_BUDGET_SEC = 120
 
 
 def configured_planet_ids() -> List[bytes]:
@@ -122,18 +123,20 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
         failed_planets = []
         done = 0
         started = time.monotonic()
+        out_of_time = False
         for i in range(max((len(uuids) for uuids in pending.values()), default=0)):
-            if time.monotonic() - started > RETRY_CLAIM_BUDGET_SEC:
-                logger.warning(
-                    "Retry claim stopped at time budget",
-                    budget_sec=RETRY_CLAIM_BUDGET_SEC,
-                    done=done,
-                    total=total,
-                )
+            active = [
+                (planet_id, uuids)
+                for planet_id, uuids in pending.items()
+                if i < len(uuids) and planet_id not in failed_planets
+            ]
+            if not active:
                 break
-            for planet_id, uuids in pending.items():
-                if i >= len(uuids) or planet_id in failed_planets:
-                    continue
+            for planet_id, uuids in active:
+                # 건마다 확인한다 — 한 바퀴(플래닛 수만큼)를 다 돌고 확인하면 그만큼 넘친다.
+                if time.monotonic() - started > RETRY_CLAIM_BUDGET_SEC:
+                    out_of_time = True
+                    break
                 uuid = uuids[i]
                 done += 1
                 try:
@@ -147,6 +150,14 @@ def process_retry_claim(self, message: Dict[str, Any] = None):
                         planet_id=planet_id,
                         exc_info=e,
                     )
+            if out_of_time:
+                logger.warning(
+                    "Retry claim stopped at time budget",
+                    budget_sec=RETRY_CLAIM_BUDGET_SEC,
+                    done=done,
+                    total=total,
+                )
+                break
 
         if not total:
             logger.info("No claim to retry")
