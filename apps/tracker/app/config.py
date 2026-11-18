@@ -1,7 +1,7 @@
 import base64
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import AmqpDsn, PostgresDsn, field_validator
+from pydantic import PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from shared.enums import PlanetID
 
@@ -25,6 +25,10 @@ class Settings(BaseSettings):
         "TxTracker",
     ]
     enabled_planets: List[str] = ["0x000000000000", "0x000000000001", "0x000000000003"]
+    # 재서명(B2). 워커 WORKER_RESIGN_MODE 와 같은 값을 쓴다. 기본값은 꺼짐(지금 동작).
+    # on: STAGING → STAGED, INCLUDED·모르는 값·GraphQL errors 는 상태를 두고 updated_at 만 갱신하며
+    #   플래닛별 창을 updated_at 순으로 돈다. 옛 tx 확정(claim_tx_history)은 모드와 상관없이 켜져 있다.
+    resign_mode: Literal["off", "dry_run", "on"] = "off"
 
     @property
     def converted_gql_url_map(self) -> dict[PlanetID, str]:
