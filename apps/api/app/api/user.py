@@ -314,7 +314,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
         sess,
         usp_stmt,
         endpoint="upgrade",
-        planet_id=request.planet_id,
+        planet_id=request.planet_id.value.decode(),
         avatar_addr=request.avatar_addr,
     )
     if not target_usp:
@@ -339,7 +339,7 @@ def upgrade_season_pass(request: UpgradeRequestSchema, sess=Depends(session)):
             sess,
             usp_stmt,
             endpoint="upgrade",
-            planet_id=request.planet_id,
+            planet_id=request.planet_id.value.decode(),
             avatar_addr=request.avatar_addr,
         )
 
@@ -517,7 +517,7 @@ def claim_reward(request: ClaimRequestSchema, sess=Depends(session)):
             UserSeasonPass.season_pass_id == target_pass.id,
         ),
         endpoint="claim",
-        planet_id=request.planet_id,
+        planet_id=request.planet_id.value.decode(),
         avatar_addr=request.avatar_addr,
     )
     if not user_season:
@@ -605,7 +605,7 @@ def claim_prev_reward(request: ClaimRequestSchema, sess=Depends(session)):
             UserSeasonPass.avatar_addr == request.avatar_addr,
         ),
         endpoint="claim-prev",
-        planet_id=request.planet_id,
+        planet_id=request.planet_id.value.decode(),
         avatar_addr=request.avatar_addr,
     )
     if not user_season:

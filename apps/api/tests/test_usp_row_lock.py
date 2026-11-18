@@ -286,6 +286,6 @@ def test_claim_lock_wait_times_out_as_overload(test_db, send_to_worker, monkeypa
     assert exc_info.value.log_context == {
         "reason": "usp_lock_timeout",
         "endpoint": "claim",
-        "planet_id": PlanetID.ODIN,
+        "planet_id": PlanetID.ODIN.value.decode(),
         "avatar_addr": AVATAR,
     }
