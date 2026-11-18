@@ -24,14 +24,16 @@ def run_consume(claim, chain_nonce=7):
     ), patch.object(claim_consumer, "_get_account", return_value=account), patch.object(
         claim_consumer, "GQLClient", return_value=gql
     ), patch.object(
-        claim_consumer, "create_grant_items_unsigned_tx", return_value=b"unsigned"
+        claim_consumer, "history_table_ready", return_value=False
+    ), patch.object(
+        claim_consumer, "build_unsigned_claim_tx", return_value=b"unsigned"
     ) as build, patch.object(
         claim_consumer, "create_signed_tx", return_value=b"signed"
     ), patch.object(
         claim_consumer, "logger"
     ):
         claim_consumer.consume_claim_message(ClaimMessage(uuid=claim.uuid))
-    return build.call_args.kwargs["nonce"], sess
+    return build.call_args.args[1], sess
 
 
 def make_claim(nonce):

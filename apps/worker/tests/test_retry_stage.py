@@ -6,9 +6,9 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from shared.enums import TxStatus
-
 from app.tasks import stage_task
+from shared.enums import TxStatus
+from sqlalchemy.dialects import postgresql
 
 ODIN = b"0x000000000000"
 HEIMDALL = b"0x000000000001"
@@ -16,8 +16,23 @@ HEIMDALL = b"0x000000000001"
 
 def claim(planet_id, nonce):
     return SimpleNamespace(
-        planet_id=planet_id, nonce=nonce, tx="00", tx_status=TxStatus.INVALID
+        id=hash((planet_id, nonce)) % 10_000,
+        planet_id=planet_id,
+        nonce=nonce,
+        tx="00",
+        tx_id=f"tx-{nonce}",
+        tx_status=TxStatus.INVALID,
     )
+
+
+def staged_ids(sess):
+    """restage 가 STAGED 로 적은 claim id(조건부 UPDATE 의 WHERE id)."""
+    ids = []
+    for call in sess.execute.call_args_list:
+        params = call.args[0].compile(dialect=postgresql.dialect()).params
+        if params.get("tx_status") == TxStatus.STAGED:
+            ids.append(params["id_1"])
+    return ids
 
 
 def run_retry_stage(rows_by_planet, stage):
@@ -49,12 +64,11 @@ def test_failed_planet_does_not_block_other_planets():
     odin = [claim(ODIN, 1), claim(ODIN, 2)]
     heimdall = [claim(HEIMDALL, 7), claim(HEIMDALL, 8)]
 
-    gql, retry, _ = run_retry_stage({ODIN: odin, HEIMDALL: heimdall}, fail_odin)
+    gql, retry, sess = run_retry_stage({ODIN: odin, HEIMDALL: heimdall}, fail_odin)
 
     # 오딘은 첫 건 실패 뒤 남은 건을 건너뛰고(nonce 순서라 뒤를 보내도 소용없다), 하임달은 모두 보낸다.
     assert [c.args[0] for c in gql.stage.call_args_list] == [ODIN, HEIMDALL, HEIMDALL]
-    assert [c.tx_status for c in odin] == [TxStatus.INVALID, TxStatus.INVALID]
-    assert [c.tx_status for c in heimdall] == [TxStatus.STAGED, TxStatus.STAGED]
+    assert staged_ids(sess) == [c.id for c in heimdall]
     retry.assert_not_called()
 
 
@@ -66,11 +80,11 @@ def test_stage_exception_is_treated_as_planet_failure():
 
     heimdall = [claim(HEIMDALL, 7)]
 
-    gql, retry, _ = run_retry_stage(
+    gql, retry, sess = run_retry_stage(
         {ODIN: [claim(ODIN, 1)], HEIMDALL: heimdall}, raise_odin
     )
 
-    assert heimdall[0].tx_status == TxStatus.STAGED
+    assert staged_ids(sess) == [heimdall[0].id]
     retry.assert_not_called()
 
 

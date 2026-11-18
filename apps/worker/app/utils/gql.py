@@ -1,13 +1,12 @@
 import hashlib
 import hmac
 import json
-import os
+import re
 from typing import Optional
 
 import bencodex
 import eth_utils
 import requests
-
 from shared.enums import PassType
 from shared.utils.season_pass import create_jwt_token
 
@@ -70,6 +69,93 @@ def get_block_tip(
         timeout=timeout,
     )
     return resp.json()["data"]["nodeStatus"]["tip"]["index"]
+
+
+_HEX = re.compile(r"^(0x)?[0-9a-fA-F]+$")
+
+
+class GQLQueryError(Exception):
+    """GraphQL 응답이 errors 를 담았거나 기대한 data 가 없을 때."""
+
+
+def query_once(
+    gql_url: str,
+    query: str,
+    headless_jwt_secret: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> dict:
+    """GraphQL 을 **한 번만** 부른다(재시도 없음). data 를 돌려준다.
+
+    재서명 판단용이다. 판단은 "모름이면 건드리지 않음"이라 재시도보다 회차 시간을 지키는 게 낫다
+    (GQLClient 는 재시도 2번 + 처음 한 번 스키마 조회라 느린 노드에서 호출 한 번이 15초를 넘는다).
+    HTTP 오류·errors·data 누락은 모두 예외다."""
+    headers = {}
+    if headless_jwt_secret:
+        headers["Authorization"] = f"Bearer {create_jwt_token(headless_jwt_secret)}"
+    resp = requests.post(
+        gql_url, json={"query": query}, headers=headers, timeout=timeout
+    )
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get("errors"):
+        raise GQLQueryError(str(body["errors"])[:200])
+    data = body.get("data")
+    if not data:
+        raise GQLQueryError("no data")
+    return data
+
+
+def get_tip_index_once(
+    gql_url: str,
+    headless_jwt_secret: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> int:
+    tip = query_once(
+        gql_url, "{ nodeStatus { tip { index } } }", headless_jwt_secret, timeout
+    )["nodeStatus"]["tip"]["index"]
+    if not isinstance(tip, int):
+        raise GQLQueryError(f"bad tip {tip!r}")
+    return tip
+
+
+def get_next_tx_nonce_once(
+    gql_url: str,
+    address: str,
+    headless_jwt_secret: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> int:
+    """노드의 nextTxNonce(블록 nonce + 그 노드 대기열에 이어진 tx 수)."""
+    if not _HEX.match(address):
+        raise ValueError(f"bad address {address!r}")
+    nonce = query_once(
+        gql_url,
+        f'{{ transaction {{ nextTxNonce(address: "{address}") }} }}',
+        headless_jwt_secret,
+        timeout,
+    )["transaction"]["nextTxNonce"]
+    if not isinstance(nonce, int):
+        raise GQLQueryError(f"bad nonce {nonce!r}")
+    return nonce
+
+
+def get_tx_status_once(
+    gql_url: str,
+    tx_id: str,
+    headless_jwt_secret: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> str:
+    """그 노드 기준 tx 상태 이름(SUCCESS/FAILURE/INCLUDED/STAGING/INVALID)."""
+    if not _HEX.match(tx_id):
+        raise ValueError(f"bad tx id {tx_id!r}")
+    status = query_once(
+        gql_url,
+        f'{{ transaction {{ transactionResult(txId: "{tx_id}") {{ txStatus }} }} }}',
+        headless_jwt_secret,
+        timeout,
+    )["transaction"]["transactionResult"]["txStatus"]
+    if not isinstance(status, str):
+        raise GQLQueryError(f"bad status {status!r}")
+    return status
 
 
 def fetch_block_data(
