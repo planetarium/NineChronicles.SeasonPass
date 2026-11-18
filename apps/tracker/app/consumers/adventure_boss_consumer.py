@@ -3,7 +3,6 @@ from datetime import datetime
 
 import structlog
 from app.config import config
-from app.utils.exp import apply_exp
 from app.utils.gql import get_explore_floor
 from app.utils.season_pass import apply_exp, fetch_adv_boss_history, verify_season_pass
 from shared.enums import ActionType, PassType, PlanetID
